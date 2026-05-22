@@ -894,7 +894,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Abgang ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO"}]}));
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
   const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[...s,{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,outlets:[]}]); setOpenId(id); };
-  const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Kasten-Typ ist in Benutzung.");return;} setBoxTypes(s=>s.filter(b=>b.id!==id)); };
+  const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Kasten-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Kasten-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
   const sortedTypes=alphaSort(boxTypes,"name");
   return (
     <Section title="Kasten-Typen" subtitle="Jeder physische Steckplatz = ein Abgang. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
@@ -916,7 +916,9 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                     </select>
                   </Field>
                   <Field label="Max (A)"><input type="number" style={S.input} value={b.feedAmp} onChange={e=>update(b.id,{feedAmp:+e.target.value})}/></Field>
-                  <Field label=""><button style={S.dangerBtnWide} onClick={()=>removeType(b.id)}>Löschen</button></Field>
+                </div>
+                <div style={{textAlign:"right",marginTop:4}}>
+                  <button style={S.dangerBtnWide} onClick={()=>removeType(b.id)}>Löschen</button>
                 </div>
                 <div style={{overflowX:"auto"}}>
                 <table style={S.table}>
