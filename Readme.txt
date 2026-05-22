@@ -107,8 +107,7 @@ VERBRAUCHER (Stammdaten)
 
 ↥ Laden          Gespeicherten Stand (.json) laden und weiterarbeiten.
 💾 Speichern     Aktuellen Stand als .json speichern (in "Speicher-
-                 stände" ablegen). DAS TOOL SPEICHERT NICHT AUTOMA-
-                 TISCH – regelmäßig sichern!
+                 stände" ablegen).
 ⭐ Als Standard  Aktuelle Kasten-Typen und Verbraucher als neue
                  Standard-Datei speichern. Die heruntergeladene Datei
                  ersetzt die alte Datei in "NDR Standardeinstellungen".
@@ -140,9 +139,8 @@ VERBRAUCHER (Stammdaten)
 
 Die Werte sind eine Planungshilfe für die Veranstaltungstechnik.
 Die Verantwortung für die tatsächliche Auslegung, Absicherung und
-sichere Installation liegt beim ausführenden Personal / der zuständigen
-Elektrofachkraft.
+sichere Installation liegt bei der zuständigen Elektrofachkraft.
 
 ------------------------------------------------------------------------
-  Bei Fragen oder Änderungswünschen: einfach melden.
+  Bei Fragen oder Änderungswünschen: silas.roesler@pm.me
 ========================================================================
