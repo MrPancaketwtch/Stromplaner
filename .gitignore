@@ -1,0 +1,7 @@
+# Build-Zwischendateien
+app_standalone.jsx
+app_bundle.js
+
+# Windows
+Thumbs.db
+desktop.ini
