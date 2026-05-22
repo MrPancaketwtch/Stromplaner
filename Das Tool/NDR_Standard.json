@@ -1365,33 +1365,15 @@
   ],
   "loads": [
     {
-      "id": "v1",
-      "name": "Desisti 2kW",
+      "id": "izygsw4",
+      "name": "Desisti \"2kW\"",
       "watt": 330,
       "threePhase": false
     },
     {
-      "id": "v2",
-      "name": "LED PAR",
+      "id": "kkbxpwz",
+      "name": "Desisti \"1kW\"",
       "watt": 150,
-      "threePhase": false
-    },
-    {
-      "id": "v3",
-      "name": "Moving Head",
-      "watt": 600,
-      "threePhase": false
-    },
-    {
-      "id": "v4",
-      "name": "Stufenlinse",
-      "watt": 1000,
-      "threePhase": false
-    },
-    {
-      "id": "v5",
-      "name": "Verfolger HMI",
-      "watt": 2500,
       "threePhase": false
     }
   ],

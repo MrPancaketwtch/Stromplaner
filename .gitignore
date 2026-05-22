@@ -9,6 +9,9 @@ Das Tool/_entry.js
 app_standalone.jsx
 app_bundle.js
 
+# Claude Code (intern)
+.claude/
+
 # Windows
 Thumbs.db
 desktop.ini
