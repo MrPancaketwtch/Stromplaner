@@ -12,6 +12,28 @@ schluss. Zusätzlich gibt es ein Blockschaltbild der gesamten Kaskade.
 
 
 ------------------------------------------------------------------------
+  ENTWICKLUNG / BUILD  (nur relevant, wenn der Quellcode geändert wird)
+------------------------------------------------------------------------
+
+Der Quellcode liegt als "Stromplaner.jsx" im Ordner "Das Tool".
+Änderungen daran wirken sich erst aus, wenn die HTML-Datei neu gebaut
+wird. Dafür wird Node.js benötigt.
+
+Einmalige Einrichtung:
+  1. Node.js installieren: nodejs.org → LTS-Version → Installer starten
+  2. Terminal im Hauptordner öffnen
+     (Rechtsklick auf den Ordner → "In Terminal öffnen")
+  3. Befehl eingeben: npm install
+     (lädt esbuild, React und SheetJS automatisch herunter)
+
+Bei jeder Änderung an Stromplaner.jsx:
+  → build.bat doppelklicken
+  Das erzeugt eine aktualisierte "Das Tool\Stromplaner.html".
+
+  Alternativ im Terminal: npm run build
+
+
+------------------------------------------------------------------------
   ORDNERSTRUKTUR
 ------------------------------------------------------------------------
 

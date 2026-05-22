@@ -1,7 +1,11 @@
 # Interne Claude-Code-Notizen
 CLAUDE_CODE_ÜBERGABE.md
 
-# Build-Zwischendateien
+# Node / Build
+node_modules/
+Das Tool/_entry.js
+
+# Build-Zwischendateien (altes Build-System)
 app_standalone.jsx
 app_bundle.js
 
