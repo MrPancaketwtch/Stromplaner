@@ -95,8 +95,9 @@ KASTEN-TYPEN (Stammdaten)
 
 VERBRAUCHER (Stammdaten)
    – Liste aller Verbraucher mit Leistung in Watt.
-   – Checkbox "3-phasig": Verbraucher wird gleichmäßig auf alle
-     drei Phasen verteilt (Strom = W / 230 / 3 je Phase).
+   – Checkbox "3-phasig": Verbraucher liegt auf allen drei Phasen.
+     Der eingetragene Wert (W) entspricht der Leistung je Phase;
+     der Strom (A/Ph = W / 230) wird auf L1, L2 und L3 kopiert.
    – 1-phasige Verbraucher: Strom = W / 230, auf eine Phase.
 
 
@@ -123,8 +124,10 @@ VERBRAUCHER (Stammdaten)
   BERECHNUNGSLOGIK
 ------------------------------------------------------------------------
 
-– Alle Verbraucher sind einphasig (Strom = Leistung / 230 V) oder
-  3-phasig (Strom = Leistung / 230 V / 3 je Phase).
+– Alle Verbraucher sind einphasig (Strom = W / 230 V) oder
+  3-phasig (Strom = W / 230 V je Phase, gleicher Wert auf L1, L2, L3).
+  Bei 3-phasigen Verbrauchern entspricht der eingetragene Watt-Wert
+  der Leistung je Phase (wie in Datenblättern angegeben).
 – Phasen bleiben beim Aufstecken erhalten (L1→L1, L2→L2, L3→L3).
 – Die Kaskadenberechnung summiert alle aufgesteckten Kästen rekursiv.
 – Die Prozentzahl bezieht sich immer auf die Einspeisung des

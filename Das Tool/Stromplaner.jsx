@@ -294,7 +294,7 @@ export default function App() {
     const totalAmp = load.watt/VOLT;
     const r={L1:0,L2:0,L3:0};
     if(load.threePhase){
-      const pp=totalAmp/3; r.L1=pp; r.L2=pp; r.L3=pp;
+      r.L1=totalAmp; r.L2=totalAmp; r.L3=totalAmp;
     } else if(isMulticore(outlet.connector)){
       // Phase from mcSlot rotation
       const slot   = p.mcSlot||1;
@@ -470,7 +470,7 @@ export default function App() {
         ["Verbraucher","Abgang","Steckplatz","Phase","W","A","Sich.","Schutz"]];
       placements.filter(p=>p.instanceId===inst.id).forEach(p=>{
         const l=loadById[p.loadId]; const out=type?.outlets.find(o=>o.id===p.outletId);
-        const amp=l?(l.threePhase?round2(l.watt/VOLT/3):round2(l.watt/VOLT)):"";
+        const amp=l?round2(l.watt/VOLT):"";
         let ph=""; let slot="";
         if(l?.threePhase){ ph="L1+L2+L3"; }
         else if(out&&isMulticore(out.connector)){ const s=p.mcSlot||1; ph=PHASES[(s-1)%3]; slot=`Steckplatz ${s}`; }
@@ -520,7 +520,7 @@ export default function App() {
       const rows2=placements.filter(p=>p.instanceId===inst.id).map(p=>{
         const l=loadById[p.loadId]; const out=type?.outlets.find(o=>o.id===p.outletId);
         if(!l) return null;
-        const amp=l.threePhase?round2(l.watt/VOLT/3):round2(l.watt/VOLT);
+        const amp=round2(l.watt/VOLT);
         let ph="",slot="";
         if(l.threePhase){ ph="L1+L2+L3"; }
         else if(out&&isMulticore(out.connector)){ const s=p.mcSlot||1; ph=PHASES[(s-1)%3]; slot=`Steckplatz ${s}`; }
@@ -831,7 +831,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
                 if(l?.threePhase) phDisplay="L1+L2+L3";
                 else if(outlet&&isMulticore(outlet.connector)&&p.mcSlot) phDisplay=PHASES[(p.mcSlot-1)%3];
                 else if(outlet) phDisplay=outlet.phase||"—";
-                const amp=l?(l.threePhase?round2(l.watt/VOLT/3):round2(l.watt/VOLT)):"";
+                const amp=l?round2(l.watt/VOLT):"";
                 // Multicore slot options
                 const showMcSlot=outlet&&isMulticore(outlet.connector);
                 const mcOptions=showMcSlot?mcSlotOptions(outlet):[];
@@ -983,7 +983,7 @@ function LoadsTab({ loads,setLoads }) {
             <tr key={l.id}>
               <td style={S.td}><input style={S.inputSm} value={l.name} onChange={e=>update(l.id,{name:e.target.value})}/></td>
               <td style={S.td}><input type="number" style={{...S.inputSm,width:90}} value={l.watt} onChange={e=>update(l.id,{watt:+e.target.value})}/></td>
-              <td style={S.td}>{l.threePhase?`${round2(l.watt/VOLT/3)}/Ph`:round2(l.watt/VOLT)}</td>
+              <td style={S.td}>{l.threePhase?`${round2(l.watt/VOLT)}/Ph`:round2(l.watt/VOLT)}</td>
               <td style={S.td}><input type="checkbox" checked={l.threePhase||false} onChange={e=>update(l.id,{threePhase:e.target.checked})}/></td>
               <td style={S.td}><button style={S.dangerBtn} onClick={()=>remove(l.id)}>✕</button></td>
             </tr>
