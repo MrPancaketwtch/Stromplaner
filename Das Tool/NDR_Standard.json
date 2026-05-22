@@ -21,7 +21,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -30,7 +30,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -39,7 +39,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -48,7 +48,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -57,7 +57,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -66,7 +66,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -75,7 +75,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -84,7 +84,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -93,7 +93,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -102,7 +102,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -111,7 +111,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         }
       ]
@@ -128,7 +128,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -137,7 +137,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -146,7 +146,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -155,7 +155,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -164,7 +164,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -173,7 +173,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         }
       ]
@@ -190,7 +190,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -199,7 +199,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -208,7 +208,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -217,7 +217,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -226,7 +226,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -235,7 +235,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         }
       ]
@@ -252,7 +252,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -261,7 +261,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -270,7 +270,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -279,7 +279,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -288,7 +288,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -297,7 +297,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -306,7 +306,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -315,7 +315,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -324,7 +324,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -333,7 +333,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -342,7 +342,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -351,7 +351,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         }
       ]
@@ -368,7 +368,7 @@
           "connector": "MC",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO",
           "mcSlots": 6
         },
@@ -378,7 +378,7 @@
           "connector": "MC",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO",
           "mcSlots": 6
         }
@@ -396,7 +396,7 @@
           "connector": "CEE16_1",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -405,7 +405,7 @@
           "connector": "CEE16_1",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -414,7 +414,7 @@
           "connector": "CEE16_1",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -423,7 +423,7 @@
           "connector": "CEE32_1",
           "amp": 32,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -432,7 +432,7 @@
           "connector": "CEE32_1",
           "amp": 32,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -441,7 +441,7 @@
           "connector": "CEE32_1",
           "amp": 32,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -450,7 +450,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -459,7 +459,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -468,7 +468,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         }
       ]
@@ -485,7 +485,7 @@
           "connector": "CEE16",
           "amp": 16,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -494,7 +494,7 @@
           "connector": "CEE16",
           "amp": 16,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -503,7 +503,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -512,7 +512,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -521,7 +521,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         }
       ]
@@ -538,7 +538,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -547,7 +547,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -556,7 +556,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -565,7 +565,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -574,7 +574,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -583,7 +583,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         }
       ]
@@ -600,7 +600,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -609,7 +609,7 @@
           "connector": "CEE16",
           "amp": 16,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -618,7 +618,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -627,7 +627,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -636,7 +636,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -645,7 +645,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -654,7 +654,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -663,7 +663,7 @@
           "connector": "CEE125",
           "amp": 125,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -707,7 +707,7 @@
           "connector": "PL400",
           "amp": 400,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -716,7 +716,7 @@
           "connector": "PL400",
           "amp": 400,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -725,7 +725,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -734,7 +734,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L1",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         },
         {
@@ -743,7 +743,7 @@
           "connector": "SCHUKO",
           "amp": 16,
           "phase": "L2",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "RCBO"
         }
       ]
@@ -760,7 +760,7 @@
           "connector": "CEE16",
           "amp": 16,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -769,7 +769,7 @@
           "connector": "CEE16",
           "amp": 16,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -778,7 +778,7 @@
           "connector": "CEE16",
           "amp": 16,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -787,7 +787,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -796,7 +796,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -805,7 +805,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -814,7 +814,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -823,7 +823,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -832,7 +832,7 @@
           "connector": "CEE125",
           "amp": 125,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -876,7 +876,7 @@
           "connector": "CEE16",
           "amp": 16,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -885,7 +885,7 @@
           "connector": "CEE16",
           "amp": 16,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -894,7 +894,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -903,7 +903,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -912,7 +912,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -921,7 +921,7 @@
           "connector": "CEE63",
           "amp": 63,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -930,7 +930,7 @@
           "connector": "CEE125",
           "amp": 125,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
@@ -1001,7 +1001,7 @@
           "connector": "CEE32",
           "amp": 32,
           "phase": "L1L2L3",
-          "breaker": "B",
+          "breaker": "C",
           "protection": "LS"
         },
         {
