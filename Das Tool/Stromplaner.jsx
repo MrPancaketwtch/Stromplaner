@@ -629,7 +629,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
         </div>
         {instances.length===0 ? <p style={S.empty}>Noch keine Kästen aktiviert.</p> : (
           <div style={{overflowX:"auto"}}>
-          <table style={S.table}>
+          <table style={{...S.table,minWidth:860,width:"auto"}}>
             <thead><tr>
               <th style={S.th}></th><th style={S.th}>Name</th><th style={S.th}>Typ</th><th style={S.th}>Eingang</th>
               <th style={S.th}>hängt an Kasten…</th><th style={S.th}>…Abgang</th>
@@ -671,7 +671,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                         </select>
                       ) : <span style={{color:"#555",fontSize:11}}>via Parent</span>}
                     </td>
-                    <td style={S.td}><button style={S.dangerBtn} onClick={()=>removeInstance(inst.id)}>✕</button></td>
+                    <td style={S.td}><button style={S.dangerBtn} onClick={()=>{if(confirm(`Kasten „${inst.name}" wirklich löschen? Alle Steckungen dieses Kastens gehen verloren.`))removeInstance(inst.id);}}>✕</button></td>
                   </tr>
                 );
               })}
