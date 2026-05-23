@@ -635,6 +635,9 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                 const ol=isOverloaded(inst.id);
                 const sortedOther=alphaSort(instances.filter(o=>o.id!==inst.id),"name");
                 const parentOutlets=parentType?sortOutlets(parentType.outlets):[];
+                // Belegte Anschlüsse ausblenden (anderer Kasten hängt schon dort)
+                const takenOutletIds=new Set(instances.filter(i=>i.id!==inst.id&&i.parentId===inst.parentId&&i.parentId).map(i=>i.parentOutletId).filter(Boolean));
+                const availableOutlets=parentOutlets.filter(o=>!takenOutletIds.has(o.id)||o.id===inst.parentOutletId);
                 // Only show Hauptanschluss picker for root instances
                 const isRoot=!inst.parentId;
                 return (
@@ -653,7 +656,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                       <select style={S.selectSm} value={inst.parentOutletId||""} disabled={!inst.parentId}
                         onChange={e=>setParentWithValidation(inst.id,inst.parentId,e.target.value)}>
                         <option value="">—</option>
-                        {parentOutlets.map(o=><option key={o.id} value={o.id}>{o.label} ({o.amp}A)</option>)}
+                        {availableOutlets.map(o=><option key={o.id} value={o.id}>{o.label} ({o.amp}A)</option>)}
                       </select>
                     </td>
                     <td style={S.td}>
@@ -1168,7 +1171,7 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
   const getIR = (iid) => inspResults[iid] || { voltL1N:"",voltL2N:"",voltL3N:"",voltL1L2:"",voltL2L3:"",voltL1L3:"",voltNPE:"",voltL1PE:"",voltL2PE:"",voltL3PE:"",phaseRot:"",outlets:{} };
   const updIR = (iid, patch) => setInspResults(s=>({ ...s, [iid]:{ ...getIR(iid), ...patch } }));
 
-  const getOR = (iid, oid) => (getIR(iid).outlets||{})[oid] || { rPE:"",rIso:"",rcdT1:"",rcdIan:"",ok:false };
+  const getOR = (iid, oid) => (getIR(iid).outlets||{})[oid] || { rPE:"",rPEL2:"",rPEL3:"",rIso:"",rIsoL2:"",rIsoL3:"",rcdT1:"",rcdIan:"",ok:false };
   const updOR = (iid, oid, patch) => {
     const ir = getIR(iid);
     setInspResults(s=>({ ...s, [iid]:{ ...ir, outlets:{ ...(ir.outlets||{}), [oid]:{ ...getOR(iid,oid), ...patch } } } }));
@@ -1230,22 +1233,51 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
         ["ANSCHLUSSMESSUNGEN"],
       ];
 
-      const hdr = ["Anschluss","Stecker","A","Schutz","R_PE (Ω)","R_PE OK","R_iso (MΩ)","R_iso OK"];
-      if(hasRCD) hdr.push("FI t@IΔn (ms)","FI t OK","FI I_an (mA)");
-      hdr.push("Gesamt");
-      rows.push(hdr);
+      const outlets1phE = outlets.filter(o=>!is3ph(o.connector));
+      const outlets3phE = outlets.filter(o=> is3ph(o.connector));
+      const hasRCD1phE  = outlets1phE.some(o=>o.protection==="RCD"||o.protection==="RCBO");
+      const hasRCD3phE  = outlets3phE.some(o=>o.protection==="RCD"||o.protection==="RCBO");
 
-      outlets.forEach(o => {
-        const or    = getOR(inst.id,o.id);
-        const isRCD = o.protection==="RCD"||o.protection==="RCBO";
-        const ckPE  = or.rPE!==""  ? (parseFloat(or.rPE)<=0.5  ?"✓":"✗") : "";
-        const ckIso = or.rIso!=="" ? (parseFloat(or.rIso)>=1   ?"✓":"✗") : "";
-        const ckT1  = (isRCD&&or.rcdT1!=="") ? (parseFloat(or.rcdT1)<=300?"✓":"✗") : "";
-        const row   = [o.label, CONN[o.connector]?.label||o.connector, o.amp, `${o.protection} ${o.breaker}`, or.rPE||"", ckPE, or.rIso||"", ckIso];
-        if(hasRCD) row.push(isRCD?or.rcdT1||"":"", isRCD?ckT1:"", isRCD?or.rcdIan||"":"");
-        row.push(or.ok?"✓":"");
-        rows.push(row);
-      });
+      if(outlets1phE.length){
+        rows.push(["1-PHASIGE ANSCHLÜSSE"]);
+        const hdr1 = ["Anschluss","Stecker","A","Schutz","R_PE (Ω)","R_PE OK","R_iso (MΩ)","R_iso OK"];
+        if(hasRCD1phE) hdr1.push("FI t@IΔn (ms)","FI t OK","FI I_an (mA)");
+        hdr1.push("Gesamt");
+        rows.push(hdr1);
+        outlets1phE.forEach(o=>{
+          const or    = getOR(inst.id,o.id);
+          const isRCD = o.protection==="RCD"||o.protection==="RCBO";
+          const ckPE  = or.rPE!==""  ? (parseFloat(or.rPE)<=0.5 ?"✓":"✗") : "";
+          const ckIso = or.rIso!=="" ? (parseFloat(or.rIso)>=1  ?"✓":"✗") : "";
+          const ckT1  = (isRCD&&or.rcdT1!=="") ? (parseFloat(or.rcdT1)<=300?"✓":"✗") : "";
+          const row   = [o.label, CONN[o.connector]?.label||o.connector, o.amp, `${o.protection} ${o.breaker}`, or.rPE||"", ckPE, or.rIso||"", ckIso];
+          if(hasRCD1phE) row.push(isRCD?or.rcdT1||"":"", isRCD?ckT1:"", isRCD?or.rcdIan||"":"");
+          row.push(or.ok?"✓":"");
+          rows.push(row);
+        });
+        rows.push([]);
+      }
+
+      if(outlets3phE.length){
+        rows.push(["3-PHASIGE ANSCHLÜSSE"]);
+        const hdr3 = ["Anschluss","Stecker","A","Schutz","R_PE L1","OK","R_PE L2","R_PE L3","R_iso L1","OK","R_iso L2","R_iso L3"];
+        if(hasRCD3phE) hdr3.push("FI t@IΔn (ms)","FI t OK","FI I_an (mA)");
+        hdr3.push("Gesamt");
+        rows.push(hdr3);
+        outlets3phE.forEach(o=>{
+          const or    = getOR(inst.id,o.id);
+          const isRCD = o.protection==="RCD"||o.protection==="RCBO";
+          const ckPE  = or.rPE!==""   ? (parseFloat(or.rPE)<=0.5  ?"✓":"✗") : "";
+          const ckIso = or.rIso!==""  ? (parseFloat(or.rIso)>=1   ?"✓":"✗") : "";
+          const ckT1  = (isRCD&&or.rcdT1!=="") ? (parseFloat(or.rcdT1)<=300?"✓":"✗") : "";
+          const row   = [o.label, CONN[o.connector]?.label||o.connector, o.amp, `${o.protection} ${o.breaker}`,
+            or.rPE||"", ckPE, or.rPEL2||"", or.rPEL3||"",
+            or.rIso||"", ckIso, or.rIsoL2||"", or.rIsoL3||""];
+          if(hasRCD3phE) row.push(isRCD?or.rcdT1||"":"", isRCD?ckT1:"", isRCD?or.rcdIan||"":"");
+          row.push(or.ok?"✓":"");
+          rows.push(row);
+        });
+      }
 
       const ws   = XLSX.utils.aoa_to_sheet(rows);
       const name = inst.name.replace(/[/\\?*[\]:]/g,"").slice(0,31)||"Kasten";
@@ -1273,10 +1305,13 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
       {sorted.length===0
         ? <p style={S.empty}>Keine Kästen aktiviert. Bitte zuerst im Tab „Konfiguration" Kästen hinzufügen.</p>
         : sorted.map(inst=>{
-          const type    = boxTypeById[inst.typeId];
-          const outlets = type ? sortOutlets(type.outlets) : [];
-          const ir      = getIR(inst.id);
-          const hasRCD  = outlets.some(o=>o.protection==="RCD"||o.protection==="RCBO");
+          const type      = boxTypeById[inst.typeId];
+          const outlets   = type ? sortOutlets(type.outlets) : [];
+          const ir        = getIR(inst.id);
+          const outlets1ph = outlets.filter(o=>!is3ph(o.connector));
+          const outlets3ph = outlets.filter(o=> is3ph(o.connector));
+          const hasRCD1ph  = outlets1ph.some(o=>o.protection==="RCD"||o.protection==="RCBO");
+          const hasRCD3ph  = outlets3ph.some(o=>o.protection==="RCD"||o.protection==="RCBO");
 
           // Spannungsprüfung
           const okV1=chk(ir.voltL1N,207,253), okV2=chk(ir.voltL2N,207,253), okV3=chk(ir.voltL3N,207,253);
@@ -1289,113 +1324,142 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
               subtitle={`${type?.name||"?"} · Einspeisung: ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A`}>
 
               {/* ── Spannungsmessung + Drehfeld ── */}
-              <div style={{...S.metaGrid,marginBottom:8}}>
+              <div style={{...S.metaGrid,gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",marginBottom:6}}>
                 <Field label="U L1–N (V)">
-                  <input style={{...S.input,...inpBorder(okV1)}} value={ir.voltL1N||""} onChange={e=>updIR(inst.id,{voltL1N:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okV1)}} value={ir.voltL1N||""} onChange={e=>updIR(inst.id,{voltL1N:e.target.value})}/>
+                  <span style={S.normHint}>207 – 253 V</span>
                 </Field>
                 <Field label="U L2–N (V)">
-                  <input style={{...S.input,...inpBorder(okV2)}} value={ir.voltL2N||""} onChange={e=>updIR(inst.id,{voltL2N:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okV2)}} value={ir.voltL2N||""} onChange={e=>updIR(inst.id,{voltL2N:e.target.value})}/>
+                  <span style={S.normHint}>207 – 253 V</span>
                 </Field>
                 <Field label="U L3–N (V)">
-                  <input style={{...S.input,...inpBorder(okV3)}} value={ir.voltL3N||""} onChange={e=>updIR(inst.id,{voltL3N:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okV3)}} value={ir.voltL3N||""} onChange={e=>updIR(inst.id,{voltL3N:e.target.value})}/>
+                  <span style={S.normHint}>207 – 253 V</span>
                 </Field>
                 <Field label="Drehfeld">
-                  <select style={S.input}
+                  <select style={{...S.inputSm,width:"100%"}}
                     value={ir.phaseRot||""} onChange={e=>updIR(inst.id,{phaseRot:e.target.value})}>
                     <option value="">— nicht geprüft —</option>
                     <option value="rechts">Rechtsdrehfeld</option>
                     <option value="links">Linksdrehfeld</option>
                   </select>
                 </Field>
-              </div>
-              <div style={{...S.metaGrid,marginBottom:8}}>
                 <Field label="U L1–L2 (V)">
-                  <input style={{...S.input,...inpBorder(okL12)}} value={ir.voltL1L2||""} onChange={e=>updIR(inst.id,{voltL1L2:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 360 – 440 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okL12)}} value={ir.voltL1L2||""} onChange={e=>updIR(inst.id,{voltL1L2:e.target.value})}/>
+                  <span style={S.normHint}>360 – 440 V</span>
                 </Field>
                 <Field label="U L2–L3 (V)">
-                  <input style={{...S.input,...inpBorder(okL23)}} value={ir.voltL2L3||""} onChange={e=>updIR(inst.id,{voltL2L3:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 360 – 440 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okL23)}} value={ir.voltL2L3||""} onChange={e=>updIR(inst.id,{voltL2L3:e.target.value})}/>
+                  <span style={S.normHint}>360 – 440 V</span>
                 </Field>
                 <Field label="U L1–L3 (V)">
-                  <input style={{...S.input,...inpBorder(okL13)}} value={ir.voltL1L3||""} onChange={e=>updIR(inst.id,{voltL1L3:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 360 – 440 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okL13)}} value={ir.voltL1L3||""} onChange={e=>updIR(inst.id,{voltL1L3:e.target.value})}/>
+                  <span style={S.normHint}>360 – 440 V</span>
                 </Field>
-              </div>
-              <div style={{...S.metaGrid,marginBottom:16}}>
                 <Field label="U N–PE (V)">
-                  <input style={{...S.input,...inpBorder(okNPE)}} value={ir.voltNPE||""} onChange={e=>updIR(inst.id,{voltNPE:e.target.value})}/>
-                  <span style={S.normHint}>Norm: ≤ 2 V (IEC 60364-4-41)</span>
+                  <input style={{...S.inputSm,...inpBorder(okNPE)}} value={ir.voltNPE||""} onChange={e=>updIR(inst.id,{voltNPE:e.target.value})}/>
+                  <span style={S.normHint}>≤ 2 V</span>
                 </Field>
                 <Field label="U L1–PE (V)">
-                  <input style={{...S.input,...inpBorder(okL1PE)}} value={ir.voltL1PE||""} onChange={e=>updIR(inst.id,{voltL1PE:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okL1PE)}} value={ir.voltL1PE||""} onChange={e=>updIR(inst.id,{voltL1PE:e.target.value})}/>
+                  <span style={S.normHint}>207 – 253 V</span>
                 </Field>
                 <Field label="U L2–PE (V)">
-                  <input style={{...S.input,...inpBorder(okL2PE)}} value={ir.voltL2PE||""} onChange={e=>updIR(inst.id,{voltL2PE:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okL2PE)}} value={ir.voltL2PE||""} onChange={e=>updIR(inst.id,{voltL2PE:e.target.value})}/>
+                  <span style={S.normHint}>207 – 253 V</span>
                 </Field>
                 <Field label="U L3–PE (V)">
-                  <input style={{...S.input,...inpBorder(okL3PE)}} value={ir.voltL3PE||""} onChange={e=>updIR(inst.id,{voltL3PE:e.target.value})}/>
-                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                  <input style={{...S.inputSm,...inpBorder(okL3PE)}} value={ir.voltL3PE||""} onChange={e=>updIR(inst.id,{voltL3PE:e.target.value})}/>
+                  <span style={S.normHint}>207 – 253 V</span>
                 </Field>
               </div>
 
-              {/* ── Anschluss-Messtabelle ── */}
-              <div style={{overflowX:"auto"}}>
-              <table style={{...S.table,minWidth:hasRCD?920:620,width:"auto"}}>
-                <thead><tr>
-                  <th style={S.th}>Anschluss</th>
-                  <th style={S.th}>Stecker</th>
-                  <th style={S.th}>A</th>
-                  <th style={S.th}>Schutz</th>
-                  <th style={S.th}>R_PE (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
-                  <th style={S.th}>R_iso (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
-                  {hasRCD&&<th style={S.th}>FI t @ IΔn (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>}
-                  {hasRCD&&<th style={S.th}>FI I_an (mA)<br/><span style={S.normHint}>≤ IΔn</span></th>}
-                  <th style={S.th}>OK?</th>
-                </tr></thead>
-                <tbody>
-                  {outlets.map(outlet=>{
-                    const or     = getOR(inst.id,outlet.id);
-                    const isRCD  = outlet.protection==="RCD"||outlet.protection==="RCBO";
-                    const okPE   = chk(or.rPE,  undefined, 0.5);
-                    const okIso  = chk(or.rIso,  1, undefined);
-                    const okT1   = isRCD ? chk(or.rcdT1, undefined, 300) : null;
-                    return (
-                      <tr key={outlet.id}>
-                        <td style={S.td}>{outlet.label}</td>
-                        <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{CONN[outlet.connector]?.label||outlet.connector}</td>
-                        <td style={S.td}>{outlet.amp}</td>
-                        <td style={{...S.td,fontSize:11}}>{outlet.protection} {outlet.breaker}</td>
-                        <td style={cellBg(okPE)}>
-                          <input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:72,...inpBorder(okPE)}} value={or.rPE} onChange={e=>updOR(inst.id,outlet.id,{rPE:e.target.value})}/>
-                        </td>
-                        <td style={cellBg(okIso)}>
-                          <input type="number" step="0.1" placeholder="0,0" style={{...S.inputSm,width:72,...inpBorder(okIso)}} value={or.rIso} onChange={e=>updOR(inst.id,outlet.id,{rIso:e.target.value})}/>
-                        </td>
-                        {hasRCD&&(
-                          <td style={isRCD?cellBg(okT1):{...S.td,background:"#0e1216"}}>
-                            {isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:72,...inpBorder(okT1)}} value={or.rcdT1} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/>}
-                          </td>
-                        )}
-                        {hasRCD&&(
-                          <td style={isRCD?S.td:{...S.td,background:"#0e1216"}}>
-                            {isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:72}} value={or.rcdIan} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/>}
-                          </td>
-                        )}
-                        <td style={{...S.td,textAlign:"center"}}>
-                          <input type="checkbox" checked={or.ok||false} onChange={e=>updOR(inst.id,outlet.id,{ok:e.target.checked})}/>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              {/* ── 1-phasige Anschlüsse ── */}
+              {outlets1ph.length>0&&(
+              <div style={{overflowX:"auto",marginBottom:outlets3ph.length?16:0}}>
+                {outlets3ph.length>0&&<p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px"}}>1-phasige Anschlüsse</p>}
+                <table style={{...S.table,minWidth:hasRCD1ph?920:620,width:"auto"}}>
+                  <thead><tr>
+                    <th style={S.th}>Anschluss</th><th style={S.th}>Stecker</th><th style={S.th}>A</th><th style={S.th}>Schutz</th>
+                    <th style={S.th}>R_PE (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
+                    <th style={S.th}>R_iso (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
+                    {hasRCD1ph&&<th style={S.th}>FI t @ IΔn (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>}
+                    {hasRCD1ph&&<th style={S.th}>FI I_an (mA)<br/><span style={S.normHint}>≤ IΔn</span></th>}
+                    <th style={S.th}>OK?</th>
+                  </tr></thead>
+                  <tbody>
+                    {outlets1ph.map(outlet=>{
+                      const or    = getOR(inst.id,outlet.id);
+                      const isRCD = outlet.protection==="RCD"||outlet.protection==="RCBO";
+                      const okPE  = chk(or.rPE, undefined, 0.5);
+                      const okIso = chk(or.rIso, 1, undefined);
+                      const okT1  = isRCD ? chk(or.rcdT1, undefined, 300) : null;
+                      return (
+                        <tr key={outlet.id}>
+                          <td style={S.td}>{outlet.label}</td>
+                          <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{CONN[outlet.connector]?.label||outlet.connector}</td>
+                          <td style={S.td}>{outlet.amp}</td>
+                          <td style={{...S.td,fontSize:11}}>{outlet.protection} {outlet.breaker}</td>
+                          <td style={cellBg(okPE)}><input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:72,...inpBorder(okPE)}} value={or.rPE} onChange={e=>updOR(inst.id,outlet.id,{rPE:e.target.value})}/></td>
+                          <td style={cellBg(okIso)}><input type="number" step="0.1" placeholder="0,0" style={{...S.inputSm,width:72,...inpBorder(okIso)}} value={or.rIso} onChange={e=>updOR(inst.id,outlet.id,{rIso:e.target.value})}/></td>
+                          {hasRCD1ph&&<td style={isRCD?cellBg(okT1):{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:72,...inpBorder(okT1)}} value={or.rcdT1} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/>}</td>}
+                          {hasRCD1ph&&<td style={isRCD?S.td:{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:72}} value={or.rcdIan} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/>}</td>}
+                          <td style={{...S.td,textAlign:"center"}}><input type="checkbox" checked={or.ok||false} onChange={e=>updOR(inst.id,outlet.id,{ok:e.target.checked})}/></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
+              )}
+
+              {/* ── 3-phasige Anschlüsse ── */}
+              {outlets3ph.length>0&&(
+              <div style={{overflowX:"auto"}}>
+                {outlets1ph.length>0&&<p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px"}}>3-phasige Anschlüsse</p>}
+                <table style={{...S.table,minWidth:hasRCD3ph?1100:860,width:"auto"}}>
+                  <thead><tr>
+                    <th style={S.th}>Anschluss</th><th style={S.th}>Stecker</th><th style={S.th}>A</th><th style={S.th}>Schutz</th>
+                    <th style={S.th}>R_PE L1 (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
+                    <th style={S.th}>R_PE L2 (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
+                    <th style={S.th}>R_PE L3 (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
+                    <th style={S.th}>R_iso L1 (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
+                    <th style={S.th}>R_iso L2 (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
+                    <th style={S.th}>R_iso L3 (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
+                    {hasRCD3ph&&<th style={S.th}>FI t @ IΔn (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>}
+                    {hasRCD3ph&&<th style={S.th}>FI I_an (mA)<br/><span style={S.normHint}>≤ IΔn</span></th>}
+                    <th style={S.th}>OK?</th>
+                  </tr></thead>
+                  <tbody>
+                    {outlets3ph.map(outlet=>{
+                      const or     = getOR(inst.id,outlet.id);
+                      const isRCD  = outlet.protection==="RCD"||outlet.protection==="RCBO";
+                      const okPE   = chk(or.rPE,   undefined, 0.5), okPE2  = chk(or.rPEL2,  undefined, 0.5), okPE3  = chk(or.rPEL3,  undefined, 0.5);
+                      const okIso  = chk(or.rIso,  1, undefined),   okIso2 = chk(or.rIsoL2, 1, undefined),   okIso3 = chk(or.rIsoL3, 1, undefined);
+                      const okT1   = isRCD ? chk(or.rcdT1, undefined, 300) : null;
+                      return (
+                        <tr key={outlet.id}>
+                          <td style={S.td}>{outlet.label}</td>
+                          <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{CONN[outlet.connector]?.label||outlet.connector}</td>
+                          <td style={S.td}>{outlet.amp}</td>
+                          <td style={{...S.td,fontSize:11}}>{outlet.protection} {outlet.breaker}</td>
+                          <td style={cellBg(okPE)}>  <input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:66,...inpBorder(okPE)}}   value={or.rPE}    onChange={e=>updOR(inst.id,outlet.id,{rPE:e.target.value})}/></td>
+                          <td style={cellBg(okPE2)}> <input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:66,...inpBorder(okPE2)}}  value={or.rPEL2}  onChange={e=>updOR(inst.id,outlet.id,{rPEL2:e.target.value})}/></td>
+                          <td style={cellBg(okPE3)}> <input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:66,...inpBorder(okPE3)}}  value={or.rPEL3}  onChange={e=>updOR(inst.id,outlet.id,{rPEL3:e.target.value})}/></td>
+                          <td style={cellBg(okIso)}> <input type="number" step="0.1"  placeholder="0,0"  style={{...S.inputSm,width:66,...inpBorder(okIso)}}  value={or.rIso}   onChange={e=>updOR(inst.id,outlet.id,{rIso:e.target.value})}/></td>
+                          <td style={cellBg(okIso2)}><input type="number" step="0.1"  placeholder="0,0"  style={{...S.inputSm,width:66,...inpBorder(okIso2)}} value={or.rIsoL2} onChange={e=>updOR(inst.id,outlet.id,{rIsoL2:e.target.value})}/></td>
+                          <td style={cellBg(okIso3)}><input type="number" step="0.1"  placeholder="0,0"  style={{...S.inputSm,width:66,...inpBorder(okIso3)}} value={or.rIsoL3} onChange={e=>updOR(inst.id,outlet.id,{rIsoL3:e.target.value})}/></td>
+                          {hasRCD3ph&&<td style={isRCD?cellBg(okT1):{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:66,...inpBorder(okT1)}} value={or.rcdT1} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/>}</td>}
+                          {hasRCD3ph&&<td style={isRCD?S.td:{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:66}} value={or.rcdIan} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/>}</td>}
+                          <td style={{...S.td,textAlign:"center"}}><input type="checkbox" checked={or.ok||false} onChange={e=>updOR(inst.id,outlet.id,{ok:e.target.checked})}/></td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              )}
             </Section>
           );
         })
