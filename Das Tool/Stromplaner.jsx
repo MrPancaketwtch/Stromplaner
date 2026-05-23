@@ -1165,10 +1165,10 @@ function Field({label,children}){ return <label style={S.field}><span style={S.f
 function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResults, setInspResults }) {
   const updMeta = (patch) => setInspMeta(s=>({...s,...patch}));
 
-  const getIR = (iid) => inspResults[iid] || { voltL1N:"",voltL2N:"",voltL3N:"",phaseRot:"",outlets:{} };
+  const getIR = (iid) => inspResults[iid] || { voltL1N:"",voltL2N:"",voltL3N:"",voltL1L2:"",voltL2L3:"",voltL1L3:"",phaseRot:"",outlets:{} };
   const updIR = (iid, patch) => setInspResults(s=>({ ...s, [iid]:{ ...getIR(iid), ...patch } }));
 
-  const getOR = (iid, oid) => (getIR(iid).outlets||{})[oid] || { rPE:"",rIso:"",rcdT1:"",rcdT5:"" };
+  const getOR = (iid, oid) => (getIR(iid).outlets||{})[oid] || { rPE:"",rIso:"",rcdT1:"",rcdIan:"" };
   const updOR = (iid, oid, patch) => {
     const ir = getIR(iid);
     setInspResults(s=>({ ...s, [iid]:{ ...ir, outlets:{ ...(ir.outlets||{}), [oid]:{ ...getOR(iid,oid), ...patch } } } }));
@@ -1185,6 +1185,76 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
   const inpBorder = (ok) => ok===true ? {borderColor:"#2ecc71"} : ok===false ? {borderColor:"#e74c3c"} : {};
   const cellBg    = (ok) => ({...S.td, background: ok===true?"rgba(46,204,113,0.12)": ok===false?"rgba(231,76,60,0.12)":"transparent"});
 
+  const exportInspection = () => {
+    const wb = XLSX.utils.book_new();
+
+    // ── Deckblatt ──
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ["Errichtungsprüfungsprotokoll"],
+      [],
+      ["Prüfer:",              inspMeta.inspector||""],
+      ["Datum:",               inspMeta.date||""],
+      ["Prüfmittel / Messgerät:", inspMeta.equipment||""],
+      [],
+      ["Erstellt mit Stromplaner"],
+    ]), "Deckblatt");
+
+    // ── Pro Kasten ein Sheet ──
+    alphaSort(instances,"name").forEach(inst => {
+      const type    = boxTypeById[inst.typeId];
+      const outlets = type ? sortOutlets(type.outlets) : [];
+      const ir      = getIR(inst.id);
+      const hasRCD  = outlets.some(o=>o.protection==="RCD"||o.protection==="RCBO");
+      const vChk    = (val,lo,hi) => { const n=parseFloat(val); return (val===""||isNaN(n))?"":n>=lo&&n<=hi?"✓":"✗"; };
+
+      const rows = [
+        [inst.name],
+        [type?.name||"", `Einspeisung: ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A`],
+        [],
+        ["SPANNUNGSMESSUNG"],
+        ["Messgröße","Messwert","Einheit","Normwert","Ergebnis"],
+        ["U L1–N",  ir.voltL1N||"",  "V", "207–253 V", vChk(ir.voltL1N,207,253)],
+        ["U L2–N",  ir.voltL2N||"",  "V", "207–253 V", vChk(ir.voltL2N,207,253)],
+        ["U L3–N",  ir.voltL3N||"",  "V", "207–253 V", vChk(ir.voltL3N,207,253)],
+        ["U L1–L2", ir.voltL1L2||"", "V", "360–440 V", vChk(ir.voltL1L2,360,440)],
+        ["U L2–L3", ir.voltL2L3||"", "V", "360–440 V", vChk(ir.voltL2L3,360,440)],
+        ["U L1–L3", ir.voltL1L3||"", "V", "360–440 V", vChk(ir.voltL1L3,360,440)],
+        ["Drehfeld",
+          ir.phaseRot==="rechts"?"Rechtsdrehfeld":ir.phaseRot==="links"?"Linksdrehfeld":"",
+          "", "Rechtsdrehfeld",
+          ir.phaseRot==="rechts"?"✓":ir.phaseRot==="links"?"✗":""],
+        [],
+        ["ANSCHLUSSMESSUNGEN"],
+      ];
+
+      const hdr = ["Anschluss","Stecker","A","Schutz","R_PE (Ω)","R_PE OK","R_iso (MΩ)","R_iso OK"];
+      if(hasRCD) hdr.push("FI t@IΔn (ms)","FI t OK","FI I_an (mA)");
+      hdr.push("Gesamt");
+      rows.push(hdr);
+
+      outlets.forEach(o => {
+        const or    = getOR(inst.id,o.id);
+        const isRCD = o.protection==="RCD"||o.protection==="RCBO";
+        const ckPE  = or.rPE!==""  ? (parseFloat(or.rPE)<=0.5  ?"✓":"✗") : "";
+        const ckIso = or.rIso!=="" ? (parseFloat(or.rIso)>=1   ?"✓":"✗") : "";
+        const ckT1  = (isRCD&&or.rcdT1!=="") ? (parseFloat(or.rcdT1)<=300?"✓":"✗") : "";
+        const filled = or.rPE||or.rIso||or.rcdT1||or.rcdIan;
+        const fail   = (or.rPE!==""&&parseFloat(or.rPE)>0.5)||(or.rIso!==""&&parseFloat(or.rIso)<1)||(isRCD&&or.rcdT1!==""&&parseFloat(or.rcdT1)>300);
+        const ok     = !filled?"":fail?"✗":"✓";
+        const row    = [o.label, CONN[o.connector]?.label||o.connector, o.amp, `${o.protection} ${o.breaker}`, or.rPE||"", ckPE, or.rIso||"", ckIso];
+        if(hasRCD) row.push(isRCD?or.rcdT1||"":"", isRCD?ckT1:"", isRCD?or.rcdIan||"":"");
+        row.push(ok);
+        rows.push(row);
+      });
+
+      const ws   = XLSX.utils.aoa_to_sheet(rows);
+      const name = inst.name.replace(/[/\\?*[\]:]/g,"").slice(0,31)||"Kasten";
+      XLSX.utils.book_append_sheet(wb, ws, name);
+    });
+
+    XLSX.writeFile(wb, `Errichtungspruefung_${inspMeta.date||new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
   const sorted = alphaSort(instances,"name");
 
   return (
@@ -1194,6 +1264,9 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
           <Field label="Prüfer"><input style={S.input} value={inspMeta.inspector} onChange={e=>updMeta({inspector:e.target.value})}/></Field>
           <Field label="Datum"><input style={S.input} type="date" value={inspMeta.date} onChange={e=>updMeta({date:e.target.value})}/></Field>
           <Field label="Prüfmittel / Messgerät"><input style={S.input} value={inspMeta.equipment} onChange={e=>updMeta({equipment:e.target.value})}/></Field>
+        </div>
+        <div style={{textAlign:"right",marginTop:14}}>
+          <button style={S.exportBtn} onClick={exportInspection}>⬇ Prüfprotokoll Excel</button>
         </div>
       </Section>
 
@@ -1207,6 +1280,7 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
 
           // Spannungsprüfung
           const okV1=chk(ir.voltL1N,207,253), okV2=chk(ir.voltL2N,207,253), okV3=chk(ir.voltL3N,207,253);
+          const okL12=chk(ir.voltL1L2,360,440), okL23=chk(ir.voltL2L3,360,440), okL13=chk(ir.voltL1L3,360,440);
 
           return (
             <Section key={inst.id}
@@ -1214,7 +1288,7 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
               subtitle={`${type?.name||"?"} · Einspeisung: ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A`}>
 
               {/* ── Spannungsmessung + Drehfeld ── */}
-              <div style={{...S.metaGrid,marginBottom:16}}>
+              <div style={{...S.metaGrid,marginBottom:8}}>
                 <Field label="U L1–N (V)">
                   <input style={{...S.input,...inpBorder(okV1)}} value={ir.voltL1N||""} onChange={e=>updIR(inst.id,{voltL1N:e.target.value})}/>
                   <span style={S.normHint}>Norm: 207 – 253 V</span>
@@ -1228,13 +1302,27 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
                   <span style={S.normHint}>Norm: 207 – 253 V</span>
                 </Field>
                 <Field label="Drehfeld">
-                  <select style={{...S.input,...(ir.phaseRot==="rechts"?{color:"#2ecc71",borderColor:"#2ecc71"}:ir.phaseRot==="links"?{color:"#e74c3c",borderColor:"#e74c3c"}:{})}}
+                  <select style={S.input}
                     value={ir.phaseRot||""} onChange={e=>updIR(inst.id,{phaseRot:e.target.value})}>
                     <option value="">— nicht geprüft —</option>
                     <option value="rechts">Rechtsdrehfeld ✓</option>
                     <option value="links">Linksdrehfeld ✗</option>
                   </select>
                   <span style={S.normHint}>Soll: Rechtsdrehfeld</span>
+                </Field>
+              </div>
+              <div style={{...S.metaGrid,marginBottom:16}}>
+                <Field label="U L1–L2 (V)">
+                  <input style={{...S.input,...inpBorder(okL12)}} value={ir.voltL1L2||""} onChange={e=>updIR(inst.id,{voltL1L2:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 360 – 440 V</span>
+                </Field>
+                <Field label="U L2–L3 (V)">
+                  <input style={{...S.input,...inpBorder(okL23)}} value={ir.voltL2L3||""} onChange={e=>updIR(inst.id,{voltL2L3:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 360 – 440 V</span>
+                </Field>
+                <Field label="U L1–L3 (V)">
+                  <input style={{...S.input,...inpBorder(okL13)}} value={ir.voltL1L3||""} onChange={e=>updIR(inst.id,{voltL1L3:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 360 – 440 V</span>
                 </Field>
               </div>
 
@@ -1249,7 +1337,7 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
                   <th style={S.th}>R_PE (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
                   <th style={S.th}>R_iso (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
                   {hasRCD&&<th style={S.th}>FI t @ IΔn (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>}
-                  {hasRCD&&<th style={S.th}>FI t @ 5×IΔn (ms)<br/><span style={S.normHint}>≤ 40 ms</span></th>}
+                  {hasRCD&&<th style={S.th}>FI I_an (mA)<br/><span style={S.normHint}>≤ IΔn</span></th>}
                   <th style={S.th}>OK?</th>
                 </tr></thead>
                 <tbody>
@@ -1259,9 +1347,8 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
                     const okPE   = chk(or.rPE,  undefined, 0.5);
                     const okIso  = chk(or.rIso,  1, undefined);
                     const okT1   = isRCD ? chk(or.rcdT1, undefined, 300) : null;
-                    const okT5   = isRCD ? chk(or.rcdT5, undefined, 40)  : null;
-                    const filled = or.rPE||or.rIso||or.rcdT1||or.rcdT5;
-                    const checks = [okPE,okIso,...(isRCD?[okT1,okT5]:[])].filter(v=>v!==null);
+                    const filled = or.rPE||or.rIso||or.rcdT1||or.rcdIan;
+                    const checks = [okPE,okIso,...(isRCD?[okT1]:[])].filter(v=>v!==null);
                     const anyFail = checks.some(v=>v===false);
                     const passIcon = !filled ? <span style={{color:"#555"}}>—</span>
                                    : anyFail ? <span style={{color:"#e74c3c"}}>✗</span>
@@ -1284,8 +1371,8 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
                           </td>
                         )}
                         {hasRCD&&(
-                          <td style={isRCD?cellBg(okT5):{...S.td,background:"#0e1216"}}>
-                            {isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:72,...inpBorder(okT5)}} value={or.rcdT5} onChange={e=>updOR(inst.id,outlet.id,{rcdT5:e.target.value})}/>}
+                          <td style={isRCD?S.td:{...S.td,background:"#0e1216"}}>
+                            {isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:72}} value={or.rcdIan} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/>}
                           </td>
                         )}
                         <td style={{...S.td,...S.inspPass}}>{passIcon}</td>
