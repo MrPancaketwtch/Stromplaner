@@ -34,21 +34,21 @@ Kein Internet erforderlich. Alles läuft lokal auf dem Gerät.
 
 ### 1 · Konfiguration
 - Produktionsname, Ersteller, Version, Datum eintragen
-- Hauptanschluss definieren (Bezeichnung + maximaler Strom)
+- Hauptanschlüsse definieren (Bezeichnung + maximaler Strom)
 - Kästen aktivieren: Typ aus dem Dropdown wählen → **+ Kasten hinzufügen**
 - Pro Kasten: einstellen, an welchem Kasten und Abgang er hängt *(z. B. „Kasten 5H hängt an Kasten 3, Abgang 32A-2")*
-- Kästen ohne Verbindung gelten als Einspeisepunkt (Hauptanschluss)
+- Kästen ohne Verbindung gelten als erster Punkt in der Kaskade
 - Überlastete Kästen werden mit ⚠ markiert
 
 ### 2 · Steckplan
 - Pro aktiviertem Kasten ein eigenes Tab
-- Oben: Live-Anzeige der Gesamtlast am Hauptanschluss
+- Oben: Live-Anzeige der Gesamtlast an Hauptanschlüssen
 - Pro Kasten: Phasenbalken zeigen Eigenlast und Gesamtlast *(grün = ok · orange = >80% · rot = Überlast)*
 - **+ Verbraucher stecken**: Verbraucher wählen, dann Steckplatz wählen – Phase wird automatisch gesetzt
-- Nur passende Steckplätze werden angezeigt (1-phasige Verbraucher sehen nur 1-phasige Abgänge und umgekehrt)
+- Nur passende Steckplätze werden angezeigt (1-phasige Verbraucher sehen nur 1-phasige Abgänge und 3-phasige Verbraucher sehen nur 3-phasige Abgänge)
 
 ### 3 · Übersicht
-- Hauptanschluss mit Gesamtlast aller Phasen
+- Hauptanschlüsse mit Gesamtlast aller Phasen
 - Tabelle aller Kästen mit Status
 
 ### Schaltbild
