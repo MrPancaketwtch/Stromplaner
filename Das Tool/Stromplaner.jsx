@@ -1294,14 +1294,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         ${sorted2.map((inst,i)=>{const type=boxTypeById[inst.typeId];const parent=inst.parentId?instById[inst.parentId]:null;return`<div class="trow${i===sorted2.length-1?" row-last":""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name||"–")}</span><span class="muted">${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A</span><span class="muted">${parent?esc(parent.name):"— Einspeisung —"}</span></div>`;}).join("")}
       </div></section>
     <div class="spacer-auto"></div>
-    <section class="block"><header class="bar"><span><strong>Gesamtbefund</strong></span><span class="bar-right">${totalMangel>0?"Mit Mängeln":"Bestanden"}</span></header>
-      <div class="block-body"><div class="kpi-grid">
-        <div class="kpi kpi-sep"><div class="kpi-k">Kästen</div><div class="kpi-v">${total}</div><div class="kpi-s muted">geprüft</div></div>
-        <div class="kpi kpi-sep"><div class="kpi-k">Prüfpunkte</div><div class="kpi-v">${totalPunkte}</div><div class="kpi-s muted">Sichtprüfung</div></div>
-        <div class="kpi kpi-sep"><div class="kpi-k">Mängel</div><div class="kpi-v${totalMangel>0?' bad':''}">${totalMangel}</div><div class="kpi-s muted">offen</div></div>
-        <div class="kpi"><div class="kpi-k">RCD-Tests</div><div class="kpi-v">${totalRCD}</div><div class="kpi-s muted">protokolliert</div></div>
-      </div></div></section>
   </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / ${total+2}</span></footer>
 </article>`;
 
     // ── Pro Kasten ────────────────────────────────────────────────────────
