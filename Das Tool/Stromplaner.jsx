@@ -235,7 +235,7 @@ export default function App() {
   // placements: {id, instanceId, outletId, mcSlot(num|null), loadId}
   const [placements, setPlacements] = useState([]);
   const [activePlan,   setActivePlan]   = useState(null);
-  const [inspMeta,     setInspMeta]     = useState({ inspector:"", date:new Date().toISOString().slice(0,10), equipment:"" });
+  const [inspMeta,     setInspMeta]     = useState({ inspector:"", date:new Date().toISOString().slice(0,10), time:"", equipment:"", address:"", location:"", netType:"" });
   const [inspResults,  setInspResults]  = useState({});
   const [loaded,       setLoaded]       = useState(false); // prevent save before first load
 
@@ -1204,11 +1204,16 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
     const th = `padding:3px 5px;border:1px solid #ddd;font-size:9px;text-align:center;background:#eee`;
     const td = `padding:2px 5px;border:1px solid #ddd;font-size:10px;text-align:center`;
 
+    const mRow = (lbl,val) => val?`<tr><td style="padding:1px 14px 1px 0;color:#666">${lbl}</td><td><b>${val}</b></td></tr>`:"";
     let body = `<h1 style="font-size:17px;margin:0 0 6px">🔌 Errichtungsprüfungsprotokoll</h1>
       <table style="font-size:11px;margin-bottom:16px;border-collapse:collapse">
-        <tr><td style="padding:1px 14px 1px 0;color:#666">Prüfer</td><td><b>${inspMeta.inspector||"–"}</b></td></tr>
-        <tr><td style="padding:1px 14px 1px 0;color:#666">Datum</td><td><b>${inspMeta.date||"–"}</b></td></tr>
-        <tr><td style="padding:1px 14px 1px 0;color:#666">Prüfmittel</td><td><b>${inspMeta.equipment||"–"}</b></td></tr>
+        ${mRow("Prüfer",       inspMeta.inspector)}
+        ${mRow("Datum",        inspMeta.date)}
+        ${mRow("Uhrzeit",      inspMeta.time)}
+        ${mRow("Adresse",      inspMeta.address)}
+        ${mRow("Anschlussort", inspMeta.location)}
+        ${mRow("Netzform",     inspMeta.netType)}
+        ${mRow("Prüfmittel",   inspMeta.equipment)}
       </table>`;
 
     alphaSort(instances,"name").forEach(inst => {
@@ -1314,7 +1319,19 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
         <div style={S.metaGrid}>
           <Field label="Prüfer"><input style={S.input} value={inspMeta.inspector} onChange={e=>updMeta({inspector:e.target.value})}/></Field>
           <Field label="Datum"><input style={S.input} type="date" value={inspMeta.date} onChange={e=>updMeta({date:e.target.value})}/></Field>
+          <Field label="Uhrzeit"><input style={S.input} type="time" value={inspMeta.time||""} onChange={e=>updMeta({time:e.target.value})}/></Field>
           <Field label="Prüfmittel / Messgerät"><input style={S.input} value={inspMeta.equipment} onChange={e=>updMeta({equipment:e.target.value})}/></Field>
+          <Field label="Adresse"><input style={S.input} value={inspMeta.address||""} onChange={e=>updMeta({address:e.target.value})}/></Field>
+          <Field label="Ort des Anschlusses"><input style={S.input} value={inspMeta.location||""} onChange={e=>updMeta({location:e.target.value})}/></Field>
+          <Field label="Netzform">
+            <select style={S.input} value={inspMeta.netType||""} onChange={e=>updMeta({netType:e.target.value})}>
+              <option value="">— nicht angegeben —</option>
+              <option value="TN-S">TN-S</option>
+              <option value="TN-C-S">TN-C-S</option>
+              <option value="TT">TT</option>
+              <option value="IT">IT</option>
+            </select>
+          </Field>
         </div>
         <div style={{textAlign:"right",marginTop:14}}>
           <button style={S.exportBtn} onClick={exportInspectionPDF}>🖨 Prüfprotokoll PDF</button>
@@ -1398,7 +1415,7 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
               {outlets1ph.length>0&&(
               <div style={{overflowX:"auto",marginBottom:outlets3ph.length?16:0}}>
                 {outlets3ph.length>0&&<p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px"}}>1-phasige Anschlüsse</p>}
-                <table style={{...S.table,minWidth:hasRCD1ph?920:620,width:"auto"}}>
+                <table style={{...S.table,width:"100%"}}>
                   <thead><tr>
                     <th style={S.th}>Anschluss</th><th style={S.th}>Stecker</th><th style={S.th}>A</th><th style={S.th}>Schutz</th>
                     <th style={S.th}>R_PE (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
@@ -1437,7 +1454,7 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
               {outlets3ph.length>0&&(
               <div style={{overflowX:"auto"}}>
                 {outlets1ph.length>0&&<p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px"}}>3-phasige Anschlüsse</p>}
-                <table style={{...S.table,minWidth:hasRCD3ph?920:620,width:"auto"}}>
+                <table style={{...S.table,width:"100%"}}>
                   <thead><tr>
                     <th style={S.th}>Anschluss</th><th style={S.th}>Stecker</th><th style={S.th}>A</th><th style={S.th}>Schutz</th>
                     <th style={{...S.th,fontSize:10}}>PE-L1<br/><span style={S.normHint}>≤0,5Ω</span></th>
@@ -1463,14 +1480,14 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
                           <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{CONN[outlet.connector]?.label||outlet.connector}</td>
                           <td style={S.td}>{outlet.amp}</td>
                           <td style={{...S.td,fontSize:11}}>{outlet.protection} {outlet.breaker}</td>
-                          <td style={cellBg(okPE)}>  <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okPE)}}   value={or.rPE}    onChange={e=>updOR(inst.id,outlet.id,{rPE:e.target.value})}/></td>
-                          <td style={cellBg(okPE2)}> <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okPE2)}}  value={or.rPEL2}  onChange={e=>updOR(inst.id,outlet.id,{rPEL2:e.target.value})}/></td>
-                          <td style={cellBg(okPE3)}> <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okPE3)}}  value={or.rPEL3}  onChange={e=>updOR(inst.id,outlet.id,{rPEL3:e.target.value})}/></td>
-                          <td style={cellBg(okIso)}> <input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okIso)}}  value={or.rIso}   onChange={e=>updOR(inst.id,outlet.id,{rIso:e.target.value})}/></td>
-                          <td style={cellBg(okIso2)}><input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okIso2)}} value={or.rIsoL2} onChange={e=>updOR(inst.id,outlet.id,{rIsoL2:e.target.value})}/></td>
-                          <td style={cellBg(okIso3)}><input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okIso3)}} value={or.rIsoL3} onChange={e=>updOR(inst.id,outlet.id,{rIsoL3:e.target.value})}/></td>
-                          {hasRCD3ph&&<td style={isRCD?cellBg(okT1):{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okT1)}} value={or.rcdT1} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/>}</td>}
-                          {hasRCD3ph&&<td style={isRCD?S.td:{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="–" style={{...S.inputSm,width:46}} value={or.rcdIan} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/>}</td>}
+                          <td style={cellBg(okPE)}>  <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,...inpBorder(okPE)}}   value={or.rPE}    onChange={e=>updOR(inst.id,outlet.id,{rPE:e.target.value})}/></td>
+                          <td style={cellBg(okPE2)}> <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,...inpBorder(okPE2)}}  value={or.rPEL2}  onChange={e=>updOR(inst.id,outlet.id,{rPEL2:e.target.value})}/></td>
+                          <td style={cellBg(okPE3)}> <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,...inpBorder(okPE3)}}  value={or.rPEL3}  onChange={e=>updOR(inst.id,outlet.id,{rPEL3:e.target.value})}/></td>
+                          <td style={cellBg(okIso)}> <input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,...inpBorder(okIso)}}  value={or.rIso}   onChange={e=>updOR(inst.id,outlet.id,{rIso:e.target.value})}/></td>
+                          <td style={cellBg(okIso2)}><input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,...inpBorder(okIso2)}} value={or.rIsoL2} onChange={e=>updOR(inst.id,outlet.id,{rIsoL2:e.target.value})}/></td>
+                          <td style={cellBg(okIso3)}><input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,...inpBorder(okIso3)}} value={or.rIsoL3} onChange={e=>updOR(inst.id,outlet.id,{rIsoL3:e.target.value})}/></td>
+                          {hasRCD3ph&&<td style={isRCD?cellBg(okT1):{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="–" style={{...S.inputSm,...inpBorder(okT1)}} value={or.rcdT1} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/>}</td>}
+                          {hasRCD3ph&&<td style={isRCD?S.td:{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="–" style={S.inputSm} value={or.rcdIan} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/>}</td>}
                           <td style={{...S.td,textAlign:"center"}}><input type="checkbox" checked={or.ok||false} onChange={e=>updOR(inst.id,outlet.id,{ok:e.target.checked})}/></td>
                         </tr>
                       );

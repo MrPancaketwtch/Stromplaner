@@ -31,7 +31,7 @@ async function build() {
       `<!DOCTYPE html><html lang="de"><head>` +
       `<meta charset="utf-8">` +
       `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-      `<title>Stromplaner v4</title>` +
+      `<title>Stromplaner</title>` +
       `<style>html,body{margin:0;padding:0;background:#15191e;}</style>` +
       `</head><body><div id="root"></div><script>\n` +
       bundle +
