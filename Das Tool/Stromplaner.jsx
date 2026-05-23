@@ -1219,10 +1219,10 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
         ["U L1–L2", ir.voltL1L2||"", "V", "360–440 V", vChk(ir.voltL1L2,360,440)],
         ["U L2–L3", ir.voltL2L3||"", "V", "360–440 V", vChk(ir.voltL2L3,360,440)],
         ["U L1–L3", ir.voltL1L3||"", "V", "360–440 V", vChk(ir.voltL1L3,360,440)],
-        ["U N–PE",  ir.voltNPE||"",  "V", "", ""],
-        ["U L1–PE", ir.voltL1PE||"", "V", "", ""],
-        ["U L2–PE", ir.voltL2PE||"", "V", "", ""],
-        ["U L3–PE", ir.voltL3PE||"", "V", "", ""],
+        ["U N–PE",  ir.voltNPE||"",  "V", "≤ 2 V",     ir.voltNPE!==""?(parseFloat(ir.voltNPE)<=2?"✓":"✗"):""],
+        ["U L1–PE", ir.voltL1PE||"", "V", "207–253 V", vChk(ir.voltL1PE,207,253)],
+        ["U L2–PE", ir.voltL2PE||"", "V", "207–253 V", vChk(ir.voltL2PE,207,253)],
+        ["U L3–PE", ir.voltL3PE||"", "V", "207–253 V", vChk(ir.voltL3PE,207,253)],
         ["Drehfeld",
           ir.phaseRot==="rechts"?"Rechtsdrehfeld":ir.phaseRot==="links"?"Linksdrehfeld":"",
           "", "", ""],
@@ -1281,6 +1281,7 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
           // Spannungsprüfung
           const okV1=chk(ir.voltL1N,207,253), okV2=chk(ir.voltL2N,207,253), okV3=chk(ir.voltL3N,207,253);
           const okL12=chk(ir.voltL1L2,360,440), okL23=chk(ir.voltL2L3,360,440), okL13=chk(ir.voltL1L3,360,440);
+          const okNPE=chk(ir.voltNPE,undefined,2), okL1PE=chk(ir.voltL1PE,207,253), okL2PE=chk(ir.voltL2PE,207,253), okL3PE=chk(ir.voltL3PE,207,253);
 
           return (
             <Section key={inst.id}
@@ -1326,16 +1327,20 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
               </div>
               <div style={{...S.metaGrid,marginBottom:16}}>
                 <Field label="U N–PE (V)">
-                  <input style={S.input} value={ir.voltNPE||""} onChange={e=>updIR(inst.id,{voltNPE:e.target.value})}/>
+                  <input style={{...S.input,...inpBorder(okNPE)}} value={ir.voltNPE||""} onChange={e=>updIR(inst.id,{voltNPE:e.target.value})}/>
+                  <span style={S.normHint}>Norm: ≤ 2 V (IEC 60364-4-41)</span>
                 </Field>
                 <Field label="U L1–PE (V)">
-                  <input style={S.input} value={ir.voltL1PE||""} onChange={e=>updIR(inst.id,{voltL1PE:e.target.value})}/>
+                  <input style={{...S.input,...inpBorder(okL1PE)}} value={ir.voltL1PE||""} onChange={e=>updIR(inst.id,{voltL1PE:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 207 – 253 V</span>
                 </Field>
                 <Field label="U L2–PE (V)">
-                  <input style={S.input} value={ir.voltL2PE||""} onChange={e=>updIR(inst.id,{voltL2PE:e.target.value})}/>
+                  <input style={{...S.input,...inpBorder(okL2PE)}} value={ir.voltL2PE||""} onChange={e=>updIR(inst.id,{voltL2PE:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 207 – 253 V</span>
                 </Field>
                 <Field label="U L3–PE (V)">
-                  <input style={S.input} value={ir.voltL3PE||""} onChange={e=>updIR(inst.id,{voltL3PE:e.target.value})}/>
+                  <input style={{...S.input,...inpBorder(okL3PE)}} value={ir.voltL3PE||""} onChange={e=>updIR(inst.id,{voltL3PE:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 207 – 253 V</span>
                 </Field>
               </div>
 
