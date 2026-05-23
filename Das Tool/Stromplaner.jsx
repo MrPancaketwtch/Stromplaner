@@ -1392,13 +1392,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="thead" style="grid-template-columns:40px 200px 1fr 80px"><span>Nr.</span><span>Kasten</span><span>Beschreibung</span><span class="r">Schwere</span></div>
         ${maengel.map((m,i)=>`<div class="trow${i===maengel.length-1?" row-last":""}" style="grid-template-columns:40px 200px 1fr 80px"><span class="muted">M${String(i+1).padStart(2,"0")}</span><span>${esc(m.inst.name)}</span><span>${esc(m.item)}</span><span class="r">${m.type==="bad"?`<span class="bad">✕ Mangel</span>`:`<span class="warn">! Hinweis</span>`}</span></div>`).join("")}`}
       </div></section>
-    <section class="block"><header class="bar"><span><strong>F · Bestätigung</strong><span class="bar-sub">DIN VDE 0100-600</span></span></header>
+    <section class="block"><header class="bar"><span><strong>F · Unterschrift</strong><span class="bar-sub">Prüfende Elektrofachkraft</span></span></header>
       <div class="block-body">
-        <div class="confirm">Hiermit wird bestätigt, dass die mobile Stromverteilung <strong>${esc(meta?.production||"–")}</strong> gemäß <strong>DIN VDE 0100-600</strong> errichtet und geprüft wurde. Sichtprüfung und Messungen wurden an jedem Anlagenteil durchgeführt und protokolliert. ${totalMangel>0?"Die Anlage ist nach Behebung der genannten Mängel freizugeben.":"Die Anlage ist freigegeben."}</div>
-        <div class="sign-row">
-          <div class="sign"><div class="sign-role">Prüfende Elektrofachkraft</div><div class="sign-line"></div><div class="sign-name">${esc(inspMeta.inspector||"–")}</div><div class="muted">${esc(inspMeta.location||"")}${inspMeta.date?" · "+esc(inspMeta.date):""}</div></div>
-          <div class="sign sign-r"><div class="sign-role">Veranstalter · Übernahme</div><div class="sign-line"></div><div class="sign-name">${esc(meta?.production||"–")}</div><div class="muted">${esc(inspMeta.date||"")}</div></div>
-        </div>
+        <div class="sign" style="padding:12px 12px 8px"><div class="sign-role">Prüfende Elektrofachkraft · DIN VDE 0100-600</div><div class="sign-line"></div><div class="sign-name">${esc(inspMeta.inspector||"–")}</div><div class="muted">${esc(inspMeta.location||"")}${inspMeta.date?" · "+esc(inspMeta.date):""}</div></div>
       </div></section>
     <div class="spacer-auto"></div>
     <section class="block"><header class="bar"><span><strong>Hinweis</strong></span></header>
