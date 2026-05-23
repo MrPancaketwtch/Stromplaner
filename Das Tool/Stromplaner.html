@@ -44660,9 +44660,9 @@ Fortfahren?`);
       ["plan", "2 \xB7 Steckplan"],
       ["overview", "3 \xB7 \xDCbersicht"],
       ["schematic", "Schaltbild"],
+      ["inspection", "Errichtungspr\xFCfung"],
       ["boxtypes", "Kasten-Typen"],
-      ["loads", "Verbraucher"],
-      ["inspection", "Errichtungspr\xFCfung"]
+      ["loads", "Verbraucher"]
     ];
     const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, rootInstances, mainConns, mainConnById };
     return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("style", null, CSS), /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: exportPDF }, "\u{1F5A8} PDF"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportExcel }, "\u2B07 Excel")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement("button", { key: k, style: { ...S.navBtn, ...tab === k ? S.navBtnActive : {} }, onClick: () => setTab(k) }, label))), /* @__PURE__ */ import_react.default.createElement("main", { style: S.main }, tab === "config" && /* @__PURE__ */ import_react.default.createElement(
@@ -44987,114 +44987,118 @@ Fortfahren?`);
     };
     const inpBorder = (ok) => ok === true ? { borderColor: "#2ecc71" } : ok === false ? { borderColor: "#e74c3c" } : {};
     const cellBg = (ok) => ({ ...S.td, background: ok === true ? "rgba(46,204,113,0.12)" : ok === false ? "rgba(231,76,60,0.12)" : "transparent" });
-    const exportInspection = () => {
-      const wb = utils.book_new();
-      utils.book_append_sheet(wb, utils.aoa_to_sheet([
-        ["Errichtungspr\xFCfungsprotokoll"],
-        [],
-        ["Pr\xFCfer:", inspMeta.inspector || ""],
-        ["Datum:", inspMeta.date || ""],
-        ["Pr\xFCfmittel / Messger\xE4t:", inspMeta.equipment || ""],
-        [],
-        ["Erstellt mit Stromplaner"]
-      ]), "Deckblatt");
+    const exportInspectionPDF = () => {
+      const pw = window.open("", "_blank", "width=920,height=750");
+      if (!pw) {
+        alert("Popup-Blocker aktiv \u2013 bitte erlauben.");
+        return;
+      }
+      const ck = (val, lo, hi) => {
+        if (val === "" || val === void 0) return "";
+        const n = parseFloat(val);
+        if (isNaN(n)) return "";
+        if (lo !== void 0 && n < lo) return "\u2717";
+        if (hi !== void 0 && n > hi) return "\u2717";
+        return "\u2713";
+      };
+      const okBg = (v) => v === "\u2713" ? "background:#e8f8f0" : v === "\u2717" ? "background:#fde8e8" : "";
+      const okCol = (v) => v === "\u2713" ? "color:#27ae60" : v === "\u2717" ? "color:#c0392b" : "color:#999";
+      const th = `padding:3px 5px;border:1px solid #ddd;font-size:9px;text-align:center;background:#eee`;
+      const td = `padding:2px 5px;border:1px solid #ddd;font-size:10px;text-align:center`;
+      let body = `<h1 style="font-size:17px;margin:0 0 6px">\u{1F50C} Errichtungspr\xFCfungsprotokoll</h1>
+      <table style="font-size:11px;margin-bottom:16px;border-collapse:collapse">
+        <tr><td style="padding:1px 14px 1px 0;color:#666">Pr\xFCfer</td><td><b>${inspMeta.inspector || "\u2013"}</b></td></tr>
+        <tr><td style="padding:1px 14px 1px 0;color:#666">Datum</td><td><b>${inspMeta.date || "\u2013"}</b></td></tr>
+        <tr><td style="padding:1px 14px 1px 0;color:#666">Pr\xFCfmittel</td><td><b>${inspMeta.equipment || "\u2013"}</b></td></tr>
+      </table>`;
       alphaSort(instances, "name").forEach((inst) => {
         const type = boxTypeById[inst.typeId];
         const outlets = type ? sortOutlets(type.outlets) : [];
         const ir = getIR(inst.id);
-        const hasRCD = outlets.some((o) => o.protection === "RCD" || o.protection === "RCBO");
-        const vChk = (val, lo, hi) => {
-          const n = parseFloat(val);
-          return val === "" || isNaN(n) ? "" : n >= lo && n <= hi ? "\u2713" : "\u2717";
-        };
-        const rows = [
-          [inst.name],
-          [type?.name || "", `Einspeisung: ${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A`],
-          [],
-          ["SPANNUNGSMESSUNG"],
-          ["Messgr\xF6\xDFe", "Messwert", "Einheit", "Normwert", "Ergebnis"],
-          ["U L1\u2013N", ir.voltL1N || "", "V", "207\u2013253 V", vChk(ir.voltL1N, 207, 253)],
-          ["U L2\u2013N", ir.voltL2N || "", "V", "207\u2013253 V", vChk(ir.voltL2N, 207, 253)],
-          ["U L3\u2013N", ir.voltL3N || "", "V", "207\u2013253 V", vChk(ir.voltL3N, 207, 253)],
-          ["U L1\u2013L2", ir.voltL1L2 || "", "V", "360\u2013440 V", vChk(ir.voltL1L2, 360, 440)],
-          ["U L2\u2013L3", ir.voltL2L3 || "", "V", "360\u2013440 V", vChk(ir.voltL2L3, 360, 440)],
-          ["U L1\u2013L3", ir.voltL1L3 || "", "V", "360\u2013440 V", vChk(ir.voltL1L3, 360, 440)],
-          ["U N\u2013PE", ir.voltNPE || "", "V", "\u2264 2 V", ir.voltNPE !== "" ? parseFloat(ir.voltNPE) <= 2 ? "\u2713" : "\u2717" : ""],
-          ["U L1\u2013PE", ir.voltL1PE || "", "V", "207\u2013253 V", vChk(ir.voltL1PE, 207, 253)],
-          ["U L2\u2013PE", ir.voltL2PE || "", "V", "207\u2013253 V", vChk(ir.voltL2PE, 207, 253)],
-          ["U L3\u2013PE", ir.voltL3PE || "", "V", "207\u2013253 V", vChk(ir.voltL3PE, 207, 253)],
-          [
-            "Drehfeld",
-            ir.phaseRot === "rechts" ? "Rechtsdrehfeld" : ir.phaseRot === "links" ? "Linksdrehfeld" : "",
-            "",
-            "",
-            ""
-          ],
-          [],
-          ["ANSCHLUSSMESSUNGEN"]
-        ];
-        const outlets1phE = outlets.filter((o) => !is3ph(o.connector));
-        const outlets3phE = outlets.filter((o) => is3ph(o.connector));
-        const hasRCD1phE = outlets1phE.some((o) => o.protection === "RCD" || o.protection === "RCBO");
-        const hasRCD3phE = outlets3phE.some((o) => o.protection === "RCD" || o.protection === "RCBO");
-        if (outlets1phE.length) {
-          rows.push(["1-PHASIGE ANSCHL\xDCSSE"]);
-          const hdr1 = ["Anschluss", "Stecker", "A", "Schutz", "R_PE (\u03A9)", "R_PE OK", "R_iso (M\u03A9)", "R_iso OK"];
-          if (hasRCD1phE) hdr1.push("FI t@I\u0394n (ms)", "FI t OK", "FI I_an (mA)");
-          hdr1.push("Gesamt");
-          rows.push(hdr1);
-          outlets1phE.forEach((o) => {
-            const or = getOR(inst.id, o.id);
-            const isRCD = o.protection === "RCD" || o.protection === "RCBO";
-            const ckPE = or.rPE !== "" ? parseFloat(or.rPE) <= 0.5 ? "\u2713" : "\u2717" : "";
-            const ckIso = or.rIso !== "" ? parseFloat(or.rIso) >= 1 ? "\u2713" : "\u2717" : "";
-            const ckT1 = isRCD && or.rcdT1 !== "" ? parseFloat(or.rcdT1) <= 300 ? "\u2713" : "\u2717" : "";
-            const row = [o.label, CONN[o.connector]?.label || o.connector, o.amp, `${o.protection} ${o.breaker}`, or.rPE || "", ckPE, or.rIso || "", ckIso];
-            if (hasRCD1phE) row.push(isRCD ? or.rcdT1 || "" : "", isRCD ? ckT1 : "", isRCD ? or.rcdIan || "" : "");
-            row.push(or.ok ? "\u2713" : "");
-            rows.push(row);
+        const outs1 = outlets.filter((o) => !is3ph(o.connector));
+        const outs3 = outlets.filter((o) => is3ph(o.connector));
+        const rcd1 = outs1.some((o) => o.protection === "RCD" || o.protection === "RCBO");
+        const rcd3 = outs3.some((o) => o.protection === "RCD" || o.protection === "RCBO");
+        body += `<div style="page-break-inside:avoid;margin-top:16px">
+        <h2 style="font-size:12px;background:#1c2127;color:#fff;padding:5px 10px;margin:0 0 6px;border-radius:4px">
+          ${inst.name} <span style="font-weight:400;font-size:10px">${type?.name || ""} \xB7 ${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span>
+        </h2>`;
+        const vr = (lbl, val, norm, ok) => `<tr style="${okBg(ok)}"><td style="padding:2px 6px;border:1px solid #ddd;font-size:10px">${lbl}</td>
+         <td style="padding:2px 6px;border:1px solid #ddd;font-size:10px;font-weight:700">${val || ""}</td>
+         <td style="padding:2px 6px;border:1px solid #ddd;font-size:9px;color:#777">${norm}</td>
+         <td style="padding:2px 6px;border:1px solid #ddd;font-size:10px;font-weight:700;${okCol(ok)}">${ok}</td></tr>`;
+        body += `<table style="border-collapse:collapse;width:300px;margin-bottom:10px;float:left;margin-right:16px">
+        <thead><tr><th style="${th};text-align:left">Messgr\xF6\xDFe</th><th style="${th}">Wert (V)</th><th style="${th}">Norm</th><th style="${th}">OK</th></tr></thead><tbody>
+        ${vr("U L1\u2013N", ir.voltL1N, "207\u2013253 V", ck(ir.voltL1N, 207, 253))}
+        ${vr("U L2\u2013N", ir.voltL2N, "207\u2013253 V", ck(ir.voltL2N, 207, 253))}
+        ${vr("U L3\u2013N", ir.voltL3N, "207\u2013253 V", ck(ir.voltL3N, 207, 253))}
+        ${vr("U L1\u2013L2", ir.voltL1L2, "360\u2013440 V", ck(ir.voltL1L2, 360, 440))}
+        ${vr("U L2\u2013L3", ir.voltL2L3, "360\u2013440 V", ck(ir.voltL2L3, 360, 440))}
+        ${vr("U L1\u2013L3", ir.voltL1L3, "360\u2013440 V", ck(ir.voltL1L3, 360, 440))}
+        ${vr("U N\u2013PE", ir.voltNPE, "\u2264 2 V", ck(ir.voltNPE, void 0, 2))}
+        ${vr("U L1\u2013PE", ir.voltL1PE, "207\u2013253 V", ck(ir.voltL1PE, 207, 253))}
+        ${vr("U L2\u2013PE", ir.voltL2PE, "207\u2013253 V", ck(ir.voltL2PE, 207, 253))}
+        ${vr("U L3\u2013PE", ir.voltL3PE, "207\u2013253 V", ck(ir.voltL3PE, 207, 253))}
+        <tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:10px">Drehfeld</td>
+          <td colspan="2" style="padding:2px 6px;border:1px solid #ddd;font-size:10px">${ir.phaseRot === "rechts" ? "Rechtsdrehfeld" : ir.phaseRot === "links" ? "Linksdrehfeld" : "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;font-size:10px;font-weight:700;${ir.phaseRot === "rechts" ? "color:#27ae60" : ir.phaseRot === "links" ? "color:#c0392b" : "color:#999"}">${ir.phaseRot === "rechts" ? "\u2713" : ir.phaseRot === "links" ? "\u2717" : "\u2013"}</td>
+        </tr></tbody></table><div style="clear:both"></div>`;
+        if (outs1.length) {
+          if (outs3.length) body += `<p style="font-size:10px;font-weight:700;margin:0 0 3px">1-phasige Anschl\xFCsse</p>`;
+          body += `<table style="border-collapse:collapse;width:100%;margin-bottom:8px"><thead><tr>
+          <th style="${th};text-align:left">Anschluss</th><th style="${th}">Schutz</th>
+          <th style="${th}">R_PE (\u03A9)<br>\u22640,5</th><th style="${th}">R_iso (M\u03A9)<br>\u22651</th>
+          ${rcd1 ? `<th style="${th}">FI t@I\u0394n<br>\u2264300ms</th><th style="${th}">FI I_an (mA)</th>` : ""}
+          <th style="${th}">OK</th></tr></thead><tbody>`;
+          outs1.forEach((o) => {
+            const or = getOR(inst.id, o.id), isRCD = o.protection === "RCD" || o.protection === "RCBO";
+            const pe = ck(or.rPE, void 0, 0.5), iso = ck(or.rIso, 1), t1 = isRCD ? ck(or.rcdT1, void 0, 300) : "";
+            body += `<tr><td style="${td};text-align:left">${o.label}</td><td style="${td}">${o.protection} ${o.breaker}</td>
+            <td style="${td};${okBg(pe)}">${or.rPE || ""} <span style="font-size:8px;${okCol(pe)}">${pe}</span></td>
+            <td style="${td};${okBg(iso)}">${or.rIso || ""} <span style="font-size:8px;${okCol(iso)}">${iso}</span></td>
+            ${rcd1 ? `<td style="${td};${isRCD ? okBg(t1) : "background:#f5f5f5"}">${isRCD ? or.rcdT1 || "" : ""} <span style="font-size:8px;${okCol(t1)}">${t1}</span></td>
+                    <td style="${td};${isRCD ? "" : "background:#f5f5f5"}">${isRCD ? or.rcdIan || "" : ""}</td>` : ""}
+            <td style="${td};font-weight:700;${okCol(or.ok ? "\u2713" : "")}">${or.ok ? "\u2713" : "\u2014"}</td></tr>`;
           });
-          rows.push([]);
+          body += `</tbody></table>`;
         }
-        if (outlets3phE.length) {
-          rows.push(["3-PHASIGE ANSCHL\xDCSSE"]);
-          const hdr3 = ["Anschluss", "Stecker", "A", "Schutz", "R_PE L1", "OK", "R_PE L2", "R_PE L3", "R_iso L1", "OK", "R_iso L2", "R_iso L3"];
-          if (hasRCD3phE) hdr3.push("FI t@I\u0394n (ms)", "FI t OK", "FI I_an (mA)");
-          hdr3.push("Gesamt");
-          rows.push(hdr3);
-          outlets3phE.forEach((o) => {
-            const or = getOR(inst.id, o.id);
-            const isRCD = o.protection === "RCD" || o.protection === "RCBO";
-            const ckPE = or.rPE !== "" ? parseFloat(or.rPE) <= 0.5 ? "\u2713" : "\u2717" : "";
-            const ckIso = or.rIso !== "" ? parseFloat(or.rIso) >= 1 ? "\u2713" : "\u2717" : "";
-            const ckT1 = isRCD && or.rcdT1 !== "" ? parseFloat(or.rcdT1) <= 300 ? "\u2713" : "\u2717" : "";
-            const row = [
-              o.label,
-              CONN[o.connector]?.label || o.connector,
-              o.amp,
-              `${o.protection} ${o.breaker}`,
-              or.rPE || "",
-              ckPE,
-              or.rPEL2 || "",
-              or.rPEL3 || "",
-              or.rIso || "",
-              ckIso,
-              or.rIsoL2 || "",
-              or.rIsoL3 || ""
-            ];
-            if (hasRCD3phE) row.push(isRCD ? or.rcdT1 || "" : "", isRCD ? ckT1 : "", isRCD ? or.rcdIan || "" : "");
-            row.push(or.ok ? "\u2713" : "");
-            rows.push(row);
+        if (outs3.length) {
+          if (outs1.length) body += `<p style="font-size:10px;font-weight:700;margin:0 0 3px">3-phasige Anschl\xFCsse</p>`;
+          body += `<table style="border-collapse:collapse;width:100%;margin-bottom:8px"><thead><tr>
+          <th style="${th};text-align:left">Anschluss</th><th style="${th}">Schutz</th>
+          <th style="${th}">PE-L1<br>\u22640,5\u03A9</th><th style="${th}">PE-L2</th><th style="${th}">PE-L3</th>
+          <th style="${th}">iso-L1<br>\u22651M\u03A9</th><th style="${th}">iso-L2</th><th style="${th}">iso-L3</th>
+          ${rcd3 ? `<th style="${th}">FI t@I\u0394n<br>\u2264300ms</th><th style="${th}">FI I_an</th>` : ""}
+          <th style="${th}">OK</th></tr></thead><tbody>`;
+          outs3.forEach((o) => {
+            const or = getOR(inst.id, o.id), isRCD = o.protection === "RCD" || o.protection === "RCBO";
+            const pe1 = ck(or.rPE, void 0, 0.5), pe2 = ck(or.rPEL2, void 0, 0.5), pe3 = ck(or.rPEL3, void 0, 0.5);
+            const i1 = ck(or.rIso, 1), i2 = ck(or.rIsoL2, 1), i3 = ck(or.rIsoL3, 1);
+            const t1 = isRCD ? ck(or.rcdT1, void 0, 300) : "";
+            const c = (v, ok) => `<td style="${td};${okBg(ok)}">${v || ""} <span style="font-size:8px;${okCol(ok)}">${ok}</span></td>`;
+            body += `<tr><td style="${td};text-align:left">${o.label}</td><td style="${td}">${o.protection} ${o.breaker}</td>
+            ${c(or.rPE, pe1)}${c(or.rPEL2, pe2)}${c(or.rPEL3, pe3)}
+            ${c(or.rIso, i1)}${c(or.rIsoL2, i2)}${c(or.rIsoL3, i3)}
+            ${rcd3 ? `<td style="${td};${isRCD ? okBg(t1) : "background:#f5f5f5"}">${isRCD ? or.rcdT1 || "" : ""} <span style="font-size:8px;${okCol(t1)}">${t1}</span></td>
+                    <td style="${td};${isRCD ? "" : "background:#f5f5f5"}">${isRCD ? or.rcdIan || "" : ""}</td>` : ""}
+            <td style="${td};font-weight:700;${okCol(or.ok ? "\u2713" : "")}">${or.ok ? "\u2713" : "\u2014"}</td></tr>`;
           });
+          body += `</tbody></table>`;
         }
-        const ws = utils.aoa_to_sheet(rows);
-        const name = inst.name.replace(/[/\\?*[\]:]/g, "").slice(0, 31) || "Kasten";
-        utils.book_append_sheet(wb, ws, name);
+        body += `</div>`;
       });
-      writeFileSync(wb, `Errichtungspruefung_${inspMeta.date || (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}.xlsx`);
+      pw.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+      <title>Errichtungspr\xFCfung \u2013 ${inspMeta.date || ""}</title>
+      <style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;color:#222;margin:0}</style>
+      </head><body>${body}</body></html>`);
+      pw.document.close();
+      setTimeout(() => {
+        pw.focus();
+        pw.print();
+      }, 600);
     };
     const sorted = alphaSort(instances, "name");
-    return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Pr\xFCfungsdetails" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Pr\xFCfer" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: inspMeta.inspector, onChange: (e) => updMeta({ inspector: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, type: "date", value: inspMeta.date, onChange: (e) => updMeta({ date: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Pr\xFCfmittel / Messger\xE4t" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: inspMeta.equipment, onChange: (e) => updMeta({ equipment: e.target.value }) }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "right", marginTop: 14 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportInspection }, "\u2B07 Pr\xFCfprotokoll Excel"))), sorted.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, 'Keine K\xE4sten aktiviert. Bitte zuerst im Tab \u201EKonfiguration" K\xE4sten hinzuf\xFCgen.') : sorted.map((inst) => {
+    return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Pr\xFCfungsdetails" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Pr\xFCfer" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: inspMeta.inspector, onChange: (e) => updMeta({ inspector: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, type: "date", value: inspMeta.date, onChange: (e) => updMeta({ date: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Pr\xFCfmittel / Messger\xE4t" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: inspMeta.equipment, onChange: (e) => updMeta({ equipment: e.target.value }) }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "right", marginTop: 14 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportInspectionPDF }, "\u{1F5A8} Pr\xFCfprotokoll PDF"))), sorted.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, 'Keine K\xE4sten aktiviert. Bitte zuerst im Tab \u201EKonfiguration" K\xE4sten hinzuf\xFCgen.') : sorted.map((inst) => {
       const type = boxTypeById[inst.typeId];
       const outlets = type ? sortOutlets(type.outlets) : [];
       const ir = getIR(inst.id);
@@ -45112,7 +45116,7 @@ Fortfahren?`);
           title: `\u{1F50C} ${inst.name}`,
           subtitle: `${type?.name || "?"} \xB7 Einspeisung: ${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A`
         },
-        /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.metaGrid, gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", marginBottom: 6 } }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV1) }, value: ir.voltL1N || "", onChange: (e) => updIR(inst.id, { voltL1N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV2) }, value: ir.voltL2N || "", onChange: (e) => updIR(inst.id, { voltL2N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L3\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV3) }, value: ir.voltL3N || "", onChange: (e) => updIR(inst.id, { voltL3N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Drehfeld" }, /* @__PURE__ */ import_react.default.createElement(
+        /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.metaGrid, gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", marginBottom: 6 } }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV1) }, value: ir.voltL1N || "", onChange: (e) => updIR(inst.id, { voltL1N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV2) }, value: ir.voltL2N || "", onChange: (e) => updIR(inst.id, { voltL2N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L3\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV3) }, value: ir.voltL3N || "", onChange: (e) => updIR(inst.id, { voltL3N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013L2 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL12) }, value: ir.voltL1L2 || "", onChange: (e) => updIR(inst.id, { voltL1L2: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360 \u2013 440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013L3 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL23) }, value: ir.voltL2L3 || "", onChange: (e) => updIR(inst.id, { voltL2L3: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360 \u2013 440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013L3 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL13) }, value: ir.voltL1L3 || "", onChange: (e) => updIR(inst.id, { voltL1L3: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360 \u2013 440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U N\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okNPE) }, value: ir.voltNPE || "", onChange: (e) => updIR(inst.id, { voltNPE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 2 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL1PE) }, value: ir.voltL1PE || "", onChange: (e) => updIR(inst.id, { voltL1PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL2PE) }, value: ir.voltL2PE || "", onChange: (e) => updIR(inst.id, { voltL2PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L3\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL3PE) }, value: ir.voltL3PE || "", onChange: (e) => updIR(inst.id, { voltL3PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Drehfeld" }, /* @__PURE__ */ import_react.default.createElement(
           "select",
           {
             style: { ...S.inputSm, width: "100%" },
@@ -45122,7 +45126,7 @@ Fortfahren?`);
           /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 nicht gepr\xFCft \u2014"),
           /* @__PURE__ */ import_react.default.createElement("option", { value: "rechts" }, "Rechtsdrehfeld"),
           /* @__PURE__ */ import_react.default.createElement("option", { value: "links" }, "Linksdrehfeld")
-        )), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013L2 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL12) }, value: ir.voltL1L2 || "", onChange: (e) => updIR(inst.id, { voltL1L2: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360 \u2013 440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013L3 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL23) }, value: ir.voltL2L3 || "", onChange: (e) => updIR(inst.id, { voltL2L3: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360 \u2013 440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013L3 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL13) }, value: ir.voltL1L3 || "", onChange: (e) => updIR(inst.id, { voltL1L3: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360 \u2013 440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U N\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okNPE) }, value: ir.voltNPE || "", onChange: (e) => updIR(inst.id, { voltNPE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 2 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL1PE) }, value: ir.voltL1PE || "", onChange: (e) => updIR(inst.id, { voltL1PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL2PE) }, value: ir.voltL2PE || "", onChange: (e) => updIR(inst.id, { voltL2PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L3\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL3PE) }, value: ir.voltL3PE || "", onChange: (e) => updIR(inst.id, { voltL3PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207 \u2013 253 V"))),
+        ))),
         outlets1ph.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto", marginBottom: outlets3ph.length ? 16 : 0 } }, outlets3ph.length > 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px" } }, "1-phasige Anschl\xFCsse"), /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, minWidth: hasRCD1ph ? 920 : 620, width: "auto" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "R_PE (\u03A9)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 0,5 \u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "R_iso (M\u03A9)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2265 1 M\u03A9")), hasRCD1ph && /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "FI t @ I\u0394n (ms)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 300 ms")), hasRCD1ph && /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "FI I_an (mA)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 I\u0394n")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "OK?"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, outlets1ph.map((outlet) => {
           const or = getOR(inst.id, outlet.id);
           const isRCD = outlet.protection === "RCD" || outlet.protection === "RCBO";
@@ -45131,13 +45135,13 @@ Fortfahren?`);
           const okT1 = isRCD ? chk(or.rcdT1, void 0, 300) : null;
           return /* @__PURE__ */ import_react.default.createElement("tr", { key: outlet.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, outlet.label), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11, color: "#9aa4af" } }, CONN[outlet.connector]?.label || outlet.connector), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, outlet.amp), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, outlet.protection, " ", outlet.breaker), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okPE) }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "0,00", style: { ...S.inputSm, width: 72, ...inpBorder(okPE) }, value: or.rPE, onChange: (e) => updOR(inst.id, outlet.id, { rPE: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okIso) }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.1", placeholder: "0,0", style: { ...S.inputSm, width: 72, ...inpBorder(okIso) }, value: or.rIso, onChange: (e) => updOR(inst.id, outlet.id, { rIso: e.target.value }) })), hasRCD1ph && /* @__PURE__ */ import_react.default.createElement("td", { style: isRCD ? cellBg(okT1) : { ...S.td, background: "#0e1216" } }, isRCD && /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "0", style: { ...S.inputSm, width: 72, ...inpBorder(okT1) }, value: or.rcdT1, onChange: (e) => updOR(inst.id, outlet.id, { rcdT1: e.target.value }) })), hasRCD1ph && /* @__PURE__ */ import_react.default.createElement("td", { style: isRCD ? S.td : { ...S.td, background: "#0e1216" } }, isRCD && /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "0", style: { ...S.inputSm, width: 72 }, value: or.rcdIan, onChange: (e) => updOR(inst.id, outlet.id, { rcdIan: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, textAlign: "center" } }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: or.ok || false, onChange: (e) => updOR(inst.id, outlet.id, { ok: e.target.checked }) })));
         })))),
-        outlets3ph.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, outlets1ph.length > 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px" } }, "3-phasige Anschl\xFCsse"), /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, minWidth: hasRCD3ph ? 1100 : 860, width: "auto" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "R_PE L1 (\u03A9)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 0,5 \u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "R_PE L2 (\u03A9)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 0,5 \u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "R_PE L3 (\u03A9)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 0,5 \u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "R_iso L1 (M\u03A9)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2265 1 M\u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "R_iso L2 (M\u03A9)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2265 1 M\u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "R_iso L3 (M\u03A9)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2265 1 M\u03A9")), hasRCD3ph && /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "FI t @ I\u0394n (ms)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 300 ms")), hasRCD3ph && /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "FI I_an (mA)", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 I\u0394n")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "OK?"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, outlets3ph.map((outlet) => {
+        outlets3ph.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, outlets1ph.length > 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px" } }, "3-phasige Anschl\xFCsse"), /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, minWidth: hasRCD3ph ? 920 : 620, width: "auto" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, fontSize: 10 } }, "PE-L1", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u22640,5\u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, fontSize: 10 } }, "PE-L2", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u22640,5\u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, fontSize: 10 } }, "PE-L3", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u22640,5\u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, fontSize: 10 } }, "iso-L1", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u22651M\u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, fontSize: 10 } }, "iso-L2", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u22651M\u03A9")), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, fontSize: 10 } }, "iso-L3", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u22651M\u03A9")), hasRCD3ph && /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, fontSize: 10 } }, "FI t@I\u0394n", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264300ms")), hasRCD3ph && /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, fontSize: 10 } }, "FI I_an", /* @__PURE__ */ import_react.default.createElement("br", null), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264I\u0394n")), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "OK?"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, outlets3ph.map((outlet) => {
           const or = getOR(inst.id, outlet.id);
           const isRCD = outlet.protection === "RCD" || outlet.protection === "RCBO";
           const okPE = chk(or.rPE, void 0, 0.5), okPE2 = chk(or.rPEL2, void 0, 0.5), okPE3 = chk(or.rPEL3, void 0, 0.5);
           const okIso = chk(or.rIso, 1, void 0), okIso2 = chk(or.rIsoL2, 1, void 0), okIso3 = chk(or.rIsoL3, 1, void 0);
           const okT1 = isRCD ? chk(or.rcdT1, void 0, 300) : null;
-          return /* @__PURE__ */ import_react.default.createElement("tr", { key: outlet.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, outlet.label), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11, color: "#9aa4af" } }, CONN[outlet.connector]?.label || outlet.connector), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, outlet.amp), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, outlet.protection, " ", outlet.breaker), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okPE) }, "  ", /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "0,00", style: { ...S.inputSm, width: 66, ...inpBorder(okPE) }, value: or.rPE, onChange: (e) => updOR(inst.id, outlet.id, { rPE: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okPE2) }, " ", /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "0,00", style: { ...S.inputSm, width: 66, ...inpBorder(okPE2) }, value: or.rPEL2, onChange: (e) => updOR(inst.id, outlet.id, { rPEL2: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okPE3) }, " ", /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "0,00", style: { ...S.inputSm, width: 66, ...inpBorder(okPE3) }, value: or.rPEL3, onChange: (e) => updOR(inst.id, outlet.id, { rPEL3: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okIso) }, " ", /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.1", placeholder: "0,0", style: { ...S.inputSm, width: 66, ...inpBorder(okIso) }, value: or.rIso, onChange: (e) => updOR(inst.id, outlet.id, { rIso: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okIso2) }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.1", placeholder: "0,0", style: { ...S.inputSm, width: 66, ...inpBorder(okIso2) }, value: or.rIsoL2, onChange: (e) => updOR(inst.id, outlet.id, { rIsoL2: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okIso3) }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.1", placeholder: "0,0", style: { ...S.inputSm, width: 66, ...inpBorder(okIso3) }, value: or.rIsoL3, onChange: (e) => updOR(inst.id, outlet.id, { rIsoL3: e.target.value }) })), hasRCD3ph && /* @__PURE__ */ import_react.default.createElement("td", { style: isRCD ? cellBg(okT1) : { ...S.td, background: "#0e1216" } }, isRCD && /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "0", style: { ...S.inputSm, width: 66, ...inpBorder(okT1) }, value: or.rcdT1, onChange: (e) => updOR(inst.id, outlet.id, { rcdT1: e.target.value }) })), hasRCD3ph && /* @__PURE__ */ import_react.default.createElement("td", { style: isRCD ? S.td : { ...S.td, background: "#0e1216" } }, isRCD && /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "0", style: { ...S.inputSm, width: 66 }, value: or.rcdIan, onChange: (e) => updOR(inst.id, outlet.id, { rcdIan: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, textAlign: "center" } }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: or.ok || false, onChange: (e) => updOR(inst.id, outlet.id, { ok: e.target.checked }) })));
+          return /* @__PURE__ */ import_react.default.createElement("tr", { key: outlet.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, outlet.label), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11, color: "#9aa4af" } }, CONN[outlet.connector]?.label || outlet.connector), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, outlet.amp), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, outlet.protection, " ", outlet.breaker), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okPE) }, "  ", /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "\u2013", style: { ...S.inputSm, width: 46, ...inpBorder(okPE) }, value: or.rPE, onChange: (e) => updOR(inst.id, outlet.id, { rPE: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okPE2) }, " ", /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "\u2013", style: { ...S.inputSm, width: 46, ...inpBorder(okPE2) }, value: or.rPEL2, onChange: (e) => updOR(inst.id, outlet.id, { rPEL2: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okPE3) }, " ", /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "\u2013", style: { ...S.inputSm, width: 46, ...inpBorder(okPE3) }, value: or.rPEL3, onChange: (e) => updOR(inst.id, outlet.id, { rPEL3: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okIso) }, " ", /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.1", placeholder: "\u2013", style: { ...S.inputSm, width: 46, ...inpBorder(okIso) }, value: or.rIso, onChange: (e) => updOR(inst.id, outlet.id, { rIso: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okIso2) }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.1", placeholder: "\u2013", style: { ...S.inputSm, width: 46, ...inpBorder(okIso2) }, value: or.rIsoL2, onChange: (e) => updOR(inst.id, outlet.id, { rIsoL2: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: cellBg(okIso3) }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.1", placeholder: "\u2013", style: { ...S.inputSm, width: 46, ...inpBorder(okIso3) }, value: or.rIsoL3, onChange: (e) => updOR(inst.id, outlet.id, { rIsoL3: e.target.value }) })), hasRCD3ph && /* @__PURE__ */ import_react.default.createElement("td", { style: isRCD ? cellBg(okT1) : { ...S.td, background: "#0e1216" } }, isRCD && /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "\u2013", style: { ...S.inputSm, width: 46, ...inpBorder(okT1) }, value: or.rcdT1, onChange: (e) => updOR(inst.id, outlet.id, { rcdT1: e.target.value }) })), hasRCD3ph && /* @__PURE__ */ import_react.default.createElement("td", { style: isRCD ? S.td : { ...S.td, background: "#0e1216" } }, isRCD && /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "\u2013", style: { ...S.inputSm, width: 46 }, value: or.rcdIan, onChange: (e) => updOR(inst.id, outlet.id, { rcdIan: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, textAlign: "center" } }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: or.ok || false, onChange: (e) => updOR(inst.id, outlet.id, { ok: e.target.checked }) })));
         }))))
       );
     }));

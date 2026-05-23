@@ -542,8 +542,8 @@ export default function App() {
   /* ── Render ─────────────────────────────────────────────────────────────── */
   const TABS=[
     ["config","1 · Konfiguration"],["plan","2 · Steckplan"],
-    ["overview","3 · Übersicht"],["schematic","Schaltbild"],
-    ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],["inspection","Errichtungsprüfung"],
+    ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
+    ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],
   ];
   const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,rootInstances,mainConns,mainConnById };
 
@@ -1188,103 +1188,122 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
   const inpBorder = (ok) => ok===true ? {borderColor:"#2ecc71"} : ok===false ? {borderColor:"#e74c3c"} : {};
   const cellBg    = (ok) => ({...S.td, background: ok===true?"rgba(46,204,113,0.12)": ok===false?"rgba(231,76,60,0.12)":"transparent"});
 
-  const exportInspection = () => {
-    const wb = XLSX.utils.book_new();
+  const exportInspectionPDF = () => {
+    const pw = window.open("","_blank","width=920,height=750");
+    if(!pw){ alert("Popup-Blocker aktiv – bitte erlauben."); return; }
 
-    // ── Deckblatt ──
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
-      ["Errichtungsprüfungsprotokoll"],
-      [],
-      ["Prüfer:",              inspMeta.inspector||""],
-      ["Datum:",               inspMeta.date||""],
-      ["Prüfmittel / Messgerät:", inspMeta.equipment||""],
-      [],
-      ["Erstellt mit Stromplaner"],
-    ]), "Deckblatt");
+    const ck = (val,lo,hi) => {
+      if(val===""||val===undefined) return "";
+      const n=parseFloat(val); if(isNaN(n)) return "";
+      if(lo!==undefined&&n<lo) return "✗";
+      if(hi!==undefined&&n>hi) return "✗";
+      return "✓";
+    };
+    const okBg  = (v) => v==="✓"?"background:#e8f8f0":v==="✗"?"background:#fde8e8":"";
+    const okCol = (v) => v==="✓"?"color:#27ae60":v==="✗"?"color:#c0392b":"color:#999";
+    const th = `padding:3px 5px;border:1px solid #ddd;font-size:9px;text-align:center;background:#eee`;
+    const td = `padding:2px 5px;border:1px solid #ddd;font-size:10px;text-align:center`;
 
-    // ── Pro Kasten ein Sheet ──
+    let body = `<h1 style="font-size:17px;margin:0 0 6px">🔌 Errichtungsprüfungsprotokoll</h1>
+      <table style="font-size:11px;margin-bottom:16px;border-collapse:collapse">
+        <tr><td style="padding:1px 14px 1px 0;color:#666">Prüfer</td><td><b>${inspMeta.inspector||"–"}</b></td></tr>
+        <tr><td style="padding:1px 14px 1px 0;color:#666">Datum</td><td><b>${inspMeta.date||"–"}</b></td></tr>
+        <tr><td style="padding:1px 14px 1px 0;color:#666">Prüfmittel</td><td><b>${inspMeta.equipment||"–"}</b></td></tr>
+      </table>`;
+
     alphaSort(instances,"name").forEach(inst => {
-      const type    = boxTypeById[inst.typeId];
-      const outlets = type ? sortOutlets(type.outlets) : [];
-      const ir      = getIR(inst.id);
-      const hasRCD  = outlets.some(o=>o.protection==="RCD"||o.protection==="RCBO");
-      const vChk    = (val,lo,hi) => { const n=parseFloat(val); return (val===""||isNaN(n))?"":n>=lo&&n<=hi?"✓":"✗"; };
+      const type     = boxTypeById[inst.typeId];
+      const outlets  = type ? sortOutlets(type.outlets) : [];
+      const ir       = getIR(inst.id);
+      const outs1    = outlets.filter(o=>!is3ph(o.connector));
+      const outs3    = outlets.filter(o=> is3ph(o.connector));
+      const rcd1     = outs1.some(o=>o.protection==="RCD"||o.protection==="RCBO");
+      const rcd3     = outs3.some(o=>o.protection==="RCD"||o.protection==="RCBO");
 
-      const rows = [
-        [inst.name],
-        [type?.name||"", `Einspeisung: ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A`],
-        [],
-        ["SPANNUNGSMESSUNG"],
-        ["Messgröße","Messwert","Einheit","Normwert","Ergebnis"],
-        ["U L1–N",  ir.voltL1N||"",  "V", "207–253 V", vChk(ir.voltL1N,207,253)],
-        ["U L2–N",  ir.voltL2N||"",  "V", "207–253 V", vChk(ir.voltL2N,207,253)],
-        ["U L3–N",  ir.voltL3N||"",  "V", "207–253 V", vChk(ir.voltL3N,207,253)],
-        ["U L1–L2", ir.voltL1L2||"", "V", "360–440 V", vChk(ir.voltL1L2,360,440)],
-        ["U L2–L3", ir.voltL2L3||"", "V", "360–440 V", vChk(ir.voltL2L3,360,440)],
-        ["U L1–L3", ir.voltL1L3||"", "V", "360–440 V", vChk(ir.voltL1L3,360,440)],
-        ["U N–PE",  ir.voltNPE||"",  "V", "≤ 2 V",     ir.voltNPE!==""?(parseFloat(ir.voltNPE)<=2?"✓":"✗"):""],
-        ["U L1–PE", ir.voltL1PE||"", "V", "207–253 V", vChk(ir.voltL1PE,207,253)],
-        ["U L2–PE", ir.voltL2PE||"", "V", "207–253 V", vChk(ir.voltL2PE,207,253)],
-        ["U L3–PE", ir.voltL3PE||"", "V", "207–253 V", vChk(ir.voltL3PE,207,253)],
-        ["Drehfeld",
-          ir.phaseRot==="rechts"?"Rechtsdrehfeld":ir.phaseRot==="links"?"Linksdrehfeld":"",
-          "", "", ""],
-        [],
-        ["ANSCHLUSSMESSUNGEN"],
-      ];
+      body += `<div style="page-break-inside:avoid;margin-top:16px">
+        <h2 style="font-size:12px;background:#1c2127;color:#fff;padding:5px 10px;margin:0 0 6px;border-radius:4px">
+          ${inst.name} <span style="font-weight:400;font-size:10px">${type?.name||""} · ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A</span>
+        </h2>`;
 
-      const outlets1phE = outlets.filter(o=>!is3ph(o.connector));
-      const outlets3phE = outlets.filter(o=> is3ph(o.connector));
-      const hasRCD1phE  = outlets1phE.some(o=>o.protection==="RCD"||o.protection==="RCBO");
-      const hasRCD3phE  = outlets3phE.some(o=>o.protection==="RCD"||o.protection==="RCBO");
+      // Voltage table
+      const vr = (lbl,val,norm,ok) =>
+        `<tr style="${okBg(ok)}"><td style="padding:2px 6px;border:1px solid #ddd;font-size:10px">${lbl}</td>
+         <td style="padding:2px 6px;border:1px solid #ddd;font-size:10px;font-weight:700">${val||""}</td>
+         <td style="padding:2px 6px;border:1px solid #ddd;font-size:9px;color:#777">${norm}</td>
+         <td style="padding:2px 6px;border:1px solid #ddd;font-size:10px;font-weight:700;${okCol(ok)}">${ok}</td></tr>`;
 
-      if(outlets1phE.length){
-        rows.push(["1-PHASIGE ANSCHLÜSSE"]);
-        const hdr1 = ["Anschluss","Stecker","A","Schutz","R_PE (Ω)","R_PE OK","R_iso (MΩ)","R_iso OK"];
-        if(hasRCD1phE) hdr1.push("FI t@IΔn (ms)","FI t OK","FI I_an (mA)");
-        hdr1.push("Gesamt");
-        rows.push(hdr1);
-        outlets1phE.forEach(o=>{
-          const or    = getOR(inst.id,o.id);
-          const isRCD = o.protection==="RCD"||o.protection==="RCBO";
-          const ckPE  = or.rPE!==""  ? (parseFloat(or.rPE)<=0.5 ?"✓":"✗") : "";
-          const ckIso = or.rIso!=="" ? (parseFloat(or.rIso)>=1  ?"✓":"✗") : "";
-          const ckT1  = (isRCD&&or.rcdT1!=="") ? (parseFloat(or.rcdT1)<=300?"✓":"✗") : "";
-          const row   = [o.label, CONN[o.connector]?.label||o.connector, o.amp, `${o.protection} ${o.breaker}`, or.rPE||"", ckPE, or.rIso||"", ckIso];
-          if(hasRCD1phE) row.push(isRCD?or.rcdT1||"":"", isRCD?ckT1:"", isRCD?or.rcdIan||"":"");
-          row.push(or.ok?"✓":"");
-          rows.push(row);
+      body += `<table style="border-collapse:collapse;width:300px;margin-bottom:10px;float:left;margin-right:16px">
+        <thead><tr><th style="${th};text-align:left">Messgröße</th><th style="${th}">Wert (V)</th><th style="${th}">Norm</th><th style="${th}">OK</th></tr></thead><tbody>
+        ${vr("U L1–N", ir.voltL1N,"207–253 V",ck(ir.voltL1N,207,253))}
+        ${vr("U L2–N", ir.voltL2N,"207–253 V",ck(ir.voltL2N,207,253))}
+        ${vr("U L3–N", ir.voltL3N,"207–253 V",ck(ir.voltL3N,207,253))}
+        ${vr("U L1–L2",ir.voltL1L2,"360–440 V",ck(ir.voltL1L2,360,440))}
+        ${vr("U L2–L3",ir.voltL2L3,"360–440 V",ck(ir.voltL2L3,360,440))}
+        ${vr("U L1–L3",ir.voltL1L3,"360–440 V",ck(ir.voltL1L3,360,440))}
+        ${vr("U N–PE", ir.voltNPE, "≤ 2 V",    ck(ir.voltNPE,undefined,2))}
+        ${vr("U L1–PE",ir.voltL1PE,"207–253 V",ck(ir.voltL1PE,207,253))}
+        ${vr("U L2–PE",ir.voltL2PE,"207–253 V",ck(ir.voltL2PE,207,253))}
+        ${vr("U L3–PE",ir.voltL3PE,"207–253 V",ck(ir.voltL3PE,207,253))}
+        <tr><td style="padding:2px 6px;border:1px solid #ddd;font-size:10px">Drehfeld</td>
+          <td colspan="2" style="padding:2px 6px;border:1px solid #ddd;font-size:10px">${ir.phaseRot==="rechts"?"Rechtsdrehfeld":ir.phaseRot==="links"?"Linksdrehfeld":"–"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;font-size:10px;font-weight:700;${ir.phaseRot==="rechts"?"color:#27ae60":ir.phaseRot==="links"?"color:#c0392b":"color:#999"}">${ir.phaseRot==="rechts"?"✓":ir.phaseRot==="links"?"✗":"–"}</td>
+        </tr></tbody></table><div style="clear:both"></div>`;
+
+      // 1-phase table
+      if(outs1.length){
+        if(outs3.length) body+=`<p style="font-size:10px;font-weight:700;margin:0 0 3px">1-phasige Anschlüsse</p>`;
+        body+=`<table style="border-collapse:collapse;width:100%;margin-bottom:8px"><thead><tr>
+          <th style="${th};text-align:left">Anschluss</th><th style="${th}">Schutz</th>
+          <th style="${th}">R_PE (Ω)<br>≤0,5</th><th style="${th}">R_iso (MΩ)<br>≥1</th>
+          ${rcd1?`<th style="${th}">FI t@IΔn<br>≤300ms</th><th style="${th}">FI I_an (mA)</th>`:""}
+          <th style="${th}">OK</th></tr></thead><tbody>`;
+        outs1.forEach(o=>{
+          const or=getOR(inst.id,o.id), isRCD=o.protection==="RCD"||o.protection==="RCBO";
+          const pe=ck(or.rPE,undefined,0.5), iso=ck(or.rIso,1), t1=isRCD?ck(or.rcdT1,undefined,300):"";
+          body+=`<tr><td style="${td};text-align:left">${o.label}</td><td style="${td}">${o.protection} ${o.breaker}</td>
+            <td style="${td};${okBg(pe)}">${or.rPE||""} <span style="font-size:8px;${okCol(pe)}">${pe}</span></td>
+            <td style="${td};${okBg(iso)}">${or.rIso||""} <span style="font-size:8px;${okCol(iso)}">${iso}</span></td>
+            ${rcd1?`<td style="${td};${isRCD?okBg(t1):"background:#f5f5f5"}">${isRCD?or.rcdT1||"":""} <span style="font-size:8px;${okCol(t1)}">${t1}</span></td>
+                    <td style="${td};${isRCD?"":"background:#f5f5f5"}">${isRCD?or.rcdIan||"":""}</td>`:""}
+            <td style="${td};font-weight:700;${okCol(or.ok?"✓":"")}">${or.ok?"✓":"—"}</td></tr>`;
         });
-        rows.push([]);
+        body+=`</tbody></table>`;
       }
 
-      if(outlets3phE.length){
-        rows.push(["3-PHASIGE ANSCHLÜSSE"]);
-        const hdr3 = ["Anschluss","Stecker","A","Schutz","R_PE L1","OK","R_PE L2","R_PE L3","R_iso L1","OK","R_iso L2","R_iso L3"];
-        if(hasRCD3phE) hdr3.push("FI t@IΔn (ms)","FI t OK","FI I_an (mA)");
-        hdr3.push("Gesamt");
-        rows.push(hdr3);
-        outlets3phE.forEach(o=>{
-          const or    = getOR(inst.id,o.id);
-          const isRCD = o.protection==="RCD"||o.protection==="RCBO";
-          const ckPE  = or.rPE!==""   ? (parseFloat(or.rPE)<=0.5  ?"✓":"✗") : "";
-          const ckIso = or.rIso!==""  ? (parseFloat(or.rIso)>=1   ?"✓":"✗") : "";
-          const ckT1  = (isRCD&&or.rcdT1!=="") ? (parseFloat(or.rcdT1)<=300?"✓":"✗") : "";
-          const row   = [o.label, CONN[o.connector]?.label||o.connector, o.amp, `${o.protection} ${o.breaker}`,
-            or.rPE||"", ckPE, or.rPEL2||"", or.rPEL3||"",
-            or.rIso||"", ckIso, or.rIsoL2||"", or.rIsoL3||""];
-          if(hasRCD3phE) row.push(isRCD?or.rcdT1||"":"", isRCD?ckT1:"", isRCD?or.rcdIan||"":"");
-          row.push(or.ok?"✓":"");
-          rows.push(row);
+      // 3-phase table
+      if(outs3.length){
+        if(outs1.length) body+=`<p style="font-size:10px;font-weight:700;margin:0 0 3px">3-phasige Anschlüsse</p>`;
+        body+=`<table style="border-collapse:collapse;width:100%;margin-bottom:8px"><thead><tr>
+          <th style="${th};text-align:left">Anschluss</th><th style="${th}">Schutz</th>
+          <th style="${th}">PE-L1<br>≤0,5Ω</th><th style="${th}">PE-L2</th><th style="${th}">PE-L3</th>
+          <th style="${th}">iso-L1<br>≥1MΩ</th><th style="${th}">iso-L2</th><th style="${th}">iso-L3</th>
+          ${rcd3?`<th style="${th}">FI t@IΔn<br>≤300ms</th><th style="${th}">FI I_an</th>`:""}
+          <th style="${th}">OK</th></tr></thead><tbody>`;
+        outs3.forEach(o=>{
+          const or=getOR(inst.id,o.id), isRCD=o.protection==="RCD"||o.protection==="RCBO";
+          const pe1=ck(or.rPE,undefined,0.5), pe2=ck(or.rPEL2,undefined,0.5), pe3=ck(or.rPEL3,undefined,0.5);
+          const i1=ck(or.rIso,1), i2=ck(or.rIsoL2,1), i3=ck(or.rIsoL3,1);
+          const t1=isRCD?ck(or.rcdT1,undefined,300):"";
+          const c=(v,ok)=>`<td style="${td};${okBg(ok)}">${v||""} <span style="font-size:8px;${okCol(ok)}">${ok}</span></td>`;
+          body+=`<tr><td style="${td};text-align:left">${o.label}</td><td style="${td}">${o.protection} ${o.breaker}</td>
+            ${c(or.rPE,pe1)}${c(or.rPEL2,pe2)}${c(or.rPEL3,pe3)}
+            ${c(or.rIso,i1)}${c(or.rIsoL2,i2)}${c(or.rIsoL3,i3)}
+            ${rcd3?`<td style="${td};${isRCD?okBg(t1):"background:#f5f5f5"}">${isRCD?or.rcdT1||"":""} <span style="font-size:8px;${okCol(t1)}">${t1}</span></td>
+                    <td style="${td};${isRCD?"":"background:#f5f5f5"}">${isRCD?or.rcdIan||"":""}</td>`:""}
+            <td style="${td};font-weight:700;${okCol(or.ok?"✓":"")}">${or.ok?"✓":"—"}</td></tr>`;
         });
+        body+=`</tbody></table>`;
       }
 
-      const ws   = XLSX.utils.aoa_to_sheet(rows);
-      const name = inst.name.replace(/[/\\?*[\]:]/g,"").slice(0,31)||"Kasten";
-      XLSX.utils.book_append_sheet(wb, ws, name);
+      body+=`</div>`;
     });
 
-    XLSX.writeFile(wb, `Errichtungspruefung_${inspMeta.date||new Date().toISOString().slice(0,10)}.xlsx`);
+    pw.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
+      <title>Errichtungsprüfung – ${inspMeta.date||""}</title>
+      <style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;color:#222;margin:0}</style>
+      </head><body>${body}</body></html>`);
+    pw.document.close();
+    setTimeout(()=>{ pw.focus(); pw.print(); },600);
   };
 
   const sorted = alphaSort(instances,"name");
@@ -1298,7 +1317,7 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
           <Field label="Prüfmittel / Messgerät"><input style={S.input} value={inspMeta.equipment} onChange={e=>updMeta({equipment:e.target.value})}/></Field>
         </div>
         <div style={{textAlign:"right",marginTop:14}}>
-          <button style={S.exportBtn} onClick={exportInspection}>⬇ Prüfprotokoll Excel</button>
+          <button style={S.exportBtn} onClick={exportInspectionPDF}>🖨 Prüfprotokoll PDF</button>
         </div>
       </Section>
 
@@ -1337,14 +1356,6 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
                   <input style={{...S.inputSm,...inpBorder(okV3)}} value={ir.voltL3N||""} onChange={e=>updIR(inst.id,{voltL3N:e.target.value})}/>
                   <span style={S.normHint}>207 – 253 V</span>
                 </Field>
-                <Field label="Drehfeld">
-                  <select style={{...S.inputSm,width:"100%"}}
-                    value={ir.phaseRot||""} onChange={e=>updIR(inst.id,{phaseRot:e.target.value})}>
-                    <option value="">— nicht geprüft —</option>
-                    <option value="rechts">Rechtsdrehfeld</option>
-                    <option value="links">Linksdrehfeld</option>
-                  </select>
-                </Field>
                 <Field label="U L1–L2 (V)">
                   <input style={{...S.inputSm,...inpBorder(okL12)}} value={ir.voltL1L2||""} onChange={e=>updIR(inst.id,{voltL1L2:e.target.value})}/>
                   <span style={S.normHint}>360 – 440 V</span>
@@ -1372,6 +1383,14 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
                 <Field label="U L3–PE (V)">
                   <input style={{...S.inputSm,...inpBorder(okL3PE)}} value={ir.voltL3PE||""} onChange={e=>updIR(inst.id,{voltL3PE:e.target.value})}/>
                   <span style={S.normHint}>207 – 253 V</span>
+                </Field>
+                <Field label="Drehfeld">
+                  <select style={{...S.inputSm,width:"100%"}}
+                    value={ir.phaseRot||""} onChange={e=>updIR(inst.id,{phaseRot:e.target.value})}>
+                    <option value="">— nicht geprüft —</option>
+                    <option value="rechts">Rechtsdrehfeld</option>
+                    <option value="links">Linksdrehfeld</option>
+                  </select>
                 </Field>
               </div>
 
@@ -1418,17 +1437,17 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
               {outlets3ph.length>0&&(
               <div style={{overflowX:"auto"}}>
                 {outlets1ph.length>0&&<p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px"}}>3-phasige Anschlüsse</p>}
-                <table style={{...S.table,minWidth:hasRCD3ph?1100:860,width:"auto"}}>
+                <table style={{...S.table,minWidth:hasRCD3ph?920:620,width:"auto"}}>
                   <thead><tr>
                     <th style={S.th}>Anschluss</th><th style={S.th}>Stecker</th><th style={S.th}>A</th><th style={S.th}>Schutz</th>
-                    <th style={S.th}>R_PE L1 (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
-                    <th style={S.th}>R_PE L2 (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
-                    <th style={S.th}>R_PE L3 (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
-                    <th style={S.th}>R_iso L1 (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
-                    <th style={S.th}>R_iso L2 (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
-                    <th style={S.th}>R_iso L3 (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
-                    {hasRCD3ph&&<th style={S.th}>FI t @ IΔn (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>}
-                    {hasRCD3ph&&<th style={S.th}>FI I_an (mA)<br/><span style={S.normHint}>≤ IΔn</span></th>}
+                    <th style={{...S.th,fontSize:10}}>PE-L1<br/><span style={S.normHint}>≤0,5Ω</span></th>
+                    <th style={{...S.th,fontSize:10}}>PE-L2<br/><span style={S.normHint}>≤0,5Ω</span></th>
+                    <th style={{...S.th,fontSize:10}}>PE-L3<br/><span style={S.normHint}>≤0,5Ω</span></th>
+                    <th style={{...S.th,fontSize:10}}>iso-L1<br/><span style={S.normHint}>≥1MΩ</span></th>
+                    <th style={{...S.th,fontSize:10}}>iso-L2<br/><span style={S.normHint}>≥1MΩ</span></th>
+                    <th style={{...S.th,fontSize:10}}>iso-L3<br/><span style={S.normHint}>≥1MΩ</span></th>
+                    {hasRCD3ph&&<th style={{...S.th,fontSize:10}}>FI t@IΔn<br/><span style={S.normHint}>≤300ms</span></th>}
+                    {hasRCD3ph&&<th style={{...S.th,fontSize:10}}>FI I_an<br/><span style={S.normHint}>≤IΔn</span></th>}
                     <th style={S.th}>OK?</th>
                   </tr></thead>
                   <tbody>
@@ -1444,14 +1463,14 @@ function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResu
                           <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{CONN[outlet.connector]?.label||outlet.connector}</td>
                           <td style={S.td}>{outlet.amp}</td>
                           <td style={{...S.td,fontSize:11}}>{outlet.protection} {outlet.breaker}</td>
-                          <td style={cellBg(okPE)}>  <input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:66,...inpBorder(okPE)}}   value={or.rPE}    onChange={e=>updOR(inst.id,outlet.id,{rPE:e.target.value})}/></td>
-                          <td style={cellBg(okPE2)}> <input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:66,...inpBorder(okPE2)}}  value={or.rPEL2}  onChange={e=>updOR(inst.id,outlet.id,{rPEL2:e.target.value})}/></td>
-                          <td style={cellBg(okPE3)}> <input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:66,...inpBorder(okPE3)}}  value={or.rPEL3}  onChange={e=>updOR(inst.id,outlet.id,{rPEL3:e.target.value})}/></td>
-                          <td style={cellBg(okIso)}> <input type="number" step="0.1"  placeholder="0,0"  style={{...S.inputSm,width:66,...inpBorder(okIso)}}  value={or.rIso}   onChange={e=>updOR(inst.id,outlet.id,{rIso:e.target.value})}/></td>
-                          <td style={cellBg(okIso2)}><input type="number" step="0.1"  placeholder="0,0"  style={{...S.inputSm,width:66,...inpBorder(okIso2)}} value={or.rIsoL2} onChange={e=>updOR(inst.id,outlet.id,{rIsoL2:e.target.value})}/></td>
-                          <td style={cellBg(okIso3)}><input type="number" step="0.1"  placeholder="0,0"  style={{...S.inputSm,width:66,...inpBorder(okIso3)}} value={or.rIsoL3} onChange={e=>updOR(inst.id,outlet.id,{rIsoL3:e.target.value})}/></td>
-                          {hasRCD3ph&&<td style={isRCD?cellBg(okT1):{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:66,...inpBorder(okT1)}} value={or.rcdT1} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/>}</td>}
-                          {hasRCD3ph&&<td style={isRCD?S.td:{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:66}} value={or.rcdIan} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/>}</td>}
+                          <td style={cellBg(okPE)}>  <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okPE)}}   value={or.rPE}    onChange={e=>updOR(inst.id,outlet.id,{rPE:e.target.value})}/></td>
+                          <td style={cellBg(okPE2)}> <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okPE2)}}  value={or.rPEL2}  onChange={e=>updOR(inst.id,outlet.id,{rPEL2:e.target.value})}/></td>
+                          <td style={cellBg(okPE3)}> <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okPE3)}}  value={or.rPEL3}  onChange={e=>updOR(inst.id,outlet.id,{rPEL3:e.target.value})}/></td>
+                          <td style={cellBg(okIso)}> <input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okIso)}}  value={or.rIso}   onChange={e=>updOR(inst.id,outlet.id,{rIso:e.target.value})}/></td>
+                          <td style={cellBg(okIso2)}><input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okIso2)}} value={or.rIsoL2} onChange={e=>updOR(inst.id,outlet.id,{rIsoL2:e.target.value})}/></td>
+                          <td style={cellBg(okIso3)}><input type="number" step="0.1"  placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okIso3)}} value={or.rIsoL3} onChange={e=>updOR(inst.id,outlet.id,{rIsoL3:e.target.value})}/></td>
+                          {hasRCD3ph&&<td style={isRCD?cellBg(okT1):{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="–" style={{...S.inputSm,width:46,...inpBorder(okT1)}} value={or.rcdT1} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/>}</td>}
+                          {hasRCD3ph&&<td style={isRCD?S.td:{...S.td,background:"#0e1216"}}>{isRCD&&<input type="number" step="1" placeholder="–" style={{...S.inputSm,width:46}} value={or.rcdIan} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/>}</td>}
                           <td style={{...S.td,textAlign:"center"}}><input type="checkbox" checked={or.ok||false} onChange={e=>updOR(inst.id,outlet.id,{ok:e.target.checked})}/></td>
                         </tr>
                       );
