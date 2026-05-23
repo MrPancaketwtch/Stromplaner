@@ -130,9 +130,6 @@ VERBRAUCHER (Stammdaten)
 ↥ Laden          Gespeicherten Stand (.json) laden und weiterarbeiten.
 💾 Speichern     Aktuellen Stand als .json speichern (in "Speicher-
                  stände" ablegen).
-⭐ Als Standard  Aktuelle Kasten-Typen und Verbraucher als neue
-                 Standard-Datei speichern. Die heruntergeladene Datei
-                 ersetzt die alte Datei in "NDR Standardeinstellungen".
 🖨 PDF           Druckbaren Plan öffnen (Browserdruckdialog).
                  Ideal für schnellen Versand aufs Handy o.Ä.
 ⬇ Excel         Fertigen Plan als .xlsx exportieren (Übersicht,

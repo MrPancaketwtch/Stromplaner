@@ -415,13 +415,6 @@ export default function App() {
     reader.readAsText(file);
     e.target.value="";
   };
-  const saveAsDefault=()=>{
-    const data={_format:"stromplaner",_version:4,meta:DEFAULT_META,mainConns:[],boxTypes,loads,instances:[],placements:[]};
-    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a"); a.href=url;
-    a.download="NDR_Standard.json"; a.click(); URL.revokeObjectURL(url);
-  };
 
   /* ── Excel export ──────────────────────────────────────────────────────── */
   const exportExcel=()=>{
@@ -557,7 +550,6 @@ export default function App() {
         <span style={{fontSize:10,color:"#555",marginLeft:4}} title="Automatisch gespeichert">💾 auto</span>
         <label style={S.ghostBtn}>↥ Laden<input type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/></label>
         <button style={S.ghostBtn} onClick={saveJSON}>💾 Speichern</button>
-        <button style={S.ghostBtn} onClick={saveAsDefault} title="Kasten-Typen & Verbraucher als Standard speichern">⭐ Standard</button>
         <button style={S.ghostBtn} onClick={resetAll}>↺ Neu</button>
         <button style={S.ghostBtn} onClick={exportPDF}>🖨 PDF</button>
         <button style={S.exportBtn} onClick={exportExcel}>⬇ Excel</button>

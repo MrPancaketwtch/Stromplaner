@@ -44490,16 +44490,6 @@ Fortfahren?`);
       reader.readAsText(file);
       e.target.value = "";
     };
-    const saveAsDefault = () => {
-      const data = { _format: "stromplaner", _version: 4, meta: DEFAULT_META, mainConns: [], boxTypes, loads, instances: [], placements: [] };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "NDR_Standard.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    };
     const exportExcel = () => {
       const wb = utils.book_new();
       const ovRows = [
@@ -44668,7 +44658,7 @@ Fortfahren?`);
       ["loads", "Verbraucher"]
     ];
     const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, rootInstances, mainConns, mainConnById };
-    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("style", null, CSS), /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveAsDefault, title: "Kasten-Typen & Verbraucher als Standard speichern" }, "\u2B50 Standard"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: exportPDF }, "\u{1F5A8} PDF"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportExcel }, "\u2B07 Excel")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement("button", { key: k, style: { ...S.navBtn, ...tab === k ? S.navBtnActive : {} }, onClick: () => setTab(k) }, label))), /* @__PURE__ */ import_react.default.createElement("main", { style: S.main }, tab === "config" && /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("style", null, CSS), /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: exportPDF }, "\u{1F5A8} PDF"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportExcel }, "\u2B07 Excel")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement("button", { key: k, style: { ...S.navBtn, ...tab === k ? S.navBtnActive : {} }, onClick: () => setTab(k) }, label))), /* @__PURE__ */ import_react.default.createElement("main", { style: S.main }, tab === "config" && /* @__PURE__ */ import_react.default.createElement(
       ConfigTab,
       {
         ...sharedProps,
