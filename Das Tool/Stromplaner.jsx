@@ -234,8 +234,10 @@ export default function App() {
   const [instances,  setInstances]  = useState([]);
   // placements: {id, instanceId, outletId, mcSlot(num|null), loadId}
   const [placements, setPlacements] = useState([]);
-  const [activePlan, setActivePlan] = useState(null);
-  const [loaded,     setLoaded]     = useState(false); // prevent save before first load
+  const [activePlan,   setActivePlan]   = useState(null);
+  const [inspMeta,     setInspMeta]     = useState({ inspector:"", date:new Date().toISOString().slice(0,10), equipment:"" });
+  const [inspResults,  setInspResults]  = useState({});
+  const [loaded,       setLoaded]       = useState(false); // prevent save before first load
 
   /* ── Autosave ──────────────────────────────────────────────────────────── */
   // Load on mount
@@ -249,8 +251,10 @@ export default function App() {
           if(d.mainConns)  setMainConns(d.mainConns);
           if(d.boxTypes)   setBoxTypes(d.boxTypes.map(migrateBoxType));
           if(d.loads)      setLoads(d.loads.map(l=>({...l,threePhase:l.threePhase||false})));
-          if(d.instances)  setInstances(d.instances.map(migrateInstance));
-          if(d.placements) setPlacements(d.placements);
+          if(d.instances)   setInstances(d.instances.map(migrateInstance));
+          if(d.placements)  setPlacements(d.placements);
+          if(d.inspMeta)    setInspMeta(d.inspMeta);
+          if(d.inspResults) setInspResults(d.inspResults);
         }
       }
     } catch(e){ console.warn("Autosave load error",e); }
@@ -264,12 +268,12 @@ export default function App() {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(()=>{
       try {
-        const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances,placements};
+        const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults};
         localStorage.setItem(LS_KEY, JSON.stringify(data));
       } catch(e){ console.warn("Autosave error",e); }
     },600);
     return ()=>clearTimeout(saveTimer.current);
-  },[meta,mainConns,boxTypes,loads,instances,placements,loaded]);
+  },[meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,loaded]);
 
   /* ── Derived ───────────────────────────────────────────────────────────── */
   const boxTypeById  = useMemo(()=>{ const m={}; boxTypes.forEach(b=>m[b.id]=b);   return m; },[boxTypes]);
@@ -406,8 +410,10 @@ export default function App() {
         if(d.mainConns)  setMainConns(d.mainConns||[]);
         if(d.boxTypes)   setBoxTypes(d.boxTypes.map(migrateBoxType));
         if(d.loads)      setLoads(d.loads.map(l=>({...l,threePhase:l.threePhase||false})));
-        if(d.instances)  setInstances(d.instances.map(migrateInstance));
-        if(d.placements) setPlacements(d.placements);
+        if(d.instances)   setInstances(d.instances.map(migrateInstance));
+        if(d.placements)  setPlacements(d.placements);
+        if(d.inspMeta)    setInspMeta(d.inspMeta);
+        if(d.inspResults) setInspResults(d.inspResults);
         setActivePlan(null);
         alert("Planung geladen ✓");
       } catch(err){ alert("Fehler: "+err.message); }
@@ -537,7 +543,7 @@ export default function App() {
   const TABS=[
     ["config","1 · Konfiguration"],["plan","2 · Steckplan"],
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],
-    ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],
+    ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],["inspection","Errichtungsprüfung"],
   ];
   const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,rootInstances,mainConns,mainConnById };
 
@@ -570,7 +576,8 @@ export default function App() {
         {tab==="overview" && <OverviewTab {...sharedProps} meta={meta} />}
         {tab==="schematic"&& <SchematicTab {...sharedProps} meta={meta} />}
         {tab==="boxtypes" && <BoxTypesTab  boxTypes={boxTypes} setBoxTypes={setBoxTypes} instances={instances} />}
-        {tab==="loads"    && <LoadsTab     loads={loads} setLoads={setLoads} />}
+        {tab==="loads"       && <LoadsTab       loads={loads} setLoads={setLoads} />}
+        {tab==="inspection"  && <InspectionTab  {...sharedProps} inspMeta={inspMeta} setInspMeta={setInspMeta} inspResults={inspResults} setInspResults={setInspResults} />}
       </main>
     </div>
   );
@@ -1152,6 +1159,150 @@ function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,m
 function Section({title,subtitle,children}){ return <section style={S.section}><h2 style={S.h2}>{title}</h2>{subtitle&&<p style={S.subtitle}>{subtitle}</p>}{children}</section>; }
 function Field({label,children}){ return <label style={S.field}><span style={S.fieldLabel}>{label}</span>{children}</label>; }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   TAB: Errichtungsprüfung
+══════════════════════════════════════════════════════════════════════════ */
+function InspectionTab({ instances, boxTypeById, inspMeta, setInspMeta, inspResults, setInspResults }) {
+  const updMeta = (patch) => setInspMeta(s=>({...s,...patch}));
+
+  const getIR = (iid) => inspResults[iid] || { voltL1N:"",voltL2N:"",voltL3N:"",phaseRot:"",outlets:{} };
+  const updIR = (iid, patch) => setInspResults(s=>({ ...s, [iid]:{ ...getIR(iid), ...patch } }));
+
+  const getOR = (iid, oid) => (getIR(iid).outlets||{})[oid] || { rPE:"",rIso:"",rcdT1:"",rcdT5:"" };
+  const updOR = (iid, oid, patch) => {
+    const ir = getIR(iid);
+    setInspResults(s=>({ ...s, [iid]:{ ...ir, outlets:{ ...(ir.outlets||{}), [oid]:{ ...getOR(iid,oid), ...patch } } } }));
+  };
+
+  // Gibt true/false/null (null = leer) zurück
+  const chk = (val, min, max) => {
+    if(val==="" || val===undefined) return null;
+    const n=parseFloat(val); if(isNaN(n)) return null;
+    if(min!==undefined && n<min) return false;
+    if(max!==undefined && n>max) return false;
+    return true;
+  };
+  const inpBorder = (ok) => ok===true ? {borderColor:"#2ecc71"} : ok===false ? {borderColor:"#e74c3c"} : {};
+  const cellBg    = (ok) => ({...S.td, background: ok===true?"rgba(46,204,113,0.12)": ok===false?"rgba(231,76,60,0.12)":"transparent"});
+
+  const sorted = alphaSort(instances,"name");
+
+  return (
+    <div>
+      <Section title="Prüfungsdetails">
+        <div style={S.metaGrid}>
+          <Field label="Prüfer"><input style={S.input} value={inspMeta.inspector} onChange={e=>updMeta({inspector:e.target.value})}/></Field>
+          <Field label="Datum"><input style={S.input} type="date" value={inspMeta.date} onChange={e=>updMeta({date:e.target.value})}/></Field>
+          <Field label="Prüfmittel / Messgerät"><input style={S.input} value={inspMeta.equipment} onChange={e=>updMeta({equipment:e.target.value})}/></Field>
+        </div>
+      </Section>
+
+      {sorted.length===0
+        ? <p style={S.empty}>Keine Kästen aktiviert. Bitte zuerst im Tab „Konfiguration" Kästen hinzufügen.</p>
+        : sorted.map(inst=>{
+          const type    = boxTypeById[inst.typeId];
+          const outlets = type ? sortOutlets(type.outlets) : [];
+          const ir      = getIR(inst.id);
+          const hasRCD  = outlets.some(o=>o.protection==="RCD"||o.protection==="RCBO");
+
+          // Spannungsprüfung
+          const okV1=chk(ir.voltL1N,207,253), okV2=chk(ir.voltL2N,207,253), okV3=chk(ir.voltL3N,207,253);
+
+          return (
+            <Section key={inst.id}
+              title={`🔌 ${inst.name}`}
+              subtitle={`${type?.name||"?"} · Einspeisung: ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A`}>
+
+              {/* ── Spannungsmessung + Drehfeld ── */}
+              <div style={{...S.metaGrid,marginBottom:16}}>
+                <Field label="U L1–N (V)">
+                  <input style={{...S.input,...inpBorder(okV1)}} value={ir.voltL1N||""} onChange={e=>updIR(inst.id,{voltL1N:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                </Field>
+                <Field label="U L2–N (V)">
+                  <input style={{...S.input,...inpBorder(okV2)}} value={ir.voltL2N||""} onChange={e=>updIR(inst.id,{voltL2N:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                </Field>
+                <Field label="U L3–N (V)">
+                  <input style={{...S.input,...inpBorder(okV3)}} value={ir.voltL3N||""} onChange={e=>updIR(inst.id,{voltL3N:e.target.value})}/>
+                  <span style={S.normHint}>Norm: 207 – 253 V</span>
+                </Field>
+                <Field label="Drehfeld">
+                  <select style={{...S.input,...(ir.phaseRot==="rechts"?{color:"#2ecc71",borderColor:"#2ecc71"}:ir.phaseRot==="links"?{color:"#e74c3c",borderColor:"#e74c3c"}:{})}}
+                    value={ir.phaseRot||""} onChange={e=>updIR(inst.id,{phaseRot:e.target.value})}>
+                    <option value="">— nicht geprüft —</option>
+                    <option value="rechts">Rechtsdrehfeld ✓</option>
+                    <option value="links">Linksdrehfeld ✗</option>
+                  </select>
+                  <span style={S.normHint}>Soll: Rechtsdrehfeld</span>
+                </Field>
+              </div>
+
+              {/* ── Anschluss-Messtabelle ── */}
+              <div style={{overflowX:"auto"}}>
+              <table style={{...S.table,minWidth:hasRCD?920:620,width:"auto"}}>
+                <thead><tr>
+                  <th style={S.th}>Anschluss</th>
+                  <th style={S.th}>Stecker</th>
+                  <th style={S.th}>A</th>
+                  <th style={S.th}>Schutz</th>
+                  <th style={S.th}>R_PE (Ω)<br/><span style={S.normHint}>≤ 0,5 Ω</span></th>
+                  <th style={S.th}>R_iso (MΩ)<br/><span style={S.normHint}>≥ 1 MΩ</span></th>
+                  {hasRCD&&<th style={S.th}>FI t @ IΔn (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>}
+                  {hasRCD&&<th style={S.th}>FI t @ 5×IΔn (ms)<br/><span style={S.normHint}>≤ 40 ms</span></th>}
+                  <th style={S.th}>OK?</th>
+                </tr></thead>
+                <tbody>
+                  {outlets.map(outlet=>{
+                    const or     = getOR(inst.id,outlet.id);
+                    const isRCD  = outlet.protection==="RCD"||outlet.protection==="RCBO";
+                    const okPE   = chk(or.rPE,  undefined, 0.5);
+                    const okIso  = chk(or.rIso,  1, undefined);
+                    const okT1   = isRCD ? chk(or.rcdT1, undefined, 300) : null;
+                    const okT5   = isRCD ? chk(or.rcdT5, undefined, 40)  : null;
+                    const filled = or.rPE||or.rIso||or.rcdT1||or.rcdT5;
+                    const checks = [okPE,okIso,...(isRCD?[okT1,okT5]:[])].filter(v=>v!==null);
+                    const anyFail = checks.some(v=>v===false);
+                    const passIcon = !filled ? <span style={{color:"#555"}}>—</span>
+                                   : anyFail ? <span style={{color:"#e74c3c"}}>✗</span>
+                                   :           <span style={{color:"#2ecc71"}}>✓</span>;
+                    return (
+                      <tr key={outlet.id}>
+                        <td style={S.td}>{outlet.label}</td>
+                        <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{CONN[outlet.connector]?.label||outlet.connector}</td>
+                        <td style={S.td}>{outlet.amp}</td>
+                        <td style={{...S.td,fontSize:11}}>{outlet.protection} {outlet.breaker}</td>
+                        <td style={cellBg(okPE)}>
+                          <input type="number" step="0.01" placeholder="0,00" style={{...S.inputSm,width:72,...inpBorder(okPE)}} value={or.rPE} onChange={e=>updOR(inst.id,outlet.id,{rPE:e.target.value})}/>
+                        </td>
+                        <td style={cellBg(okIso)}>
+                          <input type="number" step="0.1" placeholder="0,0" style={{...S.inputSm,width:72,...inpBorder(okIso)}} value={or.rIso} onChange={e=>updOR(inst.id,outlet.id,{rIso:e.target.value})}/>
+                        </td>
+                        {hasRCD&&(
+                          <td style={isRCD?cellBg(okT1):{...S.td,background:"#0e1216"}}>
+                            {isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:72,...inpBorder(okT1)}} value={or.rcdT1} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/>}
+                          </td>
+                        )}
+                        {hasRCD&&(
+                          <td style={isRCD?cellBg(okT5):{...S.td,background:"#0e1216"}}>
+                            {isRCD&&<input type="number" step="1" placeholder="0" style={{...S.inputSm,width:72,...inpBorder(okT5)}} value={or.rcdT5} onChange={e=>updOR(inst.id,outlet.id,{rcdT5:e.target.value})}/>}
+                          </td>
+                        )}
+                        <td style={{...S.td,...S.inspPass}}>{passIcon}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              </div>
+            </Section>
+          );
+        })
+      }
+    </div>
+  );
+}
+
 /* ── Styles ─────────────────────────────────────────────────────────────── */
 const ACCENT="#f5a623", DARK="#1c2127", PANEL="#252b33", LINE="#3a424c";
 const S={
@@ -1204,6 +1355,8 @@ const S={
   rootTitle:        {fontSize:15,fontWeight:700},
   rootSub:          {fontSize:12,color:"#9aa4af",fontWeight:400},
   stickyPhase:      {position:"sticky",top:85,zIndex:5,background:PANEL,paddingBottom:8,marginBottom:4},
+  normHint:         {fontSize:10,color:"#7c8794",marginTop:2,display:"block"},
+  inspPass:         {textAlign:"center",fontSize:15,fontWeight:700},
   dropdown:         {position:"fixed",background:"#1b2026",border:`1px solid ${LINE}`,borderRadius:6,padding:6,zIndex:9999,boxShadow:"0 8px 32px rgba(0,0,0,.7)"},
   dropdownList:     {maxHeight:320,overflowY:"auto"},
   dropdownItem:     {padding:"6px 8px",borderRadius:4,cursor:"pointer",fontSize:13,color:"#e8eaed"},
