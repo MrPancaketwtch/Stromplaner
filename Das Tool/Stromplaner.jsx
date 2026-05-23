@@ -357,7 +357,7 @@ export default function App() {
       const parentType=parentInst?boxTypeById[parentInst.typeId]:null;
       const outlet=parentType?.outlets.find(o=>o.id===parentOutletId);
       if(outlet&&type&&type.feedAmp>outlet.amp){
-        const ok=confirm(`Warnung: ${type.name} (${type.feedAmp}A) wird auf einen ${outlet.amp}A Abgang gesteckt.\nEffektive Absicherung: ${outlet.amp}A.\n\nFortfahren?`);
+        const ok=confirm(`Warnung: ${type.name} (${type.feedAmp}A) wird auf einen ${outlet.amp}A Anschluss gesteckt.\nEffektive Absicherung: ${outlet.amp}A.\n\nFortfahren?`);
         if(!ok) return;
       }
     }
@@ -454,7 +454,7 @@ export default function App() {
       const conn=type?(CONN[type.feedConnector]?.label||""):"";
       const rows=[[inst.name],["Typ",type?.name],["Eingang",conn,"Max",`${type?.feedAmp||""}A`],
         ["hängt an",inst.parentId?instById[inst.parentId]?.name:"Einspeisung"],[],
-        ["Verbraucher","Abgang","Steckplatz","Phase","W","A","Sich.","Schutz"]];
+        ["Verbraucher","Anschluss","Steckplatz","Phase","W","A","Sich.","Schutz"]];
       placements.filter(p=>p.instanceId===inst.id).forEach(p=>{
         const l=loadById[p.loadId]; const out=type?.outlets.find(o=>o.id===p.outletId);
         const amp=l?round2(l.watt/VOLT):"";
@@ -520,7 +520,7 @@ export default function App() {
         <div style="display:flex;gap:6px;margin-bottom:8px">${phBar(tot,maxA)}</div>`;
       if(rows2.length){
         body+=`<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:#eee">
-          ${["Verbraucher","Abgang","Steckplatz","Phase","W","A","Sich.","Schutz"].map(h=>`<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
+          ${["Verbraucher","Anschluss","Steckplatz","Phase","W","A","Sich.","Schutz"].map(h=>`<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
         rows2.forEach(r=>{ body+=`<tr>${[r.name,r.outlet,r.slot,r.ph,r.watt,r.amp,r.breaker,r.prot].map(v=>`<td style="padding:2px 5px;border:1px solid #ddd">${v}</td>`).join("")}</tr>`; });
         body+=`</tbody></table>`;
       } else body+=`<p style="font-size:11px;color:#999;font-style:italic">Keine Verbraucher gesteckt.</p>`;
@@ -618,7 +618,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
           <table style={{...S.table,minWidth:860,width:"auto"}}>
             <thead><tr>
               <th style={S.th}></th><th style={S.th}>Name</th><th style={S.th}>Typ</th><th style={S.th}>Eingang</th>
-              <th style={S.th}>hängt an Kasten…</th><th style={S.th}>…Abgang</th>
+              <th style={S.th}>hängt an Kasten…</th><th style={S.th}>…Anschluss</th>
               <th style={S.th}>Hauptanschluss</th><th style={S.th}></th>
             </tr></thead>
             <tbody>
@@ -665,7 +665,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
           </table>
           </div>
         )}
-        <p style={S.hint}>💡 Phasen bleiben beim Aufstecken erhalten (L1→L1). Beim Aufstecken auf kleineren Abgang erscheint eine Warnung.</p>
+        <p style={S.hint}>💡 Phasen bleiben beim Aufstecken erhalten (L1→L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.</p>
       </Section>
     </div>
   );
@@ -800,7 +800,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
           <div style={{overflowX:"auto"}}>
           <table style={S.table}>
             <thead><tr>
-              <th style={S.th}>Verbraucher</th><th style={S.th}>Abgang</th><th style={S.th}>Steckplatz</th>
+              <th style={S.th}>Verbraucher</th><th style={S.th}>Anschluss</th><th style={S.th}>Steckplatz</th>
               <th style={S.th}>Phase</th><th style={S.th}>W</th><th style={S.th}>A</th><th style={S.th}></th>
             </tr></thead>
             <tbody>
@@ -827,7 +827,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
                       <InlineSelect options={loadOptions} value={p.loadId} onChange={v=>updatePlacement(p.id,{loadId:v,outletId:"",mcSlot:null})} placeholder="Verbraucher…" style={{minWidth:180}}/>
                     </td>
                     <td style={S.td}>
-                      <FilterSelect options={outletOptions} value={p.outletId} onChange={v=>updatePlacement(p.id,{outletId:v,mcSlot:null})} placeholder="Abgang…" style={{minWidth:200}}/>
+                      <FilterSelect options={outletOptions} value={p.outletId} onChange={v=>updatePlacement(p.id,{outletId:v,mcSlot:null})} placeholder="Anschluss…" style={{minWidth:200}}/>
                     </td>
                     <td style={S.td}>
                       {showMcSlot ? (
@@ -866,7 +866,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
         if(o.id!==outletId) return o;
         const upd={...o,...patch};
         const box=s.find(bb=>bb.id===boxId);
-        if(box&&upd.amp>box.feedAmp){ alert(`Abgang (${upd.amp}A) kann Einspeisung (${box.feedAmp}A) nicht übersteigen.`); return o; }
+        if(box&&upd.amp>box.feedAmp){ alert(`Anschluss (${upd.amp}A) kann Einspeisung (${box.feedAmp}A) nicht übersteigen.`); return o; }
         if(patch.connector){
           upd.phase=is3ph(patch.connector)?"L1L2L3":(o.phase==="L1L2L3"?"L1":o.phase);
           upd.amp=CONN[patch.connector]?.amp||upd.amp;
@@ -877,20 +877,20 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
       })};
     }));
   };
-  const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Abgang ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO"}]}));
+  const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Anschluss ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO"}]}));
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
   const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[...s,{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,outlets:[]}]); setOpenId(id); };
   const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Kasten-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Kasten-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
   const sortedTypes=alphaSort(boxTypes,"name");
   return (
-    <Section title="Kasten-Typen" subtitle="Jeder physische Steckplatz = ein Abgang. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
+    <Section title="Kasten-Typen" subtitle="Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
       <button style={S.primaryBtn} onClick={addType}>+ Neuen Kasten-Typ</button>
       <div style={{marginTop:16}}>
         {sortedTypes.map(b=>(
           <div key={b.id} style={S.card}>
             <div style={S.cardHead} onClick={()=>setOpenId(openId===b.id?null:b.id)}>
               <span style={S.cardTitle}>{openId===b.id?"▾":"▸"} {b.name}</span>
-              <span style={S.cardSub}>{CONN[b.feedConnector]?.label||b.feedConnector} · {b.outlets.length} Abgänge</span>
+              <span style={S.cardSub}>{CONN[b.feedConnector]?.label||b.feedConnector} · {b.outlets.length} Anschlüsse</span>
             </div>
             {openId===b.id&&(
               <div style={S.cardBody}>
@@ -943,8 +943,8 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                   </tbody>
                 </table>
                 </div>
-                <p style={{...S.hint,marginTop:6}}>* Steckplätze gilt nur für Multicore-Abgänge. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, …</p>
-                <button style={S.secondaryBtn} onClick={()=>addOutlet(b.id)}>+ Abgang hinzufügen</button>
+                <p style={{...S.hint,marginTop:6}}>* Steckplätze gilt nur für Multicore-Anschlüsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, …</p>
+                <button style={S.secondaryBtn} onClick={()=>addOutlet(b.id)}>+ Anschluss hinzufügen</button>
               </div>
             )}
           </div>
@@ -962,7 +962,7 @@ function LoadsTab({ loads,setLoads }) {
   const update=(id,patch)=>setLoads(s=>s.map(l=>l.id===id?{...l,...patch}:l));
   const remove=(id)=>setLoads(s=>s.filter(l=>l.id!==id));
   return (
-    <Section title="Verbraucher-Stammdaten" subtitle="3-phasige Verbraucher werden gleichmäßig auf L1/L2/L3 verteilt und können nur auf CEE-Rot / Powerlock Abgänge gesteckt werden.">
+    <Section title="Verbraucher-Stammdaten" subtitle="3-phasige Verbraucher werden gleichmäßig auf L1/L2/L3 verteilt und können nur auf CEE-Rot / Powerlock Anschlüsse gesteckt werden.">
       <button style={S.primaryBtn} onClick={add}>+ Verbraucher</button>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Name</th><th style={S.th}>W</th><th style={S.th}>A</th><th style={S.th}>3-phasig</th><th style={S.th}></th></tr></thead>

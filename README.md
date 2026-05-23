@@ -36,7 +36,7 @@ Kein Internet erforderlich. Alles läuft lokal auf dem Gerät.
 - Produktionsname, Ersteller, Version, Datum eintragen
 - Hauptanschlüsse definieren (Bezeichnung + maximaler Strom)
 - Kästen aktivieren: Typ aus dem Dropdown wählen → **+ Kasten hinzufügen**
-- Pro Kasten: einstellen, an welchem Kasten und Abgang er hängt *(z. B. „Kasten 5H hängt an Kasten 3, Abgang 32A-2")*
+- Pro Kasten: einstellen, an welchem Kasten und Anschluss er hängt *(z. B. „Kasten 5H hängt an Kasten 3, Anschluss 32A-2")*
 - Kästen ohne Verbindung gelten als erster Punkt in der Kaskade
 - Überlastete Kästen werden mit ⚠ markiert
 
@@ -45,7 +45,7 @@ Kein Internet erforderlich. Alles läuft lokal auf dem Gerät.
 - Oben: Live-Anzeige der Gesamtlast an Hauptanschlüssen
 - Pro Kasten: Phasenbalken zeigen Eigenlast und Gesamtlast *(grün = ok · orange = >80% · rot = Überlast)*
 - **+ Verbraucher stecken**: Verbraucher wählen, dann Steckplatz wählen – Phase wird automatisch gesetzt
-- Nur passende Steckplätze werden angezeigt (1-phasige Verbraucher sehen nur 1-phasige Abgänge und 3-phasige Verbraucher sehen nur 3-phasige Abgänge)
+- Nur passende Steckplätze werden angezeigt (1-phasige Verbraucher sehen nur 1-phasige Anschlüsse und 3-phasige Verbraucher sehen nur 3-phasige Anschlüsse)
 
 ### 3 · Übersicht
 - Hauptanschlüsse mit Gesamtlast aller Phasen
@@ -57,9 +57,9 @@ Kein Internet erforderlich. Alles läuft lokal auf dem Gerät.
 - Farbkodierung wie im Steckplan
 
 ### Kasten-Typen *(Stammdaten)*
-- Alle Kasten-Typen mit ihren Abgängen vollständig editierbar
-- Jeder Abgang: Name, Stecker-Typ, Absicherung (A), Phase, Charakteristik (B/C/D/K), Schutzart (LS/RCD/RCBO)
-- Abgangs-Absicherung kann die Einspeisung nicht übersteigen (wird blockiert)
+- Alle Kasten-Typen mit ihren Anschlüssen vollständig editierbar
+- Jeder Anschluss: Name, Stecker-Typ, Absicherung (A), Phase, Charakteristik (B/C/D/K), Schutzart (LS/RCD/RCBO)
+- Anschluss-Absicherung kann die Einspeisung nicht übersteigen (wird blockiert)
 
 ### Verbraucher *(Stammdaten)*
 - Liste aller Verbraucher mit Leistung in Watt
@@ -82,7 +82,7 @@ Kein Internet erforderlich. Alles läuft lokal auf dem Gerät.
 
 ## Berechnungslogik
 
-- **1-phasig:** `A = W / 230`, auf die Phase des Abgangs
+- **1-phasig:** `A = W / 230`, auf die Phase des Anschlusses
 - **3-phasig:** `A = W / 230` je Phase, gleicher Wert auf L1, L2 und L3 *(Watt-Wert entspricht Leistung je Phase, wie in Datenblättern angegeben)*
 - Phasen bleiben beim Aufstecken erhalten (L1→L1, L2→L2, L3→L3)
 - Kaskadenberechnung summiert alle aufgesteckten Kästen rekursiv
