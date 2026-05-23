@@ -1302,7 +1302,6 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="kpi"><div class="kpi-k">RCD-Tests</div><div class="kpi-v">${totalRCD}</div><div class="kpi-s muted">protokolliert</div></div>
       </div></div></section>
   </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / ${total+2}</span></footer>
 </article>`;
 
     // ── Pro Kasten ────────────────────────────────────────────────────────
