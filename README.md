@@ -11,7 +11,7 @@ Man legt fest, welche Unterverteilungen (Kästen) verwendet werden, wie sie mite
 ## Schnellstart
 
 1. `Das Tool/Stromplaner.html` per Doppelklick im Browser öffnen *(Chrome, Firefox, Edge)*
-2. **↥ Laden** → Standard-Datei aus `NDR Standardeinstellungen` auswählen
+2. **Beim ersten Start:** **↥ Laden** → Standard-Datei aus `NDR Standardeinstellungen` auswählen *(danach nicht mehr nötig – das Tool merkt sich alles automatisch)*
 3. Planen
 4. Regelmäßig mit **💾 Speichern** sichern → Datei in `Speicherstände` ablegen
 5. Am Ende **⬇ Excel** oder **🖨 PDF** für den fertigen Plan
@@ -25,7 +25,7 @@ Kein Internet erforderlich. Alles läuft lokal auf dem Gerät.
 | Ordner | Inhalt |
 |--------|--------|
 | `Das Tool/` | `Stromplaner.html` – das eigentliche Programm |
-| `NDR Standardeinstellungen/` | Standard-JSON mit allen Kästen und Verbrauchern – beim Start laden |
+| `NDR Standardeinstellungen/` | Standard-JSON mit allen Kästen und Verbrauchern – **einmalig** beim ersten Start laden (danach speichert das Tool den Zustand automatisch im Browser) |
 | `Speicherstände/` | Eigene Planungen pro Veranstaltung (`.json`) |
 
 ---
