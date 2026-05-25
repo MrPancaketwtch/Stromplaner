@@ -44866,23 +44866,26 @@ Fortfahren?`);
         },
         bulkCount > 1 ? `${bulkCount}\xD7 hinzuf\xFCgen` : "Hinzuf\xFCgen"
       ), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, alignSelf: "flex-end" }, onClick: () => addPlacement(inst.id), title: "Leere Zeile hinzuf\xFCgen" }, "+ leer"));
-    })(), rows.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch nichts gesteckt.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Verbraucher"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Steckplatz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, rows.map((p) => {
-      const l = loadById[p.loadId];
-      const outlet = type?.outlets.find((o) => o.id === p.outletId);
-      const avail = getAvailableOutlets(p.loadId);
-      const outletOptions = avail.map((o) => ({
-        value: o.id,
-        label: `${o.label} (${CONN[o.connector]?.label || o.connector} \xB7 ${o.breaker}${o.amp}A \xB7 ${o.protection})`
-      }));
-      let phDisplay = "\u2014";
-      if (l?.threePhase) phDisplay = "L1+L2+L3";
-      else if (outlet && isMulticore(outlet.connector) && p.mcSlot) phDisplay = PHASES[(p.mcSlot - 1) % 3];
-      else if (outlet) phDisplay = outlet.phase || "\u2014";
-      const amp = l ? round2(l.watt / VOLT) : "";
-      const showMcSlot = outlet && isMulticore(outlet.connector);
-      const mcOptions = showMcSlot ? mcSlotOptions(outlet) : [];
-      return /* @__PURE__ */ import_react.default.createElement("tr", { key: p.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement(InlineSelect, { options: loadOptions, value: p.loadId, onChange: (v) => updatePlacement(p.id, { loadId: v, outletId: "", mcSlot: null }), placeholder: "Verbraucher\u2026", style: { minWidth: 180 } })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement(FilterSelect, { options: outletOptions, value: p.outletId, onChange: (v) => updatePlacement(p.id, { outletId: v, mcSlot: null }), placeholder: "Anschluss\u2026", style: { minWidth: 200 } })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, showMcSlot ? /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 120 }, value: p.mcSlot || "", onChange: (e) => updatePlacement(p.id, { mcSlot: e.target.value ? Number(e.target.value) : null }) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 w\xE4hlen \u2014"), mcOptions.map((s) => /* @__PURE__ */ import_react.default.createElement("option", { key: s.slotNum, value: s.slotNum }, "Steckplatz ", s.slotNum, " (", s.phase, ")"))) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: phDisplay === "\u2014" ? "#555" : "#fff" } }, phDisplay)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, l ? l.watt : "-"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, amp ? l?.threePhase ? `${amp}/Ph` : amp : "-"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removePlacement(p.id) }, "\u2715")));
-    }))))));
+    })(), rows.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch nichts gesteckt.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Verbraucher"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Steckplatz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, (() => {
+      const usedOutletIds = new Set(rows.filter((p) => p.outletId).map((p) => p.outletId));
+      return rows.map((p) => {
+        const l = loadById[p.loadId];
+        const outlet = type?.outlets.find((o) => o.id === p.outletId);
+        const avail = getAvailableOutlets(p.loadId);
+        const outletOptions = avail.filter((o) => !p.outletId || usedOutletIds.has(o.id) || o.id === p.outletId).map((o) => ({
+          value: o.id,
+          label: `${o.label} (${CONN[o.connector]?.label || o.connector} \xB7 ${o.breaker}${o.amp}A \xB7 ${o.protection})`
+        }));
+        let phDisplay = "\u2014";
+        if (l?.threePhase) phDisplay = "L1+L2+L3";
+        else if (outlet && isMulticore(outlet.connector) && p.mcSlot) phDisplay = PHASES[(p.mcSlot - 1) % 3];
+        else if (outlet) phDisplay = outlet.phase || "\u2014";
+        const amp = l ? round2(l.watt / VOLT) : "";
+        const showMcSlot = outlet && isMulticore(outlet.connector);
+        const mcOptions = showMcSlot ? mcSlotOptions(outlet) : [];
+        return /* @__PURE__ */ import_react.default.createElement("tr", { key: p.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement(InlineSelect, { options: loadOptions, value: p.loadId, onChange: (v) => updatePlacement(p.id, { loadId: v, outletId: "", mcSlot: null }), placeholder: "Verbraucher\u2026", style: { minWidth: 180 } })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement(FilterSelect, { options: outletOptions, value: p.outletId, onChange: (v) => updatePlacement(p.id, { outletId: v, mcSlot: null }), placeholder: "Anschluss\u2026", style: { minWidth: 200 } })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, showMcSlot ? /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 120 }, value: p.mcSlot || "", onChange: (e) => updatePlacement(p.id, { mcSlot: e.target.value ? Number(e.target.value) : null }) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 w\xE4hlen \u2014"), mcOptions.map((s) => /* @__PURE__ */ import_react.default.createElement("option", { key: s.slotNum, value: s.slotNum }, "Steckplatz ", s.slotNum, " (", s.phase, ")"))) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: phDisplay === "\u2014" ? "#555" : "#fff" } }, phDisplay)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, l ? l.watt : "-"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, amp ? l?.threePhase ? `${amp}/Ph` : amp : "-"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removePlacement(p.id) }, "\u2715")));
+      });
+    })())))));
   }
   function BoxTypesTab({ boxTypes, setBoxTypes, instances }) {
     const [openId, setOpenId] = (0, import_react.useState)(null);
