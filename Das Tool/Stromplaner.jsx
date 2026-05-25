@@ -94,14 +94,24 @@ function InlineSelect({ options, value, onChange, placeholder, style }) {
     document.addEventListener("mousedown",h);
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
+  // Close on scroll (dropdown is fixed, trigger moves away)
+  useEffect(()=>{
+    if(!open) return;
+    const onScroll=()=>close();
+    window.addEventListener("scroll",onScroll,true);
+    return ()=>window.removeEventListener("scroll",onScroll,true);
+  },[open]);
 
   const open_ = ()=>{
     if(trigRef.current){
       const r=trigRef.current.getBoundingClientRect();
       const spaceBelow=window.innerHeight-r.bottom;
       const dropH=Math.min(options.length*32+60,340);
-      const top=spaceBelow<dropH ? r.top+window.scrollY-dropH-4 : r.bottom+window.scrollY+2;
-      setPos({top,left:r.left+window.scrollX,width:Math.max(r.width,260)});
+      // position:fixed → viewport coords, no scroll offset
+      const top=spaceBelow<dropH ? r.top-dropH-4 : r.bottom+2;
+      const dropW=Math.max(r.width,280);
+      const left=Math.min(r.left, window.innerWidth-dropW-8);
+      setPos({top,left:Math.max(left,4),width:dropW});
     }
     setOpen(true);
     setQuery("");
@@ -166,14 +176,24 @@ function FilterSelect({ options, value, onChange, placeholder, style }) {
     document.addEventListener("mousedown",h);
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
+  // Close on scroll (dropdown is fixed, trigger moves away)
+  useEffect(()=>{
+    if(!open) return;
+    const onScroll=()=>close();
+    window.addEventListener("scroll",onScroll,true);
+    return ()=>window.removeEventListener("scroll",onScroll,true);
+  },[open]);
 
   const open_ = ()=>{
     if(trigRef.current){
       const r=trigRef.current.getBoundingClientRect();
       const spaceBelow=window.innerHeight-r.bottom;
       const dropH=Math.min(options.length*32+60,340);
-      const top=spaceBelow<dropH ? r.top+window.scrollY-dropH-4 : r.bottom+window.scrollY+2;
-      setPos({top,left:r.left+window.scrollX,width:Math.max(r.width,260)});
+      // position:fixed → viewport coords, no scroll offset
+      const top=spaceBelow<dropH ? r.top-dropH-4 : r.bottom+2;
+      const dropW=Math.max(r.width,280);
+      const left=Math.min(r.left, window.innerWidth-dropW-8);
+      setPos({top,left:Math.max(left,4),width:dropW});
     }
     setOpen(true); setQuery("");
   };
@@ -228,8 +248,8 @@ export default function App() {
   // Hauptanschlüsse: [{id, name, amp}]
   const [mainConns, setMainConns] = useState([]);
 
-  const [boxTypes,   setBoxTypes]   = useState(clone(DEFAULT_BOX_TYPES));
-  const [loads,      setLoads]      = useState(clone(DEFAULT_LOADS));
+  const [boxTypes,   setBoxTypes]   = useState(alphaSort(clone(DEFAULT_BOX_TYPES),"name"));
+  const [loads,      setLoads]      = useState(alphaSort(clone(DEFAULT_LOADS),"name"));
   // instances: {id, typeId, name, parentId, parentOutletId, mainConnectionId}
   const [instances,  setInstances]  = useState([]);
   // placements: {id, instanceId, outletId, mcSlot(num|null), loadId}
@@ -249,8 +269,8 @@ export default function App() {
         if(d._format==="stromplaner"){
           if(d.meta)       setMeta(d.meta);
           if(d.mainConns)  setMainConns(d.mainConns);
-          if(d.boxTypes)   setBoxTypes(d.boxTypes.map(migrateBoxType));
-          if(d.loads)      setLoads(d.loads.map(l=>({...l,threePhase:l.threePhase||false})));
+          if(d.boxTypes)   setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType),"name"));
+          if(d.loads)      setLoads(alphaSort(d.loads.map(l=>({...l,threePhase:l.threePhase||false})),"name"));
           if(d.instances)   setInstances(d.instances.map(migrateInstance));
           if(d.placements)  setPlacements(d.placements);
           if(d.inspMeta)    setInspMeta(d.inspMeta);
@@ -336,15 +356,27 @@ export default function App() {
     return Math.max(t.L1,t.L2,t.L3)>maxA;
   },[totalLoad,instById,boxTypeById]);
 
+  const isUnderdimensioned = useCallback((instanceId)=>{
+    const inst=instById[instanceId];
+    if(!inst||!inst.parentId||!inst.parentOutletId) return false;
+    const type=boxTypeById[inst.typeId];
+    if(!type) return false;
+    const parentInst=instById[inst.parentId];
+    const parentType=parentInst?boxTypeById[parentInst.typeId]:null;
+    const outlet=parentType?.outlets.find(o=>o.id===inst.parentOutletId);
+    if(!outlet) return false;
+    return type.feedAmp > outlet.amp;
+  },[instById,boxTypeById]);
+
   /* ── Instance actions ──────────────────────────────────────────────────── */
   const addInstance = (typeId)=>{
     const type=boxTypeById[typeId]; if(!type) return;
     const count=instances.filter(i=>i.typeId===typeId).length;
-    setInstances(s=>[...s,{
+    setInstances(s=>[{
       id:uid(),typeId,
       name:count>0?`${type.name} #${count+1}`:type.name,
       parentId:null,parentOutletId:null,mainConnectionId:null,
-    }]);
+    },...s]);
   };
   const removeInstance=(id)=>{
     setInstances(s=>s.filter(i=>i.id!==id).map(i=>i.parentId===id?{...i,parentId:null,parentOutletId:null}:i));
@@ -369,6 +401,7 @@ export default function App() {
   };
 
   const addPlacement=(instanceId)=>setPlacements(s=>[...s,{id:uid(),instanceId,outletId:"",mcSlot:null,loadId:""}]);
+  const addPlacementsFilled=(instanceId,loadId,outletId,count)=>setPlacements(s=>[...s,...Array.from({length:count},()=>({id:uid(),instanceId,outletId:outletId||"",mcSlot:null,loadId:loadId||""}))]);
   const updatePlacement=(id,patch)=>setPlacements(s=>s.map(p=>p.id===id?{...p,...patch}:p));
   const removePlacement=(id)=>setPlacements(s=>s.filter(p=>p.id!==id));
 
@@ -392,7 +425,7 @@ export default function App() {
 
   /* ── JSON Save/Load ────────────────────────────────────────────────────── */
   const saveJSON=()=>{
-    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances,placements};
+    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances:alphaSort(instances,"name"),placements};
     const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
     const url=URL.createObjectURL(blob);
     const a=document.createElement("a"); a.href=url;
@@ -408,8 +441,8 @@ export default function App() {
         if(d._format!=="stromplaner"){ alert("Keine gültige Stromplaner-Datei."); return; }
         if(d.meta)       setMeta(d.meta);
         if(d.mainConns)  setMainConns(d.mainConns||[]);
-        if(d.boxTypes)   setBoxTypes(d.boxTypes.map(migrateBoxType));
-        if(d.loads)      setLoads(d.loads.map(l=>({...l,threePhase:l.threePhase||false})));
+        if(d.boxTypes)   setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType),"name"));
+        if(d.loads)      setLoads(alphaSort(d.loads.map(l=>({...l,threePhase:l.threePhase||false})),"name"));
         if(d.instances)   setInstances(d.instances.map(migrateInstance));
         if(d.placements)  setPlacements(d.placements);
         if(d.inspMeta)    setInspMeta(d.inspMeta);
@@ -522,7 +555,7 @@ export default function App() {
       }).filter(Boolean);
       body+=`<div style="page-break-inside:avoid;margin-top:18px">
         <h2 style="font-size:13px;background:#2e75b6;color:#fff;padding:6px 10px;margin:0 0 6px;border-radius:4px">${inst.name} <span style="font-weight:400;font-size:11px">(${type?.name||""} · ${conn} · max ${maxA}A)</span></h2>
-        <div style="font-size:11px;color:#555;margin-bottom:6px">hängt an: ${inst.parentId?instById[inst.parentId]?.name:"— Einspeisung —"}</div>
+        <div style="font-size:11px;color:#555;margin-bottom:6px">hängt an: ${inst.parentId?instById[inst.parentId]?.name:inst.mainConnectionId?(mainConnById[inst.mainConnectionId]?.name||"— Einspeisung —"):"— Einspeisung —"}</div>
         <div style="display:flex;gap:6px;margin-bottom:8px">${phBar(tot,maxA)}</div>`;
       if(rows2.length){
         body+=`<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:#eee">
@@ -545,7 +578,7 @@ export default function App() {
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
     ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],
   ];
-  const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,rootInstances,mainConns,mainConnById };
+  const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,rootInstances,mainConns,mainConnById };
 
   return (
     <div style={S.app}>
@@ -571,9 +604,9 @@ export default function App() {
             setParentWithValidation={setParentWithValidation}
             mainConns={mainConns} addMainConn={addMainConn} updateMainConn={updateMainConn} removeMainConn={removeMainConn} />}
         {tab==="plan"     && <PlanTab     {...sharedProps} loads={loads} loadById={loadById}
-            placements={placements} addPlacement={addPlacement} updatePlacement={updatePlacement} removePlacement={removePlacement}
+            placements={placements} addPlacement={addPlacement} addPlacementsFilled={addPlacementsFilled} updatePlacement={updatePlacement} removePlacement={removePlacement}
             activePlan={activePlan} setActivePlan={setActivePlan} ownLoad={ownLoad} meta={meta} />}
-        {tab==="overview" && <OverviewTab {...sharedProps} meta={meta} />}
+        {tab==="overview" && <OverviewTab {...sharedProps} meta={meta} placements={placements} loads={loads} loadById={loadById} />}
         {tab==="schematic"&& <SchematicTab {...sharedProps} meta={meta} />}
         {tab==="boxtypes" && <BoxTypesTab  boxTypes={boxTypes} setBoxTypes={setBoxTypes} instances={instances} />}
         {tab==="loads"       && <LoadsTab       loads={loads} setLoads={setLoads} />}
@@ -586,7 +619,7 @@ export default function App() {
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Konfiguration
 ══════════════════════════════════════════════════════════════════════════ */
-function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addInstance,removeInstance,updateInstance,setParentWithValidation,isOverloaded,mainConns,addMainConn,updateMainConn,removeMainConn }) {
+function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addInstance,removeInstance,updateInstance,setParentWithValidation,isOverloaded,isUnderdimensioned,mainConns,addMainConn,updateMainConn,removeMainConn }) {
   const [pick,setPick]=useState(boxTypes[0]?.id||"");
   const sortedTypes=alphaSort(boxTypes,"name");
   return (
@@ -633,16 +666,25 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                 const type=boxTypeById[inst.typeId];
                 const parentType=inst.parentId?boxTypeById[instById[inst.parentId]?.typeId]:null;
                 const ol=isOverloaded(inst.id);
+                const ud=isUnderdimensioned(inst.id);
                 const sortedOther=alphaSort(instances.filter(o=>o.id!==inst.id),"name");
                 const parentOutlets=parentType?sortOutlets(parentType.outlets):[];
                 // Belegte Anschlüsse ausblenden (anderer Kasten hängt schon dort)
+                // Nur kompatible Steckertypen anzeigen (Eingangstyp des Kastens muss passen)
                 const takenOutletIds=new Set(instances.filter(i=>i.id!==inst.id&&i.parentId===inst.parentId&&i.parentId).map(i=>i.parentOutletId).filter(Boolean));
-                const availableOutlets=parentOutlets.filter(o=>!takenOutletIds.has(o.id)||o.id===inst.parentOutletId);
+                const availableOutlets=parentOutlets.filter(o=>{
+                  if(takenOutletIds.has(o.id)&&o.id!==inst.parentOutletId) return false;
+                  if(type&&type.feedConnector&&o.connector!==type.feedConnector) return false;
+                  return true;
+                });
                 // Only show Hauptanschluss picker for root instances
                 const isRoot=!inst.parentId;
                 return (
                   <tr key={inst.id}>
-                    <td style={S.td}>{ol&&<span title="Überlastet!" style={{color:"#e74c3c",fontWeight:800,fontSize:16}}>⚠</span>}</td>
+                    <td style={S.td}>
+                      {ol&&<span title="Überlastet!" style={{color:"#e74c3c",fontWeight:800,fontSize:16}}>⚠</span>}
+                      {ud&&<span title={`Unterdimensioniert: Kasten-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) größer als Anschluss`} style={{color:"#f5a623",fontWeight:800,fontSize:15,marginLeft:ol?4:0}}>⚡</span>}
+                    </td>
                     <td style={S.td}><input style={S.inputSm} value={inst.name} onChange={e=>updateInstance(inst.id,{name:e.target.value})}/></td>
                     <td style={S.td}>{type?.name}</td>
                     <td style={{...S.td,fontSize:11}}>{type?CONN[type.feedConnector]?.label:""}</td>
@@ -684,7 +726,10 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Steckplan
 ══════════════════════════════════════════════════════════════════════════ */
-function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addPlacement,updatePlacement,removePlacement,activePlan,setActivePlan,ownLoad,totalLoad,isOverloaded,rootInstances,mainConns,mainConnById,meta }) {
+function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addPlacement,addPlacementsFilled,updatePlacement,removePlacement,activePlan,setActivePlan,ownLoad,totalLoad,isOverloaded,isUnderdimensioned,rootInstances,mainConns,mainConnById,meta }) {
+  const [bulkLoadId,  setBulkLoadId]  = useState("");
+  const [bulkOutletId,setBulkOutletId]= useState("");
+  const [bulkCount,   setBulkCount]   = useState(1);
   useEffect(()=>{
     if(!activePlan&&instances.length) setActivePlan(instances[0].id);
   },[instances,activePlan,setActivePlan]);
@@ -774,9 +819,11 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
       <div style={S.boxTabs}>
         {instances.map(i=>{
           const ol=isOverloaded(i.id);
+          const ud=isUnderdimensioned(i.id);
           return (
-            <button key={i.id} style={{...S.boxTab,...(i.id===inst.id?S.boxTabActive:{}),...(ol?{borderColor:"#e74c3c"}:{})}} onClick={()=>setActivePlan(i.id)}>
-              {ol&&<span style={{color:"#e74c3c",marginRight:4,fontWeight:800}}>⚠</span>}
+            <button key={i.id} style={{...S.boxTab,...(i.id===inst.id?S.boxTabActive:{}),...(ol?{borderColor:"#e74c3c"}:ud?{borderColor:"#f5a623"}:{})}} onClick={()=>setActivePlan(i.id)}>
+              {ol&&<span title="Überlastet!" style={{color:"#e74c3c",marginRight:4,fontWeight:800}}>⚠</span>}
+              {!ol&&ud&&<span title="Unterdimensioniert!" style={{color:"#f5a623",marginRight:4,fontWeight:800}}>⚡</span>}
               {i.name}
             </button>
           );
@@ -804,7 +851,35 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
           </div>
         </div>
 
-        <button style={{...S.primaryBtn,marginTop:12}} onClick={()=>addPlacement(inst.id)}>+ Verbraucher stecken</button>
+        {/* ── Schnellerfassung ─────────────────────────────────────────── */}
+        {(()=>{
+          const bulkLoad=bulkLoadId?loadById[bulkLoadId]:null;
+          const bulkAvail=bulkLoad?getAvailableOutlets(bulkLoadId):sortedOutlets;
+          const bulkOutletOpts=bulkAvail.map(o=>({value:o.id,label:`${o.label} (${CONN[o.connector]?.label||o.connector} · ${o.breaker||""}${o.amp}A · ${o.protection})`}));
+          const canAdd=!!bulkLoadId;
+          return (
+            <div style={{display:"flex",alignItems:"flex-end",gap:8,marginTop:14,padding:"10px 12px",background:"#1b2026",borderRadius:7,border:`1px solid ${LINE}`,flexWrap:"wrap"}}>
+              <span style={{fontSize:11,color:"#9aa4af",fontWeight:600,width:"100%",marginBottom:2}}>Schnellerfassung</span>
+              <div style={{flex:"2 1 180px"}}>
+                <div style={S.fieldLabel}>Verbraucher</div>
+                <InlineSelect options={loadOptions} value={bulkLoadId} onChange={v=>{setBulkLoadId(v);setBulkOutletId("");}} placeholder="Wählen…"/>
+              </div>
+              <div style={{flex:"2 1 200px"}}>
+                <div style={S.fieldLabel}>Anschluss</div>
+                <FilterSelect options={bulkOutletOpts} value={bulkOutletId} onChange={setBulkOutletId} placeholder="Wählen…"/>
+              </div>
+              <div style={{width:70}}>
+                <div style={S.fieldLabel}>Menge</div>
+                <input type="number" min="1" max="50" style={{...S.inputSm,width:"100%",textAlign:"center"}} value={bulkCount} onChange={e=>setBulkCount(Math.max(1,parseInt(e.target.value)||1))}/>
+              </div>
+              <button style={{...S.primaryBtn,alignSelf:"flex-end"}} disabled={!canAdd}
+                onClick={()=>{ addPlacementsFilled(inst.id,bulkLoadId,bulkOutletId,Math.max(1,Math.min(50,bulkCount))); }}>
+                {bulkCount>1?`${bulkCount}× hinzufügen`:"Hinzufügen"}
+              </button>
+              <button style={{...S.ghostBtn,alignSelf:"flex-end"}} onClick={()=>addPlacement(inst.id)} title="Leere Zeile hinzufügen">+ leer</button>
+            </div>
+          );
+        })()}
 
         {rows.length===0 ? <p style={S.empty}>Noch nichts gesteckt.</p> : (
           <div style={{overflowX:"auto"}}>
@@ -889,14 +964,13 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   };
   const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Anschluss ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO"}]}));
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
-  const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[...s,{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,outlets:[]}]); setOpenId(id); };
+  const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,outlets:[]},...s]); setOpenId(id); };
   const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Kasten-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Kasten-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
-  const sortedTypes=alphaSort(boxTypes,"name");
   return (
     <Section title="Kasten-Typen" subtitle="Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
       <button style={S.primaryBtn} onClick={addType}>+ Neuen Kasten-Typ</button>
       <div style={{marginTop:16}}>
-        {sortedTypes.map(b=>(
+        {boxTypes.map(b=>(
           <div key={b.id} style={S.card}>
             <div style={S.cardHead} onClick={()=>setOpenId(openId===b.id?null:b.id)}>
               <span style={S.cardTitle}>{openId===b.id?"▾":"▸"} {b.name}</span>
@@ -968,7 +1042,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
    TAB: Verbraucher
 ══════════════════════════════════════════════════════════════════════════ */
 function LoadsTab({ loads,setLoads }) {
-  const add=()=>setLoads(s=>[...s,{id:uid(),name:"Neuer Verbraucher",watt:100,threePhase:false}]);
+  const add=()=>setLoads(s=>[{id:uid(),name:"Neuer Verbraucher",watt:100,threePhase:false},...s]);
   const update=(id,patch)=>setLoads(s=>s.map(l=>l.id===id?{...l,...patch}:l));
   const remove=(id)=>setLoads(s=>s.filter(l=>l.id!==id));
   return (
@@ -977,7 +1051,7 @@ function LoadsTab({ loads,setLoads }) {
       <table style={S.table}>
         <thead><tr><th style={S.th}>Name</th><th style={S.th}>W</th><th style={S.th}>A</th><th style={S.th}>3-phasig</th><th style={S.th}></th></tr></thead>
         <tbody>
-          {alphaSort(loads,"name").map(l=>(
+          {loads.map(l=>(
             <tr key={l.id}>
               <td style={S.td}><input style={S.inputSm} value={l.name} onChange={e=>update(l.id,{name:e.target.value})}/></td>
               <td style={S.td}><input type="number" style={{...S.inputSm,width:90}} value={l.watt} onChange={e=>update(l.id,{watt:+e.target.value})}/></td>
@@ -995,7 +1069,7 @@ function LoadsTab({ loads,setLoads }) {
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Übersicht
 ══════════════════════════════════════════════════════════════════════════ */
-function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded }) {
+function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded,isUnderdimensioned,placements,loads,loadById }) {
   if(instances.length===0) return <Section title="Übersicht"><p style={S.empty}>Noch keine Kästen aktiviert.</p></Section>;
   return (
     <div>
@@ -1054,10 +1128,13 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
               const scol=pct>100?"#c0392b":pct>80?"#e67e22":peak>0?"#27ae60":"#999";
               return (
                 <tr key={inst.id}>
-                  <td style={S.td}>{pct>100&&<span style={{color:"#e74c3c",fontWeight:800}}>⚠</span>}</td>
+                  <td style={S.td}>
+                    {pct>100&&<span title="Überlastet!" style={{color:"#e74c3c",fontWeight:800}}>⚠</span>}
+                    {pct<=100&&isUnderdimensioned(inst.id)&&<span title="Unterdimensioniert!" style={{color:"#f5a623",fontWeight:800}}>⚡</span>}
+                  </td>
                   <td style={S.td}>{inst.name}</td>
                   <td style={{...S.td,fontSize:11}}>{conn}</td>
-                  <td style={S.td}>{inst.parentId?instById[inst.parentId]?.name:"— Einspeisung —"}</td>
+                  <td style={S.td}>{inst.parentId?instById[inst.parentId]?.name:inst.mainConnectionId?mainConnById[inst.mainConnectionId]?.name:"— Einspeisung —"}</td>
                   <td style={S.td}>{round2(t.L1)}</td><td style={S.td}>{round2(t.L2)}</td><td style={S.td}>{round2(t.L3)}</td>
                   <td style={S.td}>{maxA}</td>
                   <td style={{...S.td,color:scol,fontWeight:600}}>{stat}</td>
@@ -1067,6 +1144,90 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
           </tbody>
         </table>
       </Section>
+
+      {/* ── Verbraucher nach Typ ──────────────────────────────────────────── */}
+      {(() => {
+        const counts={};
+        placements.forEach(p=>{
+          if(!p.loadId) return;
+          const l=loadById[p.loadId]; if(!l) return;
+          if(!counts[p.loadId]) counts[p.loadId]={load:l,count:0};
+          counts[p.loadId].count++;
+        });
+        const rows=Object.values(counts).sort((a,b)=>a.load.name.localeCompare(b.load.name,"de",{numeric:true}));
+        if(!rows.length) return null;
+        const totalW=rows.reduce((s,r)=>s+r.load.watt*r.count,0);
+        return (
+          <Section title="Verbraucher – Mengen nach Typ" subtitle="Alle platzierten Verbraucher, summiert nach Typ.">
+            <table style={S.table}>
+              <thead><tr>
+                <th style={S.th}>Verbraucher</th><th style={S.th}>Menge</th>
+                <th style={S.th}>W / Stk.</th><th style={S.th}>Gesamt W</th><th style={S.th}>3-Ph</th>
+              </tr></thead>
+              <tbody>
+                {rows.map(r=>(
+                  <tr key={r.load.id}>
+                    <td style={S.td}>{r.load.name}</td>
+                    <td style={{...S.td,fontWeight:700}}>{r.count}×</td>
+                    <td style={S.td}>{r.load.watt} W</td>
+                    <td style={{...S.td,fontWeight:600}}>{r.load.watt*r.count} W</td>
+                    <td style={S.td}>{r.load.threePhase?"3ph":""}</td>
+                  </tr>
+                ))}
+                <tr style={{borderTop:`2px solid #3a424c`}}>
+                  <td style={{...S.td,fontWeight:700}}>Gesamt</td>
+                  <td style={{...S.td,fontWeight:700}}>{rows.reduce((s,r)=>s+r.count,0)}×</td>
+                  <td style={S.td}></td>
+                  <td style={{...S.td,fontWeight:700,color:"#f5a623"}}>{totalW} W</td>
+                  <td style={S.td}></td>
+                </tr>
+              </tbody>
+            </table>
+          </Section>
+        );
+      })()}
+
+      {/* ── Verbraucher nach Kasten ───────────────────────────────────────── */}
+      {(() => {
+        const boxRows=instances.map(inst=>{
+          const pl=placements.filter(p=>p.instanceId===inst.id&&p.loadId);
+          if(!pl.length) return null;
+          // Count per load type within this box
+          const lc={};
+          pl.forEach(p=>{ const l=loadById[p.loadId]; if(!l) return; if(!lc[p.loadId]) lc[p.loadId]={load:l,count:0}; lc[p.loadId].count++; });
+          const rows=Object.values(lc).sort((a,b)=>a.load.name.localeCompare(b.load.name,"de",{numeric:true}));
+          return {inst,rows,totalW:rows.reduce((s,r)=>s+r.load.watt*r.count,0)};
+        }).filter(Boolean);
+        if(!boxRows.length) return null;
+        return (
+          <Section title="Verbraucher nach Kasten" subtitle="Für jede Unterverteilung: platzierte Verbraucher mit Menge und Leistung.">
+            {boxRows.map(({inst,rows,totalW})=>(
+              <div key={inst.id} style={{marginBottom:16}}>
+                <div style={{fontWeight:700,fontSize:13,color:"#e8eaed",marginBottom:6}}>
+                  {inst.name}
+                  <span style={{fontWeight:400,fontSize:11,color:"#9aa4af",marginLeft:8}}>{boxTypeById[inst.typeId]?.name||""}</span>
+                  <span style={{fontWeight:600,fontSize:11,color:"#f5a623",marginLeft:8}}>{totalW} W</span>
+                </div>
+                <table style={{...S.table,marginBottom:0}}>
+                  <thead><tr>
+                    <th style={S.th}>Verbraucher</th><th style={S.th}>Menge</th><th style={S.th}>W / Stk.</th><th style={S.th}>Gesamt W</th>
+                  </tr></thead>
+                  <tbody>
+                    {rows.map(r=>(
+                      <tr key={r.load.id}>
+                        <td style={S.td}>{r.load.name}</td>
+                        <td style={{...S.td,fontWeight:700}}>{r.count}×</td>
+                        <td style={S.td}>{r.load.watt} W</td>
+                        <td style={{...S.td,fontWeight:600}}>{r.load.watt*r.count} W</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </Section>
+        );
+      })()}
     </div>
   );
 }
@@ -1074,13 +1235,13 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Schaltbild
 ══════════════════════════════════════════════════════════════════════════ */
-function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded }) {
+function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded,isUnderdimensioned }) {
   if(instances.length===0) return <Section title="Schaltbild"><p style={S.empty}>Aktiviere zuerst Kästen.</p></Section>;
 
   const getChildren=(parentId)=>instances.filter(i=>i.parentId===parentId);
   const countLeaves=(id)=>{ const ch=getChildren(id); return ch.length===0?1:ch.reduce((s,c)=>s+countLeaves(c.id),0); };
 
-  const ROW_H=90, COL_W=220, NODE_W=180, NODE_H=70, PAD=20;
+  const ROW_H=120, COL_W=240, NODE_W=190, NODE_H=72, PAD=24;
   const positions={};
   const assignPos=(id,depth,yStart)=>{
     const ch=getChildren(id); const leaves=countLeaves(id);
@@ -1098,7 +1259,7 @@ function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,m
   const edges=instances.filter(i=>i.parentId&&positions[i.id]&&positions[i.parentId]).map(inst=>{ const from=positions[inst.parentId],to=positions[inst.id]; return {x1:from.x+NODE_W,y1:from.y+NODE_H/2,x2:to.x,y2:to.y+NODE_H/2,inst}; });
 
   return (
-    <Section title="Schaltbild" subtitle="Grün = OK · Orange = >80% · Rot = Überlast. Zahlen = Gesamtlast inkl. aufgesteckter Kästen.">
+    <Section title="Schaltbild" subtitle="Grün = OK · Orange = >80% · Rot = Überlast · ⚡ = Unterdimensioniert. Zahlen = Gesamtlast inkl. aufgesteckter Kästen.">
       <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"75vh",background:"#1b2026",borderRadius:8,padding:12}}>
         <svg width={svgW} height={svgH} style={{display:"block",minWidth:svgW}}>
           {/* Hauptanschluss boxes */}
@@ -1119,12 +1280,17 @@ function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,m
             );
           })}
           {/* Edges */}
-          {edges.map((e,i)=>{ const t=totalLoad(e.inst.id); const mx=(e.x1+e.x2)/2; return (
-            <g key={i}>
-              <path d={`M${e.x1} ${e.y1} C${mx} ${e.y1},${mx} ${e.y2},${e.x2} ${e.y2}`} fill="none" stroke="#3a424c" strokeWidth={2}/>
-              <text x={mx} y={Math.min(e.y1,e.y2)+Math.abs(e.y1-e.y2)/2-4} textAnchor="middle" fill="#9aa4af" fontSize={9}>{`L1:${round2(t.L1)} L2:${round2(t.L2)} L3:${round2(t.L3)}`}</text>
-            </g>
-          ); })}
+          {edges.map((e,i)=>{ const t=totalLoad(e.inst.id); const mx=(e.x1+e.x2)/2;
+            const my=(e.y1+e.y2)/2;
+            const lines=[`L1: ${round2(t.L1)} A`,`L2: ${round2(t.L2)} A`,`L3: ${round2(t.L3)} A`];
+            const LH=11; const BH=lines.length*LH+6; const BW=72;
+            return (
+              <g key={i}>
+                <path d={`M${e.x1} ${e.y1} C${mx} ${e.y1},${mx} ${e.y2},${e.x2} ${e.y2}`} fill="none" stroke="#3a424c" strokeWidth={2}/>
+                <rect x={mx-BW/2} y={my-BH/2} width={BW} height={BH} rx={3} fill="#1b2026" opacity={0.88} stroke="#3a424c" strokeWidth={0.5}/>
+                {lines.map((line,li)=><text key={li} x={mx} y={my-BH/2+LH*(li+1)} textAnchor="middle" fill="#9aa4af" fontSize={9}>{line}</text>)}
+              </g>
+            ); })}
           {/* Nodes */}
           {instances.map(inst=>{ const pos=positions[inst.id]; if(!pos) return null;
             const type=boxTypeById[inst.typeId]; const t=totalLoad(inst.id); const maxA=type?.feedAmp||0;
@@ -1136,6 +1302,11 @@ function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,m
                 <rect width={NODE_W} height={22} rx={8} fill={col} opacity={0.9}/>
                 <rect y={14} width={NODE_W} height={8} fill={col} opacity={0.9}/>
                 <text x={NODE_W/2} y={15} textAnchor="middle" fill="#fff" fontSize={11} fontWeight="bold">{inst.name.length>22?inst.name.slice(0,20)+"…":inst.name}</text>
+                {isUnderdimensioned(inst.id)&&(
+                  <g><title>{`Unterdimensioniert: Kasten-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) > Anschluss-Ampere`}</title>
+                    <text x={NODE_W-5} y={15} textAnchor="end" fill="#f5a623" fontSize={12} fontWeight="bold">⚡</text>
+                  </g>
+                )}
                 <text x={6}       y={34} fill="#9aa4af" fontSize={9}>{conn}</text>
                 <text x={NODE_W-6} y={34} textAnchor="end" fill="#9aa4af" fontSize={9}>max {maxA}A</text>
                 {PHASES.map((ph,pi)=>(
@@ -1192,7 +1363,8 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
 
   const cycleSicht = (iid,idx) => {
     const ir=getIR(iid); const sicht=[...(ir.sicht||Array(8).fill(null))];
-    sicht[idx]=sicht[idx]===null?true:sicht[idx]===true?false:null;
+    const v=sicht[idx];
+    sicht[idx]=v===null?true:v===true?false:v===false?"warn":null;
     updIR(iid,{sicht});
   };
 
@@ -1215,7 +1387,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
     const pdfChk=(val,lo,hi)=>{if(val===""||val===undefined||val===null)return"";const n=parseFloat(val);if(isNaN(n))return"";if(lo!==undefined&&n<lo)return"bad";if(hi!==undefined&&n>hi)return"bad";return"ok";};
     const pdfChkAll=(vals,lo,hi)=>{const vs=vals.filter(v=>v!=="");if(!vs.length)return"";return vs.some(v=>pdfChk(v,lo,hi)==="bad")?"bad":"ok";};
     const badge=(r)=>r==="ok"?`<span class="ok">✓ ok</span>`:r==="bad"?`<span class="bad">✕ Mangel</span>`:`<span class="muted">–</span>`;
-    const sichtBadge=(v)=>v===true?`<span class="ok">✓ ok</span>`:v===false?`<span class="bad">✕ Mangel</span>`:`<span class="muted">–</span>`;
+    const sichtBadge=(v)=>v===true?`<span class="ok">✓ ok</span>`:v===false?`<span class="bad">✕ Mangel</span>`:v==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="muted">–</span>`;
     const fv=(...vals)=>vals.filter(v=>v!=="").map(v=>esc(v)+"&thinsp;V").join(" / ")||"–";
 
     const css=`:root{--ep-accent:#f5a623;--ep-dark:#1c2127;--ep-ink:#1c2127;--ep-ink2:#4a5159;--ep-ink3:#7a8290;--ep-rule:#c8ccd1;--ep-rule2:#e6e9ec;--ep-band:#f3f4f6;--ep-paper:#ffffff;--ep-ok:#1c7a3e;--ep-bad:#b91c1c;--ep-warn:#8a5500;--ep-badrow:#fcf2f2;--ep-warnrow:#fdf7e6;--ep-font:'Segoe UI',system-ui,-apple-system,sans-serif;--ep-pad-x:44px;--ep-row-pad:4px 10px;--ep-gap-y:10px}
@@ -1233,14 +1405,26 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 .thead{display:grid;padding:4px 10px;background:var(--ep-band);border-bottom:1px solid var(--ep-rule2);font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.thead .r{text-align:right}
 .trow{display:grid;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);align-items:center}.trow.row-last{border-bottom:none}.trow.row-bad{background:var(--ep-badrow)}.trow .r{text-align:right}.trow .muted{color:var(--ep-ink3)}.trow .no{margin-right:8px}
 .id{color:var(--ep-warn);font-weight:600}.muted{color:var(--ep-ink3)}.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dual{display:grid;grid-template-columns:1fr 1fr}.sicht-cell{display:grid;grid-template-columns:36px 1fr 60px;padding:var(--ep-row-pad);align-items:center}.sicht-cell .r{text-align:right}.sicht-cell.row-bad{background:var(--ep-badrow)}.sicht-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.sicht-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}.abg-cell{display:grid;grid-template-columns:70px 1fr;padding:var(--ep-row-pad);align-items:center}.abg-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.abg-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}
+.dual{display:grid;grid-template-columns:1fr 1fr}.sicht-cell{display:grid;grid-template-columns:36px 1fr 60px;padding:var(--ep-row-pad);align-items:center}.sicht-cell .r{text-align:right}.sicht-cell.row-bad{background:var(--ep-badrow)}.sicht-cell.row-warn{background:var(--ep-warnrow)}.sicht-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.sicht-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}.abg-cell{display:grid;grid-template-columns:70px 1fr;padding:var(--ep-row-pad);align-items:center}.abg-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.abg-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr)}.kpi{padding:8px 12px}.kpi.kpi-sep{border-right:1px solid var(--ep-rule2)}.kpi-k{font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.kpi-v{font-size:16px;font-weight:700;margin-top:2px}.kpi-s{font-size:9px}
 .num-row{display:grid;grid-template-columns:30px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2)}.num-row.row-last{border-bottom:none}
 .confirm{padding:8px 12px;color:var(--ep-ink2);line-height:1.55}.confirm strong{color:var(--ep-ink)}.bemerkung{padding:var(--ep-row-pad);background:var(--ep-warnrow)}.bemerkung.small{background:transparent;font-size:9px;color:var(--ep-ink2);line-height:1.5;padding:6px 10px}
 .sign-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--ep-rule2)}.sign{padding:8px 12px}.sign.sign-r{border-left:1px solid var(--ep-rule2)}.sign-role{font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:28px}.sign-line{border-bottom:1px solid var(--ep-ink);height:24px}.sign-name{margin-top:4px;font-weight:600}.sign .muted{font-size:9px}
 @media print{html,body,.ep-stage{background:#fff;padding:0;gap:0}.page{box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}@page{size:A4 portrait;margin:0}`;
 
-    const sorted2=alphaSort(instances,"name");
+    // Topologische Sortierung: Einspeisepunkt → Kinder → Enkel (BFS, alphabetisch je Ebene)
+    const sorted2=(() => {
+      const result=[]; const visited=new Set();
+      const visit=(parentId)=>{
+        alphaSort(instances.filter(i=>i.parentId===parentId),"name").forEach(inst=>{
+          if(!visited.has(inst.id)){ visited.add(inst.id); result.push(inst); visit(inst.id); }
+        });
+      };
+      alphaSort(instances.filter(i=>!i.parentId),"name").forEach(inst=>{
+        if(!visited.has(inst.id)){ visited.add(inst.id); result.push(inst); visit(inst.id); }
+      });
+      return result;
+    })();
     const total=sorted2.length;
     const hdr=`<strong>Stromplaner</strong> · Errichtungsprüfung · DIN VDE 0100-600`;
     const subR=`${esc(meta?.production||"Planung")} · v${esc(meta?.version||"1")} · ${esc(inspMeta.date||"")}`;
@@ -1251,7 +1435,10 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     const maengel=[];
     sorted2.forEach(inst=>{
       const ir=getIR(inst.id);
-      (ir.sicht||[]).forEach((v,idx)=>{if(v===false)maengel.push({inst,item:SICHT_ITEMS[idx],type:"bad"});});
+      (ir.sicht||[]).forEach((v,idx)=>{
+        if(v===false) maengel.push({inst,item:SICHT_ITEMS[idx],type:"bad"});
+        else if(v==="warn") maengel.push({inst,item:SICHT_ITEMS[idx],type:"warn"});
+      });
       if(ir.bemerkung) maengel.push({inst,item:ir.bemerkung,type:"warn"});
     });
 
@@ -1262,7 +1449,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const type=boxTypeById[inst.typeId];
       const outlets=type?sortOutlets(type.outlets):[];
       totalPunkte+=(ir.sicht||[]).filter(v=>v!==null).length;
-      totalMangel+=(ir.sicht||[]).filter(v=>v===false).length;
+      totalMangel+=(ir.sicht||[]).filter(v=>v===false||v==="warn").length;
       outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO").forEach(o=>{if(getOR(inst.id,o.id).rcdT1!=="")totalRCD++;});
     });
 
@@ -1291,7 +1478,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     <section class="block"><header class="bar"><span><strong>Umfang</strong><span class="bar-sub">${total} Kasten${total!==1?"":"en"}</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span>Bezeichnung</span><span>Typ</span><span>Eingang</span><span>Hängt an</span></div>
-        ${sorted2.map((inst,i)=>{const type=boxTypeById[inst.typeId];const parent=inst.parentId?instById[inst.parentId]:null;return`<div class="trow${i===sorted2.length-1?" row-last":""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name||"–")}</span><span class="muted">${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A</span><span class="muted">${parent?esc(parent.name):"— Einspeisung —"}</span></div>`;}).join("")}
+        ${sorted2.map((inst,i)=>{const type=boxTypeById[inst.typeId];const parent=inst.parentId?instById[inst.parentId]:null;const feedLbl=parent?esc(parent.name):inst.mainConnectionId?esc(mainConnById[inst.mainConnectionId]?.name||"–"):"— Einspeisung —";return`<div class="trow${i===sorted2.length-1?" row-last":""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name||"–")}</span><span class="muted">${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A</span><span class="muted">${feedLbl}</span></div>`;}).join("")}
       </div></section>
     <div class="spacer-auto"></div>
   </main>
@@ -1310,8 +1497,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const pageNum=String(n+1).padStart(2,"0");
       const totalPages=total+2;
       const hasMangel=sicht.some(v=>v===false);
-      const befundCls=hasMangel?"bad":"ok";
-      const befundLbl=hasMangel?"✕ Mangel":"✓ Bestanden";
+      const hasHinweis=sicht.some(v=>v==="warn");
+      const befundCls=hasMangel?"bad":hasHinweis?"warn":"ok";
+      const befundLbl=hasMangel?"✕ Mangel":hasHinweis?"! Hinweise":"✓ Bestanden";
 
       const ckPE=pdfChk(ir.rPE,undefined,0.5), ckIso=pdfChk(ir.rIso,1,undefined), ckZs=pdfChk(ir.zs,undefined,1.5);
       const phaseR=ir.phaseRot==="rechts"?"ok":ir.phaseRot==="links"?"bad":"";
@@ -1338,12 +1526,12 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="kv-row"><span class="k">Typ</span><span class="v">${esc(type?.name||"–")}</span></div>
         <div class="kv-row"><span class="k">Eingang</span><span class="v">${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A</span></div>
         <div class="kv-row kv-right"><span class="k">Netzform</span><span class="v">${esc(inspMeta.netType||"–")}</span></div>
-        <div class="kv-row kv-last"><span class="k">Hängt an</span><span class="v">${parent?esc(parent.name):"— Einspeisung —"}</span></div>
+        <div class="kv-row kv-last"><span class="k">Hängt an</span><span class="v">${parent?esc(parent.name):inst.mainConnectionId?esc(mainConnById[inst.mainConnectionId]?.name||"–"):"— Einspeisung —"}</span></div>
         <div class="kv-row kv-last" style="grid-column:span 2"><span class="k">Anschlüsse</span><span class="v">${outlets.length} Stk.</span></div>
       </div></div></section>
     <section class="block"><header class="bar"><span><strong>${n}.2 · Sichtprüfung</strong><span class="bar-sub">8 Punkte</span></span></header>
       <div class="block-body"><div class="dual">
-        ${SICHT_ITEMS.map((item,idx)=>`<div class="sicht-cell${sicht[idx]===false?" row-bad":""}${idx%2===0?" cell-bright":""}${idx>=6?" cell-blast":""}"><span class="muted">${n}.2.${idx+1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
+        ${SICHT_ITEMS.map((item,idx)=>`<div class="sicht-cell${sicht[idx]===false?" row-bad":sicht[idx]==="warn"?" row-warn":""}${idx%2===0?" cell-bright":""}${idx>=6?" cell-blast":""}"><span class="muted">${n}.2.${idx+1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
       </div></div></section>
     <section class="block"><header class="bar"><span><strong>${n}.3 · Messungen</strong><span class="bar-sub">R_PE · R_iso · Z_s · I_k · Drehfeld · U</span></span></header>
       <div class="block-body">
@@ -1408,7 +1596,19 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     setTimeout(()=>{pw.focus();pw.print();},600);
   };
 
-  const sorted = alphaSort(instances,"name");
+  // Topologische Sortierung: Einspeisepunkt → Kinder → Enkel (BFS, alphabetisch je Ebene)
+  const sorted = (()=>{
+    const result=[]; const visited=new Set();
+    const visit=(parentId)=>{
+      alphaSort(instances.filter(i=>i.parentId===parentId),"name").forEach(inst=>{
+        if(!visited.has(inst.id)){ visited.add(inst.id); result.push(inst); visit(inst.id); }
+      });
+    };
+    alphaSort(instances.filter(i=>!i.parentId),"name").forEach(inst=>{
+      if(!visited.has(inst.id)){ visited.add(inst.id); result.push(inst); visit(inst.id); }
+    });
+    return result;
+  })();
 
   return (
     <div>
@@ -1462,8 +1662,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                     const v=sicht[idx];
                     return (
                       <div key={idx} style={{display:"flex",alignItems:"center",gap:7,background:"#1b2026",borderRadius:5,padding:"5px 8px",border:`1px solid ${LINE}`}}>
-                        <button onClick={()=>cycleSicht(inst.id,idx)} style={{width:26,height:26,borderRadius:4,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,flexShrink:0,background:v===true?"#1a5c2e":v===false?"#5c1a1a":"#2d343d",color:v===true?"#2ecc71":v===false?"#e74c3c":"#7c8794"}}>
-                          {v===true?"✓":v===false?"✗":"–"}
+                        <button onClick={()=>cycleSicht(inst.id,idx)} title={v===true?"OK":v===false?"Mangel":v==="warn"?"Hinweis":"Nicht geprüft"} style={{width:26,height:26,borderRadius:4,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,flexShrink:0,background:v===true?"#1a5c2e":v===false?"#5c1a1a":v==="warn"?"#4a3500":"#2d343d",color:v===true?"#2ecc71":v===false?"#e74c3c":v==="warn"?"#f5a623":"#7c8794"}}>
+                          {v===true?"✓":v===false?"✗":v==="warn"?"!":"–"}
                         </button>
                         <span style={{fontSize:11,color:"#e8eaed"}}>{item}</span>
                       </div>
@@ -1565,7 +1765,7 @@ const S={
   headerMeta:       {fontSize:12,color:"#9aa4af",flex:1},
   exportBtn:        {background:ACCENT,color:"#1c2127",border:"none",borderRadius:6,padding:"8px 14px",fontWeight:700,cursor:"pointer",fontSize:13},
   ghostBtn:         {background:"transparent",color:"#e8eaed",border:`1px solid ${LINE}`,borderRadius:6,padding:"7px 11px",fontWeight:600,cursor:"pointer",fontSize:12,display:"inline-flex",alignItems:"center",gap:4},
-  nav:              {display:"flex",gap:4,padding:"0 18px",background:DARK,borderBottom:`1px solid ${LINE}`,flexWrap:"wrap"},
+  nav:              {display:"flex",gap:4,padding:"0 18px",background:DARK,borderBottom:`1px solid ${LINE}`,flexWrap:"wrap",position:"sticky",top:48,zIndex:9},
   navBtn:           {background:"transparent",border:"none",color:"#9aa4af",padding:"11px 13px",cursor:"pointer",fontSize:13,borderBottom:"3px solid transparent"},
   navBtnActive:     {color:"#fff",borderBottom:`3px solid ${ACCENT}`,fontWeight:600},
   main:             {padding:20,maxWidth:1200,margin:"0 auto"},

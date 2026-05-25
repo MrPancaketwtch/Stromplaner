@@ -44162,13 +44162,21 @@
       document.addEventListener("mousedown", h);
       return () => document.removeEventListener("mousedown", h);
     }, []);
+    (0, import_react.useEffect)(() => {
+      if (!open) return;
+      const onScroll = () => close();
+      window.addEventListener("scroll", onScroll, true);
+      return () => window.removeEventListener("scroll", onScroll, true);
+    }, [open]);
     const open_ = () => {
       if (trigRef.current) {
         const r = trigRef.current.getBoundingClientRect();
         const spaceBelow = window.innerHeight - r.bottom;
         const dropH = Math.min(options.length * 32 + 60, 340);
-        const top = spaceBelow < dropH ? r.top + window.scrollY - dropH - 4 : r.bottom + window.scrollY + 2;
-        setPos({ top, left: r.left + window.scrollX, width: Math.max(r.width, 260) });
+        const top = spaceBelow < dropH ? r.top - dropH - 4 : r.bottom + 2;
+        const dropW = Math.max(r.width, 280);
+        const left = Math.min(r.left, window.innerWidth - dropW - 8);
+        setPos({ top, left: Math.max(left, 4), width: dropW });
       }
       setOpen(true);
       setQuery("");
@@ -44229,13 +44237,21 @@
       document.addEventListener("mousedown", h);
       return () => document.removeEventListener("mousedown", h);
     }, []);
+    (0, import_react.useEffect)(() => {
+      if (!open) return;
+      const onScroll = () => close();
+      window.addEventListener("scroll", onScroll, true);
+      return () => window.removeEventListener("scroll", onScroll, true);
+    }, [open]);
     const open_ = () => {
       if (trigRef.current) {
         const r = trigRef.current.getBoundingClientRect();
         const spaceBelow = window.innerHeight - r.bottom;
         const dropH = Math.min(options.length * 32 + 60, 340);
-        const top = spaceBelow < dropH ? r.top + window.scrollY - dropH - 4 : r.bottom + window.scrollY + 2;
-        setPos({ top, left: r.left + window.scrollX, width: Math.max(r.width, 260) });
+        const top = spaceBelow < dropH ? r.top - dropH - 4 : r.bottom + 2;
+        const dropW = Math.max(r.width, 280);
+        const left = Math.min(r.left, window.innerWidth - dropW - 8);
+        setPos({ top, left: Math.max(left, 4), width: dropW });
       }
       setOpen(true);
       setQuery("");
@@ -44286,8 +44302,8 @@
     const [tab, setTab] = (0, import_react.useState)("config");
     const [meta, setMeta] = (0, import_react.useState)(DEFAULT_META);
     const [mainConns, setMainConns] = (0, import_react.useState)([]);
-    const [boxTypes, setBoxTypes] = (0, import_react.useState)(clone(DEFAULT_BOX_TYPES));
-    const [loads, setLoads] = (0, import_react.useState)(clone(DEFAULT_LOADS));
+    const [boxTypes, setBoxTypes] = (0, import_react.useState)(alphaSort(clone(DEFAULT_BOX_TYPES), "name"));
+    const [loads, setLoads] = (0, import_react.useState)(alphaSort(clone(DEFAULT_LOADS), "name"));
     const [instances, setInstances] = (0, import_react.useState)([]);
     const [placements, setPlacements] = (0, import_react.useState)([]);
     const [activePlan, setActivePlan] = (0, import_react.useState)(null);
@@ -44302,8 +44318,8 @@
           if (d._format === "stromplaner") {
             if (d.meta) setMeta(d.meta);
             if (d.mainConns) setMainConns(d.mainConns);
-            if (d.boxTypes) setBoxTypes(d.boxTypes.map(migrateBoxType));
-            if (d.loads) setLoads(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })));
+            if (d.boxTypes) setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType), "name"));
+            if (d.loads) setLoads(alphaSort(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
             if (d.instances) setInstances(d.instances.map(migrateInstance));
             if (d.placements) setPlacements(d.placements);
             if (d.inspMeta) setInspMeta(d.inspMeta);
@@ -44404,18 +44420,29 @@
       if (!maxA) return false;
       return Math.max(t.L1, t.L2, t.L3) > maxA;
     }, [totalLoad, instById, boxTypeById]);
+    const isUnderdimensioned = (0, import_react.useCallback)((instanceId) => {
+      const inst = instById[instanceId];
+      if (!inst || !inst.parentId || !inst.parentOutletId) return false;
+      const type = boxTypeById[inst.typeId];
+      if (!type) return false;
+      const parentInst = instById[inst.parentId];
+      const parentType = parentInst ? boxTypeById[parentInst.typeId] : null;
+      const outlet = parentType?.outlets.find((o) => o.id === inst.parentOutletId);
+      if (!outlet) return false;
+      return type.feedAmp > outlet.amp;
+    }, [instById, boxTypeById]);
     const addInstance = (typeId) => {
       const type = boxTypeById[typeId];
       if (!type) return;
       const count = instances.filter((i) => i.typeId === typeId).length;
-      setInstances((s) => [...s, {
+      setInstances((s) => [{
         id: uid(),
         typeId,
         name: count > 0 ? `${type.name} #${count + 1}` : type.name,
         parentId: null,
         parentOutletId: null,
         mainConnectionId: null
-      }]);
+      }, ...s]);
     };
     const removeInstance = (id) => {
       setInstances((s) => s.filter((i) => i.id !== id).map((i) => i.parentId === id ? { ...i, parentId: null, parentOutletId: null } : i));
@@ -44442,6 +44469,7 @@ Fortfahren?`);
       updateInstance(instId, { parentId: parentId || null, parentOutletId: parentOutletId || null });
     };
     const addPlacement = (instanceId) => setPlacements((s) => [...s, { id: uid(), instanceId, outletId: "", mcSlot: null, loadId: "" }]);
+    const addPlacementsFilled = (instanceId, loadId, outletId, count) => setPlacements((s) => [...s, ...Array.from({ length: count }, () => ({ id: uid(), instanceId, outletId: outletId || "", mcSlot: null, loadId: loadId || "" }))]);
     const updatePlacement = (id, patch) => setPlacements((s) => s.map((p) => p.id === id ? { ...p, ...patch } : p));
     const removePlacement = (id) => setPlacements((s) => s.filter((p) => p.id !== id));
     const addMainConn = () => setMainConns((s) => [...s, { id: uid(), name: "Hauptanschluss " + (s.length + 1), amp: "" }]);
@@ -44459,7 +44487,7 @@ Fortfahren?`);
       setActivePlan(null);
     };
     const saveJSON = () => {
-      const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances, placements };
+      const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances: alphaSort(instances, "name"), placements };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -44481,8 +44509,8 @@ Fortfahren?`);
           }
           if (d.meta) setMeta(d.meta);
           if (d.mainConns) setMainConns(d.mainConns || []);
-          if (d.boxTypes) setBoxTypes(d.boxTypes.map(migrateBoxType));
-          if (d.loads) setLoads(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })));
+          if (d.boxTypes) setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType), "name"));
+          if (d.loads) setLoads(alphaSort(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
           if (d.instances) setInstances(d.instances.map(migrateInstance));
           if (d.placements) setPlacements(d.placements);
           if (d.inspMeta) setInspMeta(d.inspMeta);
@@ -44634,7 +44662,7 @@ Fortfahren?`);
         }).filter(Boolean);
         body += `<div style="page-break-inside:avoid;margin-top:18px">
         <h2 style="font-size:13px;background:#2e75b6;color:#fff;padding:6px 10px;margin:0 0 6px;border-radius:4px">${inst.name} <span style="font-weight:400;font-size:11px">(${type?.name || ""} \xB7 ${conn} \xB7 max ${maxA}A)</span></h2>
-        <div style="font-size:11px;color:#555;margin-bottom:6px">h\xE4ngt an: ${inst.parentId ? instById[inst.parentId]?.name : "\u2014 Einspeisung \u2014"}</div>
+        <div style="font-size:11px;color:#555;margin-bottom:6px">h\xE4ngt an: ${inst.parentId ? instById[inst.parentId]?.name : inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name || "\u2014 Einspeisung \u2014" : "\u2014 Einspeisung \u2014"}</div>
         <div style="display:flex;gap:6px;margin-bottom:8px">${phBar(tot, maxA)}</div>`;
         if (rows2.length) {
           body += `<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:#eee">
@@ -44664,7 +44692,7 @@ Fortfahren?`);
       ["boxtypes", "Kasten-Typen"],
       ["loads", "Verbraucher"]
     ];
-    const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, rootInstances, mainConns, mainConnById };
+    const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, isUnderdimensioned, rootInstances, mainConns, mainConnById };
     return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("style", null, CSS), /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: exportPDF }, "\u{1F5A8} PDF"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportExcel }, "\u2B07 Excel")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement("button", { key: k, style: { ...S.navBtn, ...tab === k ? S.navBtnActive : {} }, onClick: () => setTab(k) }, label))), /* @__PURE__ */ import_react.default.createElement("main", { style: S.main }, tab === "config" && /* @__PURE__ */ import_react.default.createElement(
       ConfigTab,
       {
@@ -44689,6 +44717,7 @@ Fortfahren?`);
         loadById,
         placements,
         addPlacement,
+        addPlacementsFilled,
         updatePlacement,
         removePlacement,
         activePlan,
@@ -44696,21 +44725,26 @@ Fortfahren?`);
         ownLoad,
         meta
       }
-    ), tab === "overview" && /* @__PURE__ */ import_react.default.createElement(OverviewTab, { ...sharedProps, meta }), tab === "schematic" && /* @__PURE__ */ import_react.default.createElement(SchematicTab, { ...sharedProps, meta }), tab === "boxtypes" && /* @__PURE__ */ import_react.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances }), tab === "loads" && /* @__PURE__ */ import_react.default.createElement(LoadsTab, { loads, setLoads }), tab === "inspection" && /* @__PURE__ */ import_react.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults })));
+    ), tab === "overview" && /* @__PURE__ */ import_react.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById }), tab === "schematic" && /* @__PURE__ */ import_react.default.createElement(SchematicTab, { ...sharedProps, meta }), tab === "boxtypes" && /* @__PURE__ */ import_react.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances }), tab === "loads" && /* @__PURE__ */ import_react.default.createElement(LoadsTab, { loads, setLoads }), tab === "inspection" && /* @__PURE__ */ import_react.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults })));
   }
-  function ConfigTab({ meta, setMeta, boxTypes, instances, instById, boxTypeById, addInstance, removeInstance, updateInstance, setParentWithValidation, isOverloaded, mainConns, addMainConn, updateMainConn, removeMainConn }) {
+  function ConfigTab({ meta, setMeta, boxTypes, instances, instById, boxTypeById, addInstance, removeInstance, updateInstance, setParentWithValidation, isOverloaded, isUnderdimensioned, mainConns, addMainConn, updateMainConn, removeMainConn }) {
     const [pick, setPick] = (0, import_react.useState)(boxTypes[0]?.id || "");
     const sortedTypes = alphaSort(boxTypes, "name");
     return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Produktionsdaten" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Produktion" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.production, onChange: (e) => setMeta({ ...meta, production: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Ersteller" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.creator, onChange: (e) => setMeta({ ...meta, creator: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Version" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.version, onChange: (e) => setMeta({ ...meta, version: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "date", style: S.input, value: meta.date, onChange: (e) => setMeta({ ...meta, date: e.target.value }) })))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "Hauptanschl\xFCsse", subtitle: "Definiere alle Einspeisepunkte dieser Produktion. K\xE4sten k\xF6nnen optional einem Hauptanschluss zugewiesen werden." }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addMainConn }, "+ Hauptanschluss hinzuf\xFCgen"), mainConns.length === 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: S.hint }, "Noch keine Hauptanschl\xFCsse definiert. K\xE4sten ohne Zuweisung erscheinen als freie Einspeisepunkte."), mainConns.map((mc) => /* @__PURE__ */ import_react.default.createElement("div", { key: mc.id, style: { display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, flex: 2, minWidth: 150 }, placeholder: "Bezeichnung z.B. NH03-Halle 1", value: mc.name, onChange: (e) => updateMainConn(mc.id, { name: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, placeholder: "Max A", value: mc.amp, onChange: (e) => updateMainConn(mc.id, { amp: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "A"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeMainConn(mc.id) }, "\u2715")))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "K\xE4sten aktivieren", subtitle: "Jeder aktivierte Kasten bekommt im Steckplan ein eigenes Datenblatt." }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.row }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.select, value: pick, onChange: (e) => setPick(e.target.value) }, sortedTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("option", { key: b.id, value: b.id }, b.name))), /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: () => addInstance(pick) }, "+ Kasten hinzuf\xFCgen")), instances.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch keine K\xE4sten aktiviert.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, minWidth: 860, width: "auto" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Typ"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Eingang"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "h\xE4ngt an Kasten\u2026"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "\u2026Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Hauptanschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, instances.map((inst) => {
       const type = boxTypeById[inst.typeId];
       const parentType = inst.parentId ? boxTypeById[instById[inst.parentId]?.typeId] : null;
       const ol = isOverloaded(inst.id);
+      const ud = isUnderdimensioned(inst.id);
       const sortedOther = alphaSort(instances.filter((o) => o.id !== inst.id), "name");
       const parentOutlets = parentType ? sortOutlets(parentType.outlets) : [];
       const takenOutletIds = new Set(instances.filter((i) => i.id !== inst.id && i.parentId === inst.parentId && i.parentId).map((i) => i.parentOutletId).filter(Boolean));
-      const availableOutlets = parentOutlets.filter((o) => !takenOutletIds.has(o.id) || o.id === inst.parentOutletId);
+      const availableOutlets = parentOutlets.filter((o) => {
+        if (takenOutletIds.has(o.id) && o.id !== inst.parentOutletId) return false;
+        if (type && type.feedConnector && o.connector !== type.feedConnector) return false;
+        return true;
+      });
       const isRoot = !inst.parentId;
-      return /* @__PURE__ */ import_react.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, ol && /* @__PURE__ */ import_react.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", fontWeight: 800, fontSize: 16 } }, "\u26A0")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: inst.name, onChange: (e) => updateInstance(inst.id, { name: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, type?.name), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, type ? CONN[type.feedConnector]?.label : ""), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.selectSm, value: inst.parentId || "", onChange: (e) => setParentWithValidation(inst.id, e.target.value, null) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 Einspeisung \u2014"), sortedOther.map((o) => /* @__PURE__ */ import_react.default.createElement("option", { key: o.id, value: o.id }, o.name)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement(
+      return /* @__PURE__ */ import_react.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, ol && /* @__PURE__ */ import_react.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", fontWeight: 800, fontSize: 16 } }, "\u26A0"), ud && /* @__PURE__ */ import_react.default.createElement("span", { title: `Unterdimensioniert: Kasten-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) gr\xF6\xDFer als Anschluss`, style: { color: "#f5a623", fontWeight: 800, fontSize: 15, marginLeft: ol ? 4 : 0 } }, "\u26A1")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: inst.name, onChange: (e) => updateInstance(inst.id, { name: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, type?.name), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, type ? CONN[type.feedConnector]?.label : ""), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.selectSm, value: inst.parentId || "", onChange: (e) => setParentWithValidation(inst.id, e.target.value, null) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 Einspeisung \u2014"), sortedOther.map((o) => /* @__PURE__ */ import_react.default.createElement("option", { key: o.id, value: o.id }, o.name)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement(
         "select",
         {
           style: S.selectSm,
@@ -44725,7 +44759,10 @@ Fortfahren?`);
       } }, "\u2715")));
     })))), /* @__PURE__ */ import_react.default.createElement("p", { style: S.hint }, "\u{1F4A1} Phasen bleiben beim Aufstecken erhalten (L1\u2192L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.")));
   }
-  function PlanTab({ instances, boxTypeById, loads, loadById, instById, placements, addPlacement, updatePlacement, removePlacement, activePlan, setActivePlan, ownLoad, totalLoad, isOverloaded, rootInstances, mainConns, mainConnById, meta }) {
+  function PlanTab({ instances, boxTypeById, loads, loadById, instById, placements, addPlacement, addPlacementsFilled, updatePlacement, removePlacement, activePlan, setActivePlan, ownLoad, totalLoad, isOverloaded, isUnderdimensioned, rootInstances, mainConns, mainConnById, meta }) {
+    const [bulkLoadId, setBulkLoadId] = (0, import_react.useState)("");
+    const [bulkOutletId, setBulkOutletId] = (0, import_react.useState)("");
+    const [bulkCount, setBulkCount] = (0, import_react.useState)(1);
     (0, import_react.useEffect)(() => {
       if (!activePlan && instances.length) setActivePlan(instances[0].id);
     }, [instances, activePlan, setActivePlan]);
@@ -44774,14 +44811,34 @@ Fortfahren?`);
       })));
     })), /* @__PURE__ */ import_react.default.createElement("div", { style: S.boxTabs }, instances.map((i) => {
       const ol = isOverloaded(i.id);
-      return /* @__PURE__ */ import_react.default.createElement("button", { key: i.id, style: { ...S.boxTab, ...i.id === inst.id ? S.boxTabActive : {}, ...ol ? { borderColor: "#e74c3c" } : {} }, onClick: () => setActivePlan(i.id) }, ol && /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#e74c3c", marginRight: 4, fontWeight: 800 } }, "\u26A0"), i.name);
+      const ud = isUnderdimensioned(i.id);
+      return /* @__PURE__ */ import_react.default.createElement("button", { key: i.id, style: { ...S.boxTab, ...i.id === inst.id ? S.boxTabActive : {}, ...ol ? { borderColor: "#e74c3c" } : ud ? { borderColor: "#f5a623" } : {} }, onClick: () => setActivePlan(i.id) }, ol && /* @__PURE__ */ import_react.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", marginRight: 4, fontWeight: 800 } }, "\u26A0"), !ol && ud && /* @__PURE__ */ import_react.default.createElement("span", { title: "Unterdimensioniert!", style: { color: "#f5a623", marginRight: 4, fontWeight: 800 } }, "\u26A1"), i.name);
     })), /* @__PURE__ */ import_react.default.createElement(Section, { title: inst.name, subtitle: `Eingang: ${connLabel} (${maxA}A)` }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.stickyPhase }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
       const a = own[ph];
       const tA = tot[ph];
       const pct = maxA ? tA / maxA * 100 : 0;
       const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
       return /* @__PURE__ */ import_react.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round2(tA), " A"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phasePct }, maxA ? `${Math.round(pct)}% von ${maxA}A` : ""), a !== tA && /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#555", marginTop: 2 } }, "Eigen: ", round2(a), "A"));
-    }))), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.primaryBtn, marginTop: 12 }, onClick: () => addPlacement(inst.id) }, "+ Verbraucher stecken"), rows.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch nichts gesteckt.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Verbraucher"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Steckplatz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, rows.map((p) => {
+    }))), (() => {
+      const bulkLoad = bulkLoadId ? loadById[bulkLoadId] : null;
+      const bulkAvail = bulkLoad ? getAvailableOutlets(bulkLoadId) : sortedOutlets;
+      const bulkOutletOpts = bulkAvail.map((o) => ({ value: o.id, label: `${o.label} (${CONN[o.connector]?.label || o.connector} \xB7 ${o.breaker || ""}${o.amp}A \xB7 ${o.protection})` }));
+      const canAdd = !!bulkLoadId;
+      return /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "flex-end", gap: 8, marginTop: 14, padding: "10px 12px", background: "#1b2026", borderRadius: 7, border: `1px solid ${LINE}`, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, width: "100%", marginBottom: 2 } }, "Schnellerfassung"), /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: "2 1 180px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.fieldLabel }, "Verbraucher"), /* @__PURE__ */ import_react.default.createElement(InlineSelect, { options: loadOptions, value: bulkLoadId, onChange: (v) => {
+        setBulkLoadId(v);
+        setBulkOutletId("");
+      }, placeholder: "W\xE4hlen\u2026" })), /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: "2 1 200px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.fieldLabel }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement(FilterSelect, { options: bulkOutletOpts, value: bulkOutletId, onChange: setBulkOutletId, placeholder: "W\xE4hlen\u2026" })), /* @__PURE__ */ import_react.default.createElement("div", { style: { width: 70 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.fieldLabel }, "Menge"), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", min: "1", max: "50", style: { ...S.inputSm, width: "100%", textAlign: "center" }, value: bulkCount, onChange: (e) => setBulkCount(Math.max(1, parseInt(e.target.value) || 1)) })), /* @__PURE__ */ import_react.default.createElement(
+        "button",
+        {
+          style: { ...S.primaryBtn, alignSelf: "flex-end" },
+          disabled: !canAdd,
+          onClick: () => {
+            addPlacementsFilled(inst.id, bulkLoadId, bulkOutletId, Math.max(1, Math.min(50, bulkCount)));
+          }
+        },
+        bulkCount > 1 ? `${bulkCount}\xD7 hinzuf\xFCgen` : "Hinzuf\xFCgen"
+      ), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, alignSelf: "flex-end" }, onClick: () => addPlacement(inst.id), title: "Leere Zeile hinzuf\xFCgen" }, "+ leer"));
+    })(), rows.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch nichts gesteckt.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Verbraucher"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Steckplatz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, rows.map((p) => {
       const l = loadById[p.loadId];
       const outlet = type?.outlets.find((o) => o.id === p.outletId);
       const avail = getAvailableOutlets(p.loadId);
@@ -44827,7 +44884,7 @@ Fortfahren?`);
     const removeOutlet = (boxId, outletId) => setBoxTypes((s) => s.map((b) => b.id !== boxId ? b : { ...b, outlets: b.outlets.filter((o) => o.id !== outletId) }));
     const addType = () => {
       const id = "NEU_" + uid();
-      setBoxTypes((s) => [...s, { id, name: "Neuer Kasten", feedConnector: "CEE32", feedAmp: 32, outlets: [] }]);
+      setBoxTypes((s) => [{ id, name: "Neuer Kasten", feedConnector: "CEE32", feedAmp: 32, outlets: [] }, ...s]);
       setOpenId(id);
     };
     const removeType = (id) => {
@@ -44838,16 +44895,15 @@ Fortfahren?`);
       if (!confirm("Kasten-Typ wirklich l\xF6schen?")) return;
       setBoxTypes((s) => s.filter((b) => b.id !== id));
     };
-    const sortedTypes = alphaSort(boxTypes, "name");
-    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Kasten-Typen", subtitle: "Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3)." }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addType }, "+ Neuen Kasten-Typ"), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 16 } }, sortedTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("div", { key: b.id, style: S.card }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.cardHead, onClick: () => setOpenId(openId === b.id ? null : b.id) }, /* @__PURE__ */ import_react.default.createElement("span", { style: S.cardTitle }, openId === b.id ? "\u25BE" : "\u25B8", " ", b.name), /* @__PURE__ */ import_react.default.createElement("span", { style: S.cardSub }, CONN[b.feedConnector]?.label || b.feedConnector, " \xB7 ", b.outlets.length, " Anschl\xFCsse")), openId === b.id && /* @__PURE__ */ import_react.default.createElement("div", { style: S.cardBody }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Name" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: b.name, onChange: (e) => update(b.id, { name: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Einspeisung" }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.input, value: b.feedConnector, onChange: (e) => update(b.id, { feedConnector: e.target.value, feedAmp: CONN[e.target.value]?.amp || b.feedAmp }) }, Object.entries(CONN).sort((a, b2) => a[1].label.localeCompare(b2[1].label, "de")).map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Max (A)" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: S.input, value: b.feedAmp, onChange: (e) => update(b.id, { feedAmp: +e.target.value }) }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "right", marginTop: 4 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtnWide, onClick: () => removeType(b.id) }, "L\xF6schen")), /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name / Steckplatz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Steckpl\xE4tze*"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Sich."), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, b.outlets.map((o) => /* @__PURE__ */ import_react.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: o.label, onChange: (e) => updateOutlet(b.id, o.id, { label: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.selectSm, value: o.connector, onChange: (e) => updateOutlet(b.id, o.id, { connector: e.target.value }) }, Object.entries(CONN).sort((a, b2) => a[1].label.localeCompare(b2[1].label, "de")).map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 55 }, value: o.amp, onChange: (e) => updateOutlet(b.id, o.id, { amp: +e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, is3ph(o.connector) ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "L1+L2+L3") : isMulticore(o.connector) ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "rotiert") : /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 60 }, value: o.phase || "L1", onChange: (e) => updateOutlet(b.id, o.id, { phase: e.target.value }) }, PHASES.map((ph) => /* @__PURE__ */ import_react.default.createElement("option", { key: ph, value: ph }, ph)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, isMulticore(o.connector) ? /* @__PURE__ */ import_react.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 55 }, value: o.mcSlots || 6, onChange: (e) => updateOutlet(b.id, o.id, { mcSlots: +e.target.value }) }) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, o.protection === "RCD" ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014") : /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: o.breaker || "C", onChange: (e) => updateOutlet(b.id, o.id, { breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 70 }, value: o.protection || "LS", onChange: (e) => updateOutlet(b.id, o.id, { protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeOutlet(b.id, o.id) }, "\u2715"))))))), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...S.hint, marginTop: 6 } }, "* Steckpl\xE4tze gilt nur f\xFCr Multicore-Anschl\xFCsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, \u2026"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.secondaryBtn, onClick: () => addOutlet(b.id) }, "+ Anschluss hinzuf\xFCgen"))))));
+    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Kasten-Typen", subtitle: "Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3)." }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addType }, "+ Neuen Kasten-Typ"), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 16 } }, boxTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("div", { key: b.id, style: S.card }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.cardHead, onClick: () => setOpenId(openId === b.id ? null : b.id) }, /* @__PURE__ */ import_react.default.createElement("span", { style: S.cardTitle }, openId === b.id ? "\u25BE" : "\u25B8", " ", b.name), /* @__PURE__ */ import_react.default.createElement("span", { style: S.cardSub }, CONN[b.feedConnector]?.label || b.feedConnector, " \xB7 ", b.outlets.length, " Anschl\xFCsse")), openId === b.id && /* @__PURE__ */ import_react.default.createElement("div", { style: S.cardBody }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Name" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: b.name, onChange: (e) => update(b.id, { name: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Einspeisung" }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.input, value: b.feedConnector, onChange: (e) => update(b.id, { feedConnector: e.target.value, feedAmp: CONN[e.target.value]?.amp || b.feedAmp }) }, Object.entries(CONN).sort((a, b2) => a[1].label.localeCompare(b2[1].label, "de")).map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Max (A)" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: S.input, value: b.feedAmp, onChange: (e) => update(b.id, { feedAmp: +e.target.value }) }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "right", marginTop: 4 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtnWide, onClick: () => removeType(b.id) }, "L\xF6schen")), /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name / Steckplatz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Steckpl\xE4tze*"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Sich."), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, b.outlets.map((o) => /* @__PURE__ */ import_react.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: o.label, onChange: (e) => updateOutlet(b.id, o.id, { label: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.selectSm, value: o.connector, onChange: (e) => updateOutlet(b.id, o.id, { connector: e.target.value }) }, Object.entries(CONN).sort((a, b2) => a[1].label.localeCompare(b2[1].label, "de")).map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 55 }, value: o.amp, onChange: (e) => updateOutlet(b.id, o.id, { amp: +e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, is3ph(o.connector) ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "L1+L2+L3") : isMulticore(o.connector) ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "rotiert") : /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 60 }, value: o.phase || "L1", onChange: (e) => updateOutlet(b.id, o.id, { phase: e.target.value }) }, PHASES.map((ph) => /* @__PURE__ */ import_react.default.createElement("option", { key: ph, value: ph }, ph)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, isMulticore(o.connector) ? /* @__PURE__ */ import_react.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 55 }, value: o.mcSlots || 6, onChange: (e) => updateOutlet(b.id, o.id, { mcSlots: +e.target.value }) }) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, o.protection === "RCD" ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014") : /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: o.breaker || "C", onChange: (e) => updateOutlet(b.id, o.id, { breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 70 }, value: o.protection || "LS", onChange: (e) => updateOutlet(b.id, o.id, { protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeOutlet(b.id, o.id) }, "\u2715"))))))), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...S.hint, marginTop: 6 } }, "* Steckpl\xE4tze gilt nur f\xFCr Multicore-Anschl\xFCsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, \u2026"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.secondaryBtn, onClick: () => addOutlet(b.id) }, "+ Anschluss hinzuf\xFCgen"))))));
   }
   function LoadsTab({ loads, setLoads }) {
-    const add = () => setLoads((s) => [...s, { id: uid(), name: "Neuer Verbraucher", watt: 100, threePhase: false }]);
+    const add = () => setLoads((s) => [{ id: uid(), name: "Neuer Verbraucher", watt: 100, threePhase: false }, ...s]);
     const update = (id, patch) => setLoads((s) => s.map((l) => l.id === id ? { ...l, ...patch } : l));
     const remove = (id) => setLoads((s) => s.filter((l) => l.id !== id));
-    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Verbraucher-Stammdaten", subtitle: "3-phasige Verbraucher werden gleichm\xE4\xDFig auf L1/L2/L3 verteilt und k\xF6nnen nur auf CEE-Rot / Powerlock Anschl\xFCsse gesteckt werden." }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: add }, "+ Verbraucher"), /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "3-phasig"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, alphaSort(loads, "name").map((l) => /* @__PURE__ */ import_react.default.createElement("tr", { key: l.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: l.name, onChange: (e) => update(l.id, { name: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, value: l.watt, onChange: (e) => update(l.id, { watt: +e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, l.threePhase ? `${round2(l.watt / VOLT)}/Ph` : round2(l.watt / VOLT)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: l.threePhase || false, onChange: (e) => update(l.id, { threePhase: e.target.checked }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => remove(l.id) }, "\u2715")))))));
+    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Verbraucher-Stammdaten", subtitle: "3-phasige Verbraucher werden gleichm\xE4\xDFig auf L1/L2/L3 verteilt und k\xF6nnen nur auf CEE-Rot / Powerlock Anschl\xFCsse gesteckt werden." }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: add }, "+ Verbraucher"), /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "3-phasig"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, loads.map((l) => /* @__PURE__ */ import_react.default.createElement("tr", { key: l.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: l.name, onChange: (e) => update(l.id, { name: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, value: l.watt, onChange: (e) => update(l.id, { watt: +e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, l.threePhase ? `${round2(l.watt / VOLT)}/Ph` : round2(l.watt / VOLT)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: l.threePhase || false, onChange: (e) => update(l.id, { threePhase: e.target.checked }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => remove(l.id) }, "\u2715")))))));
   }
-  function OverviewTab({ instances, instById, boxTypeById, totalLoad, rootInstances, mainConns, mainConnById, meta, isOverloaded }) {
+  function OverviewTab({ instances, instById, boxTypeById, totalLoad, rootInstances, mainConns, mainConnById, meta, isOverloaded, isUnderdimensioned, placements, loads, loadById }) {
     if (instances.length === 0) return /* @__PURE__ */ import_react.default.createElement(Section, { title: "\xDCbersicht" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch keine K\xE4sten aktiviert."));
     return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Hauptanschl\xFCsse", subtitle: "Summenlast aller zugewiesenen K\xE4sten je Hauptanschluss." }, mainConns.map((mc) => {
       const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
@@ -44883,17 +44939,46 @@ Fortfahren?`);
       const conn = type ? CONN[type.feedConnector]?.label || "" : "";
       const stat = pct > 100 ? "\u26A0 \xDCBERLAST" : pct > 80 ? "\u25CF>80%" : peak > 0 ? "\u2713 OK" : "\u2013";
       const scol = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : peak > 0 ? "#27ae60" : "#999";
-      return /* @__PURE__ */ import_react.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, pct > 100 && /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#e74c3c", fontWeight: 800 } }, "\u26A0")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, inst.name), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, conn), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, inst.parentId ? instById[inst.parentId]?.name : "\u2014 Einspeisung \u2014"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, round2(t.L1)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, round2(t.L2)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, round2(t.L3)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, maxA), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, color: scol, fontWeight: 600 } }, stat));
-    })))));
+      return /* @__PURE__ */ import_react.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, pct > 100 && /* @__PURE__ */ import_react.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", fontWeight: 800 } }, "\u26A0"), pct <= 100 && isUnderdimensioned(inst.id) && /* @__PURE__ */ import_react.default.createElement("span", { title: "Unterdimensioniert!", style: { color: "#f5a623", fontWeight: 800 } }, "\u26A1")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, inst.name), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, conn), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, inst.parentId ? instById[inst.parentId]?.name : inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name : "\u2014 Einspeisung \u2014"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, round2(t.L1)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, round2(t.L2)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, round2(t.L3)), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, maxA), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, color: scol, fontWeight: 600 } }, stat));
+    })))), (() => {
+      const counts = {};
+      placements.forEach((p) => {
+        if (!p.loadId) return;
+        const l = loadById[p.loadId];
+        if (!l) return;
+        if (!counts[p.loadId]) counts[p.loadId] = { load: l, count: 0 };
+        counts[p.loadId].count++;
+      });
+      const rows = Object.values(counts).sort((a, b) => a.load.name.localeCompare(b.load.name, "de", { numeric: true }));
+      if (!rows.length) return null;
+      const totalW = rows.reduce((s, r) => s + r.load.watt * r.count, 0);
+      return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Verbraucher \u2013 Mengen nach Typ", subtitle: "Alle platzierten Verbraucher, summiert nach Typ." }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Verbraucher"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Menge"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "W / Stk."), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Gesamt W"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "3-Ph"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, rows.map((r) => /* @__PURE__ */ import_react.default.createElement("tr", { key: r.load.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, r.load.name), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 700 } }, r.count, "\xD7"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, r.load.watt, " W"), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 600 } }, r.load.watt * r.count, " W"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, r.load.threePhase ? "3ph" : ""))), /* @__PURE__ */ import_react.default.createElement("tr", { style: { borderTop: `2px solid #3a424c` } }, /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 700 } }, "Gesamt"), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 700 } }, rows.reduce((s, r) => s + r.count, 0), "\xD7"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 700, color: "#f5a623" } }, totalW, " W"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td })))));
+    })(), (() => {
+      const boxRows = instances.map((inst) => {
+        const pl = placements.filter((p) => p.instanceId === inst.id && p.loadId);
+        if (!pl.length) return null;
+        const lc = {};
+        pl.forEach((p) => {
+          const l = loadById[p.loadId];
+          if (!l) return;
+          if (!lc[p.loadId]) lc[p.loadId] = { load: l, count: 0 };
+          lc[p.loadId].count++;
+        });
+        const rows = Object.values(lc).sort((a, b) => a.load.name.localeCompare(b.load.name, "de", { numeric: true }));
+        return { inst, rows, totalW: rows.reduce((s, r) => s + r.load.watt * r.count, 0) };
+      }).filter(Boolean);
+      if (!boxRows.length) return null;
+      return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Verbraucher nach Kasten", subtitle: "F\xFCr jede Unterverteilung: platzierte Verbraucher mit Menge und Leistung." }, boxRows.map(({ inst, rows, totalW }) => /* @__PURE__ */ import_react.default.createElement("div", { key: inst.id, style: { marginBottom: 16 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: "#e8eaed", marginBottom: 6 } }, inst.name, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, fontSize: 11, color: "#9aa4af", marginLeft: 8 } }, boxTypeById[inst.typeId]?.name || ""), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600, fontSize: 11, color: "#f5a623", marginLeft: 8 } }, totalW, " W")), /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, marginBottom: 0 } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Verbraucher"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Menge"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "W / Stk."), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Gesamt W"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, rows.map((r) => /* @__PURE__ */ import_react.default.createElement("tr", { key: r.load.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, r.load.name), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 700 } }, r.count, "\xD7"), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, r.load.watt, " W"), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 600 } }, r.load.watt * r.count, " W"))))))));
+    })());
   }
-  function SchematicTab({ instances, instById, boxTypeById, totalLoad, rootInstances, mainConns, mainConnById, meta, isOverloaded }) {
+  function SchematicTab({ instances, instById, boxTypeById, totalLoad, rootInstances, mainConns, mainConnById, meta, isOverloaded, isUnderdimensioned }) {
     if (instances.length === 0) return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Schaltbild" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Aktiviere zuerst K\xE4sten."));
     const getChildren = (parentId) => instances.filter((i) => i.parentId === parentId);
     const countLeaves = (id) => {
       const ch = getChildren(id);
       return ch.length === 0 ? 1 : ch.reduce((s, c) => s + countLeaves(c.id), 0);
     };
-    const ROW_H = 90, COL_W = 220, NODE_W = 180, NODE_H = 70, PAD = 20;
+    const ROW_H = 120, COL_W = 240, NODE_W = 190, NODE_H = 72, PAD = 24;
     const positions = {};
     const assignPos = (id, depth, yStart) => {
       const ch = getChildren(id);
@@ -44934,7 +45019,7 @@ Fortfahren?`);
       const from = positions[inst.parentId], to = positions[inst.id];
       return { x1: from.x + NODE_W, y1: from.y + NODE_H / 2, x2: to.x, y2: to.y + NODE_H / 2, inst };
     });
-    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Schaltbild", subtitle: "Gr\xFCn = OK \xB7 Orange = >80% \xB7 Rot = \xDCberlast. Zahlen = Gesamtlast inkl. aufgesteckter K\xE4sten." }, /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto", overflowY: "auto", maxHeight: "75vh", background: "#1b2026", borderRadius: 8, padding: 12 } }, /* @__PURE__ */ import_react.default.createElement("svg", { width: svgW, height: svgH, style: { display: "block", minWidth: svgW } }, mainConns.map((mc, mci) => {
+    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Schaltbild", subtitle: "Gr\xFCn = OK \xB7 Orange = >80% \xB7 Rot = \xDCberlast \xB7 \u26A1 = Unterdimensioniert. Zahlen = Gesamtlast inkl. aufgesteckter K\xE4sten." }, /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto", overflowY: "auto", maxHeight: "75vh", background: "#1b2026", borderRadius: 8, padding: 12 } }, /* @__PURE__ */ import_react.default.createElement("svg", { width: svgW, height: svgH, style: { display: "block", minWidth: svgW } }, mainConns.map((mc, mci) => {
       const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
       if (!connInsts.length) return null;
       const ys = connInsts.map((i) => positions[i.id]?.y).filter(Boolean);
@@ -44948,7 +45033,12 @@ Fortfahren?`);
     }), edges.map((e, i) => {
       const t = totalLoad(e.inst.id);
       const mx = (e.x1 + e.x2) / 2;
-      return /* @__PURE__ */ import_react.default.createElement("g", { key: i }, /* @__PURE__ */ import_react.default.createElement("path", { d: `M${e.x1} ${e.y1} C${mx} ${e.y1},${mx} ${e.y2},${e.x2} ${e.y2}`, fill: "none", stroke: "#3a424c", strokeWidth: 2 }), /* @__PURE__ */ import_react.default.createElement("text", { x: mx, y: Math.min(e.y1, e.y2) + Math.abs(e.y1 - e.y2) / 2 - 4, textAnchor: "middle", fill: "#9aa4af", fontSize: 9 }, `L1:${round2(t.L1)} L2:${round2(t.L2)} L3:${round2(t.L3)}`));
+      const my = (e.y1 + e.y2) / 2;
+      const lines = [`L1: ${round2(t.L1)} A`, `L2: ${round2(t.L2)} A`, `L3: ${round2(t.L3)} A`];
+      const LH = 11;
+      const BH = lines.length * LH + 6;
+      const BW = 72;
+      return /* @__PURE__ */ import_react.default.createElement("g", { key: i }, /* @__PURE__ */ import_react.default.createElement("path", { d: `M${e.x1} ${e.y1} C${mx} ${e.y1},${mx} ${e.y2},${e.x2} ${e.y2}`, fill: "none", stroke: "#3a424c", strokeWidth: 2 }), /* @__PURE__ */ import_react.default.createElement("rect", { x: mx - BW / 2, y: my - BH / 2, width: BW, height: BH, rx: 3, fill: "#1b2026", opacity: 0.88, stroke: "#3a424c", strokeWidth: 0.5 }), lines.map((line, li) => /* @__PURE__ */ import_react.default.createElement("text", { key: li, x: mx, y: my - BH / 2 + LH * (li + 1), textAnchor: "middle", fill: "#9aa4af", fontSize: 9 }, line)));
     }), instances.map((inst) => {
       const pos = positions[inst.id];
       if (!pos) return null;
@@ -44959,7 +45049,7 @@ Fortfahren?`);
       const pct = maxA ? Math.round(peak / maxA * 100) : 0;
       const col = nodeColor(inst);
       const conn = type ? CONN[type.feedConnector]?.label || "" : "";
-      return /* @__PURE__ */ import_react.default.createElement("g", { key: inst.id, transform: `translate(${pos.x},${pos.y})` }, /* @__PURE__ */ import_react.default.createElement("rect", { width: NODE_W, height: NODE_H, rx: 8, fill: "#252b33", stroke: col, strokeWidth: 2 }), /* @__PURE__ */ import_react.default.createElement("rect", { width: NODE_W, height: 22, rx: 8, fill: col, opacity: 0.9 }), /* @__PURE__ */ import_react.default.createElement("rect", { y: 14, width: NODE_W, height: 8, fill: col, opacity: 0.9 }), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W / 2, y: 15, textAnchor: "middle", fill: "#fff", fontSize: 11, fontWeight: "bold" }, inst.name.length > 22 ? inst.name.slice(0, 20) + "\u2026" : inst.name), /* @__PURE__ */ import_react.default.createElement("text", { x: 6, y: 34, fill: "#9aa4af", fontSize: 9 }, conn), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W - 6, y: 34, textAnchor: "end", fill: "#9aa4af", fontSize: 9 }, "max ", maxA, "A"), PHASES.map((ph, pi) => /* @__PURE__ */ import_react.default.createElement("g", { key: ph, transform: `translate(${pi * (NODE_W / 3)},36)` }, /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W / 6, y: 13, textAnchor: "middle", fill: "#666", fontSize: 9 }, ph), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W / 6, y: 25, textAnchor: "middle", fill: "#e8eaed", fontSize: 11, fontWeight: "700" }, round2(t[ph])))), maxA > 0 && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("rect", { x: 6, y: NODE_H - 10, width: NODE_W - 12, height: 5, rx: 2, fill: "#1b2026" }), /* @__PURE__ */ import_react.default.createElement("rect", { x: 6, y: NODE_H - 10, width: Math.min((NODE_W - 12) * (peak / maxA), NODE_W - 12), height: 5, rx: 2, fill: col }), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W - 6, y: NODE_H - 3, textAnchor: "end", fill: col, fontSize: 8 }, pct, "%")));
+      return /* @__PURE__ */ import_react.default.createElement("g", { key: inst.id, transform: `translate(${pos.x},${pos.y})` }, /* @__PURE__ */ import_react.default.createElement("rect", { width: NODE_W, height: NODE_H, rx: 8, fill: "#252b33", stroke: col, strokeWidth: 2 }), /* @__PURE__ */ import_react.default.createElement("rect", { width: NODE_W, height: 22, rx: 8, fill: col, opacity: 0.9 }), /* @__PURE__ */ import_react.default.createElement("rect", { y: 14, width: NODE_W, height: 8, fill: col, opacity: 0.9 }), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W / 2, y: 15, textAnchor: "middle", fill: "#fff", fontSize: 11, fontWeight: "bold" }, inst.name.length > 22 ? inst.name.slice(0, 20) + "\u2026" : inst.name), isUnderdimensioned(inst.id) && /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("title", null, `Unterdimensioniert: Kasten-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) > Anschluss-Ampere`), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W - 5, y: 15, textAnchor: "end", fill: "#f5a623", fontSize: 12, fontWeight: "bold" }, "\u26A1")), /* @__PURE__ */ import_react.default.createElement("text", { x: 6, y: 34, fill: "#9aa4af", fontSize: 9 }, conn), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W - 6, y: 34, textAnchor: "end", fill: "#9aa4af", fontSize: 9 }, "max ", maxA, "A"), PHASES.map((ph, pi) => /* @__PURE__ */ import_react.default.createElement("g", { key: ph, transform: `translate(${pi * (NODE_W / 3)},36)` }, /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W / 6, y: 13, textAnchor: "middle", fill: "#666", fontSize: 9 }, ph), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W / 6, y: 25, textAnchor: "middle", fill: "#e8eaed", fontSize: 11, fontWeight: "700" }, round2(t[ph])))), maxA > 0 && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("rect", { x: 6, y: NODE_H - 10, width: NODE_W - 12, height: 5, rx: 2, fill: "#1b2026" }), /* @__PURE__ */ import_react.default.createElement("rect", { x: 6, y: NODE_H - 10, width: Math.min((NODE_W - 12) * (peak / maxA), NODE_W - 12), height: 5, rx: 2, fill: col }), /* @__PURE__ */ import_react.default.createElement("text", { x: NODE_W - 6, y: NODE_H - 3, textAnchor: "end", fill: col, fontSize: 8 }, pct, "%")));
     }))));
   }
   function Section({ title, subtitle, children }) {
@@ -44995,7 +45085,8 @@ Fortfahren?`);
     const cycleSicht = (iid, idx) => {
       const ir = getIR(iid);
       const sicht = [...ir.sicht || Array(8).fill(null)];
-      sicht[idx] = sicht[idx] === null ? true : sicht[idx] === true ? false : null;
+      const v = sicht[idx];
+      sicht[idx] = v === null ? true : v === true ? false : v === false ? "warn" : null;
       updIR(iid, { sicht });
     };
     const chk = (val, min, max) => {
@@ -45034,7 +45125,7 @@ Fortfahren?`);
         return vs.some((v) => pdfChk(v, lo, hi) === "bad") ? "bad" : "ok";
       };
       const badge = (r) => r === "ok" ? `<span class="ok">\u2713 ok</span>` : r === "bad" ? `<span class="bad">\u2715 Mangel</span>` : `<span class="muted">\u2013</span>`;
-      const sichtBadge = (v) => v === true ? `<span class="ok">\u2713 ok</span>` : v === false ? `<span class="bad">\u2715 Mangel</span>` : `<span class="muted">\u2013</span>`;
+      const sichtBadge = (v) => v === true ? `<span class="ok">\u2713 ok</span>` : v === false ? `<span class="bad">\u2715 Mangel</span>` : v === "warn" ? `<span class="warn">! Hinweis</span>` : `<span class="muted">\u2013</span>`;
       const fv = (...vals) => vals.filter((v) => v !== "").map((v) => esc(v) + "&thinsp;V").join(" / ") || "\u2013";
       const css = `:root{--ep-accent:#f5a623;--ep-dark:#1c2127;--ep-ink:#1c2127;--ep-ink2:#4a5159;--ep-ink3:#7a8290;--ep-rule:#c8ccd1;--ep-rule2:#e6e9ec;--ep-band:#f3f4f6;--ep-paper:#ffffff;--ep-ok:#1c7a3e;--ep-bad:#b91c1c;--ep-warn:#8a5500;--ep-badrow:#fcf2f2;--ep-warnrow:#fdf7e6;--ep-font:'Segoe UI',system-ui,-apple-system,sans-serif;--ep-pad-x:44px;--ep-row-pad:4px 10px;--ep-gap-y:10px}
 html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box-sizing:border-box}
@@ -45051,13 +45142,33 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 .thead{display:grid;padding:4px 10px;background:var(--ep-band);border-bottom:1px solid var(--ep-rule2);font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.thead .r{text-align:right}
 .trow{display:grid;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);align-items:center}.trow.row-last{border-bottom:none}.trow.row-bad{background:var(--ep-badrow)}.trow .r{text-align:right}.trow .muted{color:var(--ep-ink3)}.trow .no{margin-right:8px}
 .id{color:var(--ep-warn);font-weight:600}.muted{color:var(--ep-ink3)}.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dual{display:grid;grid-template-columns:1fr 1fr}.sicht-cell{display:grid;grid-template-columns:36px 1fr 60px;padding:var(--ep-row-pad);align-items:center}.sicht-cell .r{text-align:right}.sicht-cell.row-bad{background:var(--ep-badrow)}.sicht-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.sicht-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}.abg-cell{display:grid;grid-template-columns:70px 1fr;padding:var(--ep-row-pad);align-items:center}.abg-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.abg-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}
+.dual{display:grid;grid-template-columns:1fr 1fr}.sicht-cell{display:grid;grid-template-columns:36px 1fr 60px;padding:var(--ep-row-pad);align-items:center}.sicht-cell .r{text-align:right}.sicht-cell.row-bad{background:var(--ep-badrow)}.sicht-cell.row-warn{background:var(--ep-warnrow)}.sicht-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.sicht-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}.abg-cell{display:grid;grid-template-columns:70px 1fr;padding:var(--ep-row-pad);align-items:center}.abg-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.abg-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr)}.kpi{padding:8px 12px}.kpi.kpi-sep{border-right:1px solid var(--ep-rule2)}.kpi-k{font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.kpi-v{font-size:16px;font-weight:700;margin-top:2px}.kpi-s{font-size:9px}
 .num-row{display:grid;grid-template-columns:30px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2)}.num-row.row-last{border-bottom:none}
 .confirm{padding:8px 12px;color:var(--ep-ink2);line-height:1.55}.confirm strong{color:var(--ep-ink)}.bemerkung{padding:var(--ep-row-pad);background:var(--ep-warnrow)}.bemerkung.small{background:transparent;font-size:9px;color:var(--ep-ink2);line-height:1.5;padding:6px 10px}
 .sign-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--ep-rule2)}.sign{padding:8px 12px}.sign.sign-r{border-left:1px solid var(--ep-rule2)}.sign-role{font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:28px}.sign-line{border-bottom:1px solid var(--ep-ink);height:24px}.sign-name{margin-top:4px;font-weight:600}.sign .muted{font-size:9px}
 @media print{html,body,.ep-stage{background:#fff;padding:0;gap:0}.page{box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}@page{size:A4 portrait;margin:0}`;
-      const sorted2 = alphaSort(instances, "name");
+      const sorted2 = (() => {
+        const result = [];
+        const visited = /* @__PURE__ */ new Set();
+        const visit = (parentId) => {
+          alphaSort(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
+            if (!visited.has(inst.id)) {
+              visited.add(inst.id);
+              result.push(inst);
+              visit(inst.id);
+            }
+          });
+        };
+        alphaSort(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
+          if (!visited.has(inst.id)) {
+            visited.add(inst.id);
+            result.push(inst);
+            visit(inst.id);
+          }
+        });
+        return result;
+      })();
       const total = sorted2.length;
       const hdr = `<strong>Stromplaner</strong> \xB7 Errichtungspr\xFCfung \xB7 DIN VDE 0100-600`;
       const subR = `${esc(meta?.production || "Planung")} \xB7 v${esc(meta?.version || "1")} \xB7 ${esc(inspMeta.date || "")}`;
@@ -45068,6 +45179,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         const ir = getIR(inst.id);
         (ir.sicht || []).forEach((v, idx) => {
           if (v === false) maengel.push({ inst, item: SICHT_ITEMS[idx], type: "bad" });
+          else if (v === "warn") maengel.push({ inst, item: SICHT_ITEMS[idx], type: "warn" });
         });
         if (ir.bemerkung) maengel.push({ inst, item: ir.bemerkung, type: "warn" });
       });
@@ -45077,7 +45189,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         const type = boxTypeById[inst.typeId];
         const outlets = type ? sortOutlets(type.outlets) : [];
         totalPunkte += (ir.sicht || []).filter((v) => v !== null).length;
-        totalMangel += (ir.sicht || []).filter((v) => v === false).length;
+        totalMangel += (ir.sicht || []).filter((v) => v === false || v === "warn").length;
         outlets.filter((o) => o.protection === "RCD" || o.protection === "RCBO").forEach((o) => {
           if (getOR(inst.id, o.id).rcdT1 !== "") totalRCD++;
         });
@@ -45109,7 +45221,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         ${sorted2.map((inst, i) => {
         const type = boxTypeById[inst.typeId];
         const parent = inst.parentId ? instById[inst.parentId] : null;
-        return `<div class="trow${i === sorted2.length - 1 ? " row-last" : ""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name || "\u2013")}</span><span class="muted">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span><span class="muted">${parent ? esc(parent.name) : "\u2014 Einspeisung \u2014"}</span></div>`;
+        const feedLbl = parent ? esc(parent.name) : inst.mainConnectionId ? esc(mainConnById[inst.mainConnectionId]?.name || "\u2013") : "\u2014 Einspeisung \u2014";
+        return `<div class="trow${i === sorted2.length - 1 ? " row-last" : ""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name || "\u2013")}</span><span class="muted">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span><span class="muted">${feedLbl}</span></div>`;
       }).join("")}
       </div></section>
     <div class="spacer-auto"></div>
@@ -45127,8 +45240,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         const pageNum = String(n + 1).padStart(2, "0");
         const totalPages = total + 2;
         const hasMangel = sicht.some((v) => v === false);
-        const befundCls = hasMangel ? "bad" : "ok";
-        const befundLbl = hasMangel ? "\u2715 Mangel" : "\u2713 Bestanden";
+        const hasHinweis = sicht.some((v) => v === "warn");
+        const befundCls = hasMangel ? "bad" : hasHinweis ? "warn" : "ok";
+        const befundLbl = hasMangel ? "\u2715 Mangel" : hasHinweis ? "! Hinweise" : "\u2713 Bestanden";
         const ckPE = pdfChk(ir.rPE, void 0, 0.5), ckIso = pdfChk(ir.rIso, 1, void 0), ckZs = pdfChk(ir.zs, void 0, 1.5);
         const phaseR = ir.phaseRot === "rechts" ? "ok" : ir.phaseRot === "links" ? "bad" : "";
         const ckVLN = pdfChkAll([ir.voltL1N, ir.voltL2N, ir.voltL3N], 207, 253);
@@ -45152,12 +45266,12 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="kv-row"><span class="k">Typ</span><span class="v">${esc(type?.name || "\u2013")}</span></div>
         <div class="kv-row"><span class="k">Eingang</span><span class="v">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span></div>
         <div class="kv-row kv-right"><span class="k">Netzform</span><span class="v">${esc(inspMeta.netType || "\u2013")}</span></div>
-        <div class="kv-row kv-last"><span class="k">H\xE4ngt an</span><span class="v">${parent ? esc(parent.name) : "\u2014 Einspeisung \u2014"}</span></div>
+        <div class="kv-row kv-last"><span class="k">H\xE4ngt an</span><span class="v">${parent ? esc(parent.name) : inst.mainConnectionId ? esc(mainConnById[inst.mainConnectionId]?.name || "\u2013") : "\u2014 Einspeisung \u2014"}</span></div>
         <div class="kv-row kv-last" style="grid-column:span 2"><span class="k">Anschl\xFCsse</span><span class="v">${outlets.length} Stk.</span></div>
       </div></div></section>
     <section class="block"><header class="bar"><span><strong>${n}.2 \xB7 Sichtpr\xFCfung</strong><span class="bar-sub">8 Punkte</span></span></header>
       <div class="block-body"><div class="dual">
-        ${SICHT_ITEMS.map((item, idx) => `<div class="sicht-cell${sicht[idx] === false ? " row-bad" : ""}${idx % 2 === 0 ? " cell-bright" : ""}${idx >= 6 ? " cell-blast" : ""}"><span class="muted">${n}.2.${idx + 1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
+        ${SICHT_ITEMS.map((item, idx) => `<div class="sicht-cell${sicht[idx] === false ? " row-bad" : sicht[idx] === "warn" ? " row-warn" : ""}${idx % 2 === 0 ? " cell-bright" : ""}${idx >= 6 ? " cell-blast" : ""}"><span class="muted">${n}.2.${idx + 1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
       </div></div></section>
     <section class="block"><header class="bar"><span><strong>${n}.3 \xB7 Messungen</strong><span class="bar-sub">R_PE \xB7 R_iso \xB7 Z_s \xB7 I_k \xB7 Drehfeld \xB7 U</span></span></header>
       <div class="block-body">
@@ -45226,7 +45340,27 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         pw.print();
       }, 600);
     };
-    const sorted = alphaSort(instances, "name");
+    const sorted = (() => {
+      const result = [];
+      const visited = /* @__PURE__ */ new Set();
+      const visit = (parentId) => {
+        alphaSort(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
+          if (!visited.has(inst.id)) {
+            visited.add(inst.id);
+            result.push(inst);
+            visit(inst.id);
+          }
+        });
+      };
+      alphaSort(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
+        if (!visited.has(inst.id)) {
+          visited.add(inst.id);
+          result.push(inst);
+          visit(inst.id);
+        }
+      });
+      return result;
+    })();
     return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Pr\xFCfungsdetails" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Pr\xFCfer" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: inspMeta.inspector, onChange: (e) => updMeta({ inspector: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, type: "date", value: inspMeta.date, onChange: (e) => updMeta({ date: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Uhrzeit" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, type: "time", value: inspMeta.time || "", onChange: (e) => updMeta({ time: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Pr\xFCfmittel / Messger\xE4t" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: inspMeta.equipment, onChange: (e) => updMeta({ equipment: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Adresse" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: inspMeta.address || "", onChange: (e) => updMeta({ address: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Ort des Anschlusses" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: inspMeta.location || "", onChange: (e) => updMeta({ location: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Netzform" }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.input, value: inspMeta.netType || "", onChange: (e) => updMeta({ netType: e.target.value }) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 nicht angegeben \u2014"), /* @__PURE__ */ import_react.default.createElement("option", { value: "TN-S" }, "TN-S"), /* @__PURE__ */ import_react.default.createElement("option", { value: "TN-C-S" }, "TN-C-S"), /* @__PURE__ */ import_react.default.createElement("option", { value: "TT" }, "TT"), /* @__PURE__ */ import_react.default.createElement("option", { value: "IT" }, "IT")))), /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "right", marginTop: 14 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportInspectionPDF }, "\u{1F5A8} Pr\xFCfprotokoll PDF"))), sorted.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, 'Keine K\xE4sten aktiviert. Bitte zuerst im Tab \u201EKonfiguration" K\xE4sten hinzuf\xFCgen.') : sorted.map((inst) => {
       const type = boxTypeById[inst.typeId];
       const outlets = type ? sortOutlets(type.outlets) : [];
@@ -45246,7 +45380,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         },
         /* @__PURE__ */ import_react.default.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Sichtpr\xFCfung"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 } }, SICHT_ITEMS.map((item, idx) => {
           const v = sicht[idx];
-          return /* @__PURE__ */ import_react.default.createElement("div", { key: idx, style: { display: "flex", alignItems: "center", gap: 7, background: "#1b2026", borderRadius: 5, padding: "5px 8px", border: `1px solid ${LINE}` } }, /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => cycleSicht(inst.id, idx), style: { width: 26, height: 26, borderRadius: 4, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, flexShrink: 0, background: v === true ? "#1a5c2e" : v === false ? "#5c1a1a" : "#2d343d", color: v === true ? "#2ecc71" : v === false ? "#e74c3c" : "#7c8794" } }, v === true ? "\u2713" : v === false ? "\u2717" : "\u2013"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, color: "#e8eaed" } }, item));
+          return /* @__PURE__ */ import_react.default.createElement("div", { key: idx, style: { display: "flex", alignItems: "center", gap: 7, background: "#1b2026", borderRadius: 5, padding: "5px 8px", border: `1px solid ${LINE}` } }, /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => cycleSicht(inst.id, idx), title: v === true ? "OK" : v === false ? "Mangel" : v === "warn" ? "Hinweis" : "Nicht gepr\xFCft", style: { width: 26, height: 26, borderRadius: 4, border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13, flexShrink: 0, background: v === true ? "#1a5c2e" : v === false ? "#5c1a1a" : v === "warn" ? "#4a3500" : "#2d343d", color: v === true ? "#2ecc71" : v === false ? "#e74c3c" : v === "warn" ? "#f5a623" : "#7c8794" } }, v === true ? "\u2713" : v === false ? "\u2717" : v === "warn" ? "!" : "\u2013"), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, color: "#e8eaed" } }, item));
         }))),
         /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.metaGrid, gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", marginBottom: 6 } }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "R_PE (\u03A9)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okRPE) }, value: ir.rPE || "", onChange: (e) => updIR(inst.id, { rPE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 0,5 \u03A9")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "R_iso (M\u03A9)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okRIso) }, value: ir.rIso || "", onChange: (e) => updIR(inst.id, { rIso: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2265 1 M\u03A9")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Z_s (\u03A9)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okZs) }, value: ir.zs || "", onChange: (e) => updIR(inst.id, { zs: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 1,5 \u03A9")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "I_k (kA)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: ir.ik || "", onChange: (e) => updIR(inst.id, { ik: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2265 I_LS"))),
         /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.metaGrid, gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", marginBottom: 6 } }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV1) }, value: ir.voltL1N || "", onChange: (e) => updIR(inst.id, { voltL1N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207\u2013253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV2) }, value: ir.voltL2N || "", onChange: (e) => updIR(inst.id, { voltL2N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207\u2013253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L3\u2013N (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okV3) }, value: ir.voltL3N || "", onChange: (e) => updIR(inst.id, { voltL3N: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207\u2013253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013L2 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL12) }, value: ir.voltL1L2 || "", onChange: (e) => updIR(inst.id, { voltL1L2: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360\u2013440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013L3 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL23) }, value: ir.voltL2L3 || "", onChange: (e) => updIR(inst.id, { voltL2L3: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360\u2013440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013L3 (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL13) }, value: ir.voltL1L3 || "", onChange: (e) => updIR(inst.id, { voltL1L3: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "360\u2013440 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U N\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okNPE) }, value: ir.voltNPE || "", onChange: (e) => updIR(inst.id, { voltNPE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 2 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L1\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL1PE) }, value: ir.voltL1PE || "", onChange: (e) => updIR(inst.id, { voltL1PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207\u2013253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L2\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL2PE) }, value: ir.voltL2PE || "", onChange: (e) => updIR(inst.id, { voltL2PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207\u2013253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "U L3\u2013PE (V)" }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, ...inpBorder(okL3PE) }, value: ir.voltL3PE || "", onChange: (e) => updIR(inst.id, { voltL3PE: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "207\u2013253 V")), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Drehfeld" }, /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.inputSm, width: "100%" }, value: ir.phaseRot || "", onChange: (e) => updIR(inst.id, { phaseRot: e.target.value }) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 nicht gepr\xFCft \u2014"), /* @__PURE__ */ import_react.default.createElement("option", { value: "rechts" }, "Rechtsdrehfeld"), /* @__PURE__ */ import_react.default.createElement("option", { value: "links" }, "Linksdrehfeld")))),
@@ -45270,7 +45404,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     headerMeta: { fontSize: 12, color: "#9aa4af", flex: 1 },
     exportBtn: { background: ACCENT, color: "#1c2127", border: "none", borderRadius: 6, padding: "8px 14px", fontWeight: 700, cursor: "pointer", fontSize: 13 },
     ghostBtn: { background: "transparent", color: "#e8eaed", border: `1px solid ${LINE}`, borderRadius: 6, padding: "7px 11px", fontWeight: 600, cursor: "pointer", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 },
-    nav: { display: "flex", gap: 4, padding: "0 18px", background: DARK, borderBottom: `1px solid ${LINE}`, flexWrap: "wrap" },
+    nav: { display: "flex", gap: 4, padding: "0 18px", background: DARK, borderBottom: `1px solid ${LINE}`, flexWrap: "wrap", position: "sticky", top: 48, zIndex: 9 },
     navBtn: { background: "transparent", border: "none", color: "#9aa4af", padding: "11px 13px", cursor: "pointer", fontSize: 13, borderBottom: "3px solid transparent" },
     navBtnActive: { color: "#fff", borderBottom: `3px solid ${ACCENT}`, fontWeight: 600 },
     main: { padding: 20, maxWidth: 1200, margin: "0 auto" },
