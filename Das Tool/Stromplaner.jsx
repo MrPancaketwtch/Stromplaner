@@ -1366,20 +1366,18 @@ function Field({label,children}){ return <label style={S.field}><span style={S.f
    TAB: Errichtungsprüfung
 ══════════════════════════════════════════════════════════════════════════ */
 const SICHT_ITEMS = [
-  "Gehäuse ohne sichtbare Beschädigung",
-  "Eingangs- und Abgangskabel unbeschädigt",
-  "Steckvorrichtungen unbeschädigt · Schutzart entspr.",
-  "Zugentlastung aller Leitungseinführungen",
-  "Beschriftung Abgänge / Stromkreise vollständig",
-  "Schutzleiteranschluss vorhanden und festsitzend",
-  "RCD vorhanden · korrekter Typ (A / B)",
-  "LS-Schalter Nennwerte zum Querschnitt passend",
+  "Schaltgeräte",
+  "Steckverbinder",
+  "Leitungen",
+  "Gehäuse",
+  "Kennzeichnung",
+  "Basisschutz",
 ];
 
 function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnById, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults }) {
   const updMeta = (patch) => setInspMeta(s=>({...s,...patch}));
 
-  const IR_DEF = { voltL1N:"",voltL2N:"",voltL3N:"",voltL1L2:"",voltL2L3:"",voltL1L3:"",voltNPE:"",voltL1PE:"",voltL2PE:"",voltL3PE:"",phaseRot:"",rPE:"",rIso:"",zs:"",ik:"",sicht:[null,null,null,null,null,null,null,null],bemerkung:"",bemerkungSchwere:"bad",outlets:{} };
+  const IR_DEF = { voltL1N:"",voltL2N:"",voltL3N:"",voltL1L2:"",voltL2L3:"",voltL1L3:"",voltNPE:"",voltL1PE:"",voltL2PE:"",voltL3PE:"",phaseRot:"",rPE:"",rIso:"",zs:"",ik:"",sicht:[null,null,null,null,null,null],bemerkung:"",bemerkungSchwere:"bad",outlets:{} };
   const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...IR_DEF,...sv,sicht:sv.sicht?[...sv.sicht]:[...IR_DEF.sicht],outlets:sv.outlets||{}}; };
   const updIR = (iid,patch) => setInspResults(s=>({...s,[iid]:{...getIR(iid),...patch}}));
 
@@ -1391,7 +1389,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
   };
 
   const cycleSicht = (iid,idx) => {
-    const ir=getIR(iid); const sicht=[...(ir.sicht||Array(8).fill(null))];
+    const ir=getIR(iid); const sicht=[...(ir.sicht||Array(6).fill(null))];
     sicht[idx]=sicht[idx]===true?null:true;   // toggle: ok ↔ nicht eingetragen
     updIR(iid,{sicht});
   };
@@ -1514,7 +1512,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const type=boxTypeById[inst.typeId];
       const outlets=type?sortOutlets(type.outlets):[];
       const ir=getIR(inst.id);
-      const sicht=ir.sicht||Array(8).fill(null);
+      const sicht=ir.sicht||Array(6).fill(null);
       const rcdOutlets=outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO");
       const parent=inst.parentId?instById[inst.parentId]:null;
       const n=instIdx+1;
@@ -1552,9 +1550,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="kv-row kv-last"><span class="k">Hängt an</span><span class="v">${parent?esc(parent.name):inst.mainConnectionId?esc(mainConnById[inst.mainConnectionId]?.name||"–"):"— Einspeisung —"}</span></div>
         <div class="kv-row kv-last" style="grid-column:span 2"><span class="k">Anschlüsse</span><span class="v">${outlets.length} Stk.</span></div>
       </div></div></section>
-    <section class="block"><header class="bar"><span><strong>${n}.2 · Sichtprüfung</strong><span class="bar-sub">8 Punkte</span></span></header>
+    <section class="block"><header class="bar"><span><strong>${n}.2 · Sichtprüfung</strong><span class="bar-sub">6 Punkte</span></span></header>
       <div class="block-body"><div class="dual">
-        ${SICHT_ITEMS.map((item,idx)=>`<div class="sicht-cell${sicht[idx]===false?" row-bad":""}${idx%2===0?" cell-bright":""}${idx>=6?" cell-blast":""}"><span class="muted">${n}.2.${idx+1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
+        ${SICHT_ITEMS.map((item,idx)=>`<div class="sicht-cell${sicht[idx]===false?" row-bad":""}${idx%2===0?" cell-bright":""}${idx>=4?" cell-blast":""}"><span class="muted">${n}.2.${idx+1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
       </div></div></section>
     <section class="block"><header class="bar"><span><strong>${n}.3 · Messungen</strong><span class="bar-sub">Drehfeld · U</span></span></header>
       <div class="block-body">
@@ -1666,7 +1664,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const type      = boxTypeById[inst.typeId];
           const outlets   = type ? sortOutlets(type.outlets) : [];
           const ir        = getIR(inst.id);
-          const sicht     = ir.sicht || Array(8).fill(null);
+          const sicht     = ir.sicht || Array(6).fill(null);
           const rcdOutlets = outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO");
 
           const okV1=chk(ir.voltL1N,207,244), okV2=chk(ir.voltL2N,207,244), okV3=chk(ir.voltL3N,207,244);
