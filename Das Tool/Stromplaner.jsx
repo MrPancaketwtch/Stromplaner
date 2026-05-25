@@ -1354,7 +1354,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
   const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...IR_DEF,...sv,sicht:sv.sicht?[...sv.sicht]:[...IR_DEF.sicht],outlets:sv.outlets||{}}; };
   const updIR = (iid,patch) => setInspResults(s=>({...s,[iid]:{...getIR(iid),...patch}}));
 
-  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false };
+  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"" };
   const getOR = (iid,oid) => ({...OR_DEF,...((getIR(iid).outlets||{})[oid]||{})});
   const updOR = (iid,oid,patch) => {
     const ir=getIR(iid);
@@ -1496,11 +1496,6 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const befundCls=hasMangel?"bad":hasHinweis?"warn":"ok";
       const befundLbl=hasMangel?"✕ Mangel":hasHinweis?"! Hinweis":"✓ Bestanden";
 
-      const feedAmpPdf=type?.feedAmp||16;
-      const zsLimitPdf=230/(feedAmpPdf*10);
-      const ikLimitPdf=feedAmpPdf*10;
-      const ckZs=pdfChk(ir.zs,undefined,zsLimitPdf);
-      const ckIk=pdfChk(ir.ik,ikLimitPdf,undefined);
       const phaseR=ir.phaseRot==="rechts"?"ok":ir.phaseRot==="links"?"bad":"";
       const ckVLN=pdfChkAll([ir.voltL1N,ir.voltL2N,ir.voltL3N],207,244);
       const ckVLL=pdfChkAll([ir.voltL1L2,ir.voltL2L3,ir.voltL1L3],360,424);
@@ -1532,32 +1527,37 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       <div class="block-body"><div class="dual">
         ${SICHT_ITEMS.map((item,idx)=>`<div class="sicht-cell${sicht[idx]===false?" row-bad":""}${idx%2===0?" cell-bright":""}${idx>=6?" cell-blast":""}"><span class="muted">${n}.2.${idx+1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
       </div></div></section>
-    <section class="block"><header class="bar"><span><strong>${n}.3 · Messungen</strong><span class="bar-sub">Z_s · I_k · Drehfeld · U</span></span></header>
+    <section class="block"><header class="bar"><span><strong>${n}.3 · Messungen</strong><span class="bar-sub">Drehfeld · U</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:1fr 210px 130px 80px"><span>Prüfung</span><span class="r">Wert</span><span class="r">Grenzwert</span><span class="r">Befund</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.1</span>Schleifenimpedanz Z_s / Kurzschlussstrom I_k</span><span class="r"><strong>${ir.zs?esc(ir.zs)+" Ω":"–"}&ensp;·&ensp;${ir.ik?esc(ir.ik)+" A":"–"}</strong></span><span class="r muted">I_k ≥ ${ikLimitPdf} A</span><span class="r">${badge(ckIk)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.2</span>Drehfeldrichtung</span><span class="r"><strong>${ir.phaseRot==="rechts"?"rechts":ir.phaseRot==="links"?"links":"–"}</strong></span><span class="r muted">rechts</span><span class="r">${badge(phaseR)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.3</span>U L–N (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1N,ir.voltL2N,ir.voltL3N)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLN)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.4</span>U L–L (L1-L2 / L2-L3 / L1-L3)</span><span class="r"><strong>${fv(ir.voltL1L2,ir.voltL2L3,ir.voltL1L3)}</strong></span><span class="r muted">360–424 V</span><span class="r">${badge(ckVLL)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U N–PE</span><span class="r"><strong>${ir.voltNPE?esc(ir.voltNPE)+"&thinsp;V":"–"}</strong></span><span class="r muted">Spannungsfrei</span><span class="r">${badge(ckVNPE)}</span></div>
-        <div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.6</span>U L–PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE,ir.voltL2PE,ir.voltL3PE)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLPE)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.1</span>Drehfeldrichtung</span><span class="r"><strong>${ir.phaseRot==="rechts"?"rechts":ir.phaseRot==="links"?"links":"–"}</strong></span><span class="r muted">rechts</span><span class="r">${badge(phaseR)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.2</span>U L–N (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1N,ir.voltL2N,ir.voltL3N)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLN)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.3</span>U L–L (L1-L2 / L2-L3 / L1-L3)</span><span class="r"><strong>${fv(ir.voltL1L2,ir.voltL2L3,ir.voltL1L3)}</strong></span><span class="r muted">360–424 V</span><span class="r">${badge(ckVLL)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.4</span>U N–PE</span><span class="r"><strong>${ir.voltNPE?esc(ir.voltNPE)+"&thinsp;V":"–"}</strong></span><span class="r muted">Spannungsfrei</span><span class="r">${badge(ckVNPE)}</span></div>
+        <div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U L–PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE,ir.voltL2PE,ir.voltL3PE)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLPE)}</span></div>
       </div></section>
     ${rcdOutlets.length?`<section class="block"><header class="bar"><span><strong>${n}.4 · RCD-Prüfung</strong><span class="bar-sub">${rcdOutlets.length} Stk.</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:1fr 80px 90px 90px 60px"><span>Anschluss</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">≤ I_Δn</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">≤ 300 ms</span></span><span class="r">OK</span></div>
         ${rcdOutlets.map((o,i)=>{const or=getOR(inst.id,o.id);const okT=pdfChk(or.rcdT1,undefined,300);return`<div class="trow${i===rcdOutlets.length-1?" row-last":""}" style="grid-template-columns:1fr 80px 90px 90px 60px"><span><span class="id">${esc(o.label)}</span></span><span class="muted">${esc(o.protection)}</span><span class="r"><strong>${esc(or.rcdIan)||"–"}</strong></span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
       </div></section>`:""}
-    <section class="block"><header class="bar"><span><strong>${n}.${rcdOutlets.length?5:4} · Abgänge</strong><span class="bar-sub">${outlets.length} Stk.</span></span></header>
-      <div class="block-body"><div class="dual">
+    <section class="block"><header class="bar"><span><strong>${n}.${rcdOutlets.length?5:4} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${outlets.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:65px 1fr 80px 95px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
         ${outlets.map((o,i)=>{
           const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===o.id);
           const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id);
           const lbl=childInsts.length?childInsts[0].name:(pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–");
-          const sub=childInsts.length?`${CONN[boxTypeById[childInsts[0].typeId]?.feedConnector]?.label||""} ${boxTypeById[childInsts[0].typeId]?.feedAmp||""}A`:`${CONN[o.connector]?.label||""} ${o.amp||""}A`;
-          const isLeft=i%2===0; const isLast=i>=outlets.length-2;
-          return `<div class="abg-cell${isLeft?" cell-bright":""}${isLast?" cell-blast":""}"><span class="id">${esc(o.label)}</span><span class="ell">${esc(lbl)} <span class="muted">· ${sub}</span></span></div>`;
+          const or=getOR(inst.id,o.id);
+          const oAmp=o.amp||type?.feedAmp||16;
+          const ikLimO=oAmp*10;
+          const zsLimO=230/(oAmp*10);
+          const ckZsO=pdfChk(or.zs,undefined,zsLimO);
+          const ckIkO=pdfChk(or.ik,ikLimO,undefined);
+          const ckO=ckIkO==="bad"||ckZsO==="bad"?"bad":ckIkO==="ok"||ckZsO==="ok"?"ok":"";
+          return `<div class="trow${i===outlets.length-1?" row-last":""}" style="grid-template-columns:65px 1fr 80px 95px 55px"><span class="id">${esc(o.label)}</span><span class="ell">${esc(lbl)}</span><span class="r">${or.zs?esc(or.zs)+" Ω":"–"}</span><span class="r"><strong>${or.ik?esc(or.ik)+" A":"–"}</strong><br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
         }).join("")}
-      </div></div></section>
+      </div></section>
     ${ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${rcdOutlets.length?6:5} · Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere||"bad")==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="bad">✕ Mangel</span>`}</span></header>
       <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere||"bad")==="warn"?"":" row-bad"}">${esc(ir.bemerkung)}</div></div></section>`:""}
   </main>
@@ -1643,10 +1643,6 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const okV1=chk(ir.voltL1N,207,244), okV2=chk(ir.voltL2N,207,244), okV3=chk(ir.voltL3N,207,244);
           const okL12=chk(ir.voltL1L2,360,424), okL23=chk(ir.voltL2L3,360,424), okL13=chk(ir.voltL1L3,360,424);
           const okNPE=chk(ir.voltNPE,undefined,1), okL1PE=chk(ir.voltL1PE,207,244), okL2PE=chk(ir.voltL2PE,207,244), okL3PE=chk(ir.voltL3PE,207,244);
-          const zsLimitUi=type?.feedAmp?(230/(type.feedAmp*10)):1.5;
-          const ikLimitUi=type?.feedAmp?(type.feedAmp*10):null;
-          const okZs=chk(ir.zs,undefined,zsLimitUi);
-          const okIk=ikLimitUi?chk(ir.ik,ikLimitUi,undefined):null;
 
           return (
             <Section key={inst.id}
@@ -1669,18 +1665,6 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                     );
                   })}
                 </div>
-              </div>
-
-              {/* ── Kasten-Messungen ── */}
-              <div style={{...S.metaGrid,gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",marginBottom:6}}>
-                <Field label="Z_s (Ω)">
-                  <input style={{...S.inputSm,...inpBorder(okZs)}} value={ir.zs||""} onChange={e=>updIR(inst.id,{zs:e.target.value})}/>
-                  <span style={S.normHint}>≤ {type?.feedAmp?(230/(type.feedAmp*10)).toFixed(2).replace(".",",")+" Ω":"1,5 Ω"}</span>
-                </Field>
-                <Field label="I_k (A)">
-                  <input style={{...S.inputSm,...(okIk!==null?inpBorder(okIk):{})}} value={ir.ik||""} onChange={e=>updIR(inst.id,{ik:e.target.value})}/>
-                  <span style={S.normHint}>≥ {ikLimitUi?ikLimitUi+" A":"I_LS"}</span>
-                </Field>
               </div>
 
               {/* ── Spannungsmessung + Drehfeld ── */}
@@ -1727,6 +1711,46 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                             <td style={S.td}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80}} value={or.rcdIan||""} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/></td>
                             <td style={cellBg(okT)}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okT)}} value={or.rcdT1||""} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/></td>
                             <td style={{...S.td,textAlign:"center"}}><input type="checkbox" checked={or.ok||false} onChange={e=>updOR(inst.id,outlet.id,{ok:e.target.checked})}/></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* ── Schleifenimpedanz (pro Abgang) ── */}
+              {outlets.length>0&&(
+                <div style={{overflowX:"auto",marginBottom:14}}>
+                  <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Schleifenimpedanz</p>
+                  <table style={{...S.table,width:"100%"}}>
+                    <thead><tr>
+                      <th style={S.th}>Anschluss</th>
+                      <th style={S.th}>Z_s (Ω)</th>
+                      <th style={S.th}>I_k (A)</th>
+                    </tr></thead>
+                    <tbody>
+                      {outlets.map(outlet=>{
+                        const or=getOR(inst.id,outlet.id);
+                        const oAmp=outlet.amp||type?.feedAmp||16;
+                        const zsLimO=230/(oAmp*10);
+                        const ikLimO=oAmp*10;
+                        const okZsO=chk(or.zs,undefined,zsLimO);
+                        const okIkO=chk(or.ik,ikLimO,undefined);
+                        return (
+                          <tr key={outlet.id}>
+                            <td style={S.td}>
+                              {outlet.label}
+                              <span style={{fontSize:11,color:"#9aa4af",marginLeft:6}}>{CONN[outlet.connector]?.label||""} {outlet.amp}A</span>
+                            </td>
+                            <td style={cellBg(okZsO)}>
+                              <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okZsO)}} value={or.zs||""} onChange={e=>updOR(inst.id,outlet.id,{zs:e.target.value})}/>
+                              <span style={S.normHint}>≤ {zsLimO.toFixed(2).replace(".",",")} Ω</span>
+                            </td>
+                            <td style={cellBg(okIkO)}>
+                              <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okIkO)}} value={or.ik||""} onChange={e=>updOR(inst.id,outlet.id,{ik:e.target.value})}/>
+                              <span style={S.normHint}>≥ {ikLimO} A</span>
+                            </td>
                           </tr>
                         );
                       })}
