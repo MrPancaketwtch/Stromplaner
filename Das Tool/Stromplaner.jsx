@@ -26,6 +26,13 @@ const CONN = {
   MC:      { label:"Multicore",       amp:16,  phases:1, isMulticore:true },
   SCHUKO:  { label:"Schuko",          amp:16,  phases:1 },
 };
+// Stecker-Familien: Adapter nur innerhalb derselben Familie erlaubt
+const CONN_FAMILY = {
+  CEE16:"CEE3P", CEE32:"CEE3P", CEE63:"CEE3P", CEE125:"CEE3P",
+  CEE16_1:"CEE1P", CEE32_1:"CEE1P",
+  PL125:"PL", PL200:"PL", PL400:"PL",
+  MC:"MC", SCHUKO:"SCHUKO",
+};
 
 const BREAKER_TYPES    = ["B","C","D","K"];
 const PROTECTION_TYPES = ["LS","RCD","RCBO"];
@@ -368,6 +375,18 @@ export default function App() {
     return type.feedAmp > outlet.amp;
   },[instById,boxTypeById]);
 
+  const isAdapted = useCallback((instanceId)=>{
+    const inst=instById[instanceId];
+    if(!inst||!inst.parentId||!inst.parentOutletId) return false;
+    const type=boxTypeById[inst.typeId];
+    if(!type||!type.feedConnector) return false;
+    const parentInst=instById[inst.parentId];
+    const parentType=parentInst?boxTypeById[parentInst.typeId]:null;
+    const outlet=parentType?.outlets.find(o=>o.id===inst.parentOutletId);
+    if(!outlet) return false;
+    return outlet.connector!==type.feedConnector;
+  },[instById,boxTypeById]);
+
   /* ── Instance actions ──────────────────────────────────────────────────── */
   const addInstance = (typeId)=>{
     const type=boxTypeById[typeId]; if(!type) return;
@@ -578,7 +597,7 @@ export default function App() {
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
     ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],
   ];
-  const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,rootInstances,mainConns,mainConnById };
+  const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById };
 
   return (
     <div style={S.app}>
@@ -619,7 +638,7 @@ export default function App() {
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Konfiguration
 ══════════════════════════════════════════════════════════════════════════ */
-function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addInstance,removeInstance,updateInstance,setParentWithValidation,isOverloaded,isUnderdimensioned,mainConns,addMainConn,updateMainConn,removeMainConn }) {
+function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addInstance,removeInstance,updateInstance,setParentWithValidation,isOverloaded,isUnderdimensioned,isAdapted,mainConns,addMainConn,updateMainConn,removeMainConn }) {
   const [pick,setPick]=useState(boxTypes[0]?.id||"");
   const sortedTypes=alphaSort(boxTypes,"name");
   return (
@@ -674,7 +693,8 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                 const takenOutletIds=new Set(instances.filter(i=>i.id!==inst.id&&i.parentId===inst.parentId&&i.parentId).map(i=>i.parentOutletId).filter(Boolean));
                 const availableOutlets=parentOutlets.filter(o=>{
                   if(takenOutletIds.has(o.id)&&o.id!==inst.parentOutletId) return false;
-                  if(type&&type.feedConnector&&o.connector!==type.feedConnector) return false;
+                  // Familien-fremde Verbindungen blocken (z.B. CEE3P nicht auf Schuko)
+                  if(type?.feedConnector&&CONN_FAMILY[type.feedConnector]!==CONN_FAMILY[o.connector]) return false;
                   return true;
                 });
                 // Only show Hauptanschluss picker for root instances
@@ -684,6 +704,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                     <td style={S.td}>
                       {ol&&<span title="Überlastet!" style={{color:"#e74c3c",fontWeight:800,fontSize:16}}>⚠</span>}
                       {ud&&<span title={`Unterdimensioniert: Kasten-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) größer als Anschluss`} style={{color:"#f5a623",fontWeight:800,fontSize:15,marginLeft:ol?4:0}}>⚡</span>}
+                      {isAdapted(inst.id)&&<span title="Adapter: Steckertyp des Kastens stimmt nicht mit Anschluss überein" style={{color:"#a78bfa",fontWeight:800,fontSize:14,marginLeft:(ol||ud)?4:0}}>🔌</span>}
                     </td>
                     <td style={S.td}><input style={S.inputSm} value={inst.name} onChange={e=>updateInstance(inst.id,{name:e.target.value})}/></td>
                     <td style={S.td}>{type?.name}</td>
@@ -698,7 +719,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                       <select style={S.selectSm} value={inst.parentOutletId||""} disabled={!inst.parentId}
                         onChange={e=>setParentWithValidation(inst.id,inst.parentId,e.target.value)}>
                         <option value="">—</option>
-                        {availableOutlets.map(o=><option key={o.id} value={o.id}>{o.label} ({o.amp}A)</option>)}
+                        {availableOutlets.map(o=>{const mismatch=type?.feedConnector&&o.connector!==type.feedConnector;return <option key={o.id} value={o.id}>{o.label} ({o.amp}A){mismatch?" [Adapter!]":""}</option>;})}
                       </select>
                     </td>
                     <td style={S.td}>
@@ -726,7 +747,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Steckplan
 ══════════════════════════════════════════════════════════════════════════ */
-function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addPlacement,addPlacementsFilled,updatePlacement,removePlacement,activePlan,setActivePlan,ownLoad,totalLoad,isOverloaded,isUnderdimensioned,rootInstances,mainConns,mainConnById,meta }) {
+function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addPlacement,addPlacementsFilled,updatePlacement,removePlacement,activePlan,setActivePlan,ownLoad,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById,meta }) {
   const [bulkLoadId,  setBulkLoadId]  = useState("");
   const [bulkOutletId,setBulkOutletId]= useState("");
   const [bulkCount,   setBulkCount]   = useState(1);
@@ -820,10 +841,12 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
         {instances.map(i=>{
           const ol=isOverloaded(i.id);
           const ud=isUnderdimensioned(i.id);
+          const ad=isAdapted(i.id);
           return (
-            <button key={i.id} style={{...S.boxTab,...(i.id===inst.id?S.boxTabActive:{}),...(ol?{borderColor:"#e74c3c"}:ud?{borderColor:"#f5a623"}:{})}} onClick={()=>setActivePlan(i.id)}>
+            <button key={i.id} style={{...S.boxTab,...(i.id===inst.id?S.boxTabActive:{}),...(ol?{borderColor:"#e74c3c"}:ud?{borderColor:"#f5a623"}:ad?{borderColor:"#a78bfa"}:{})}} onClick={()=>setActivePlan(i.id)}>
               {ol&&<span title="Überlastet!" style={{color:"#e74c3c",marginRight:4,fontWeight:800}}>⚠</span>}
               {!ol&&ud&&<span title="Unterdimensioniert!" style={{color:"#f5a623",marginRight:4,fontWeight:800}}>⚡</span>}
+              {!ol&&!ud&&ad&&<span title="Adapter!" style={{color:"#a78bfa",marginRight:4,fontWeight:800}}>🔌</span>}
               {i.name}
             </button>
           );
@@ -1069,7 +1092,7 @@ function LoadsTab({ loads,setLoads }) {
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Übersicht
 ══════════════════════════════════════════════════════════════════════════ */
-function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded,isUnderdimensioned,placements,loads,loadById }) {
+function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded,isUnderdimensioned,isAdapted,placements,loads,loadById }) {
   if(instances.length===0) return <Section title="Übersicht"><p style={S.empty}>Noch keine Kästen aktiviert.</p></Section>;
   return (
     <div>
@@ -1131,6 +1154,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
                   <td style={S.td}>
                     {pct>100&&<span title="Überlastet!" style={{color:"#e74c3c",fontWeight:800}}>⚠</span>}
                     {pct<=100&&isUnderdimensioned(inst.id)&&<span title="Unterdimensioniert!" style={{color:"#f5a623",fontWeight:800}}>⚡</span>}
+                    {pct<=100&&!isUnderdimensioned(inst.id)&&isAdapted(inst.id)&&<span title="Adapter!" style={{color:"#a78bfa",fontWeight:800}}>🔌</span>}
                   </td>
                   <td style={S.td}>{inst.name}</td>
                   <td style={{...S.td,fontSize:11}}>{conn}</td>
@@ -1235,7 +1259,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Schaltbild
 ══════════════════════════════════════════════════════════════════════════ */
-function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded,isUnderdimensioned }) {
+function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded,isUnderdimensioned,isAdapted }) {
   if(instances.length===0) return <Section title="Schaltbild"><p style={S.empty}>Aktiviere zuerst Kästen.</p></Section>;
 
   const getChildren=(parentId)=>instances.filter(i=>i.parentId===parentId);
@@ -1305,6 +1329,11 @@ function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,m
                 {isUnderdimensioned(inst.id)&&(
                   <g><title>{`Unterdimensioniert: Kasten-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) > Anschluss-Ampere`}</title>
                     <text x={NODE_W-5} y={15} textAnchor="end" fill="#f5a623" fontSize={12} fontWeight="bold">⚡</text>
+                  </g>
+                )}
+                {!isUnderdimensioned(inst.id)&&isAdapted(inst.id)&&(
+                  <g><title>Adapter: Steckertyp des Kastens stimmt nicht mit Anschluss überein</title>
+                    <text x={NODE_W-5} y={15} textAnchor="end" fill="#a78bfa" fontSize={12} fontWeight="bold">🔌</text>
                   </g>
                 )}
                 <text x={6}       y={34} fill="#9aa4af" fontSize={9}>{conn}</text>
