@@ -751,14 +751,21 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
   const [bulkLoadId,  setBulkLoadId]  = useState("");
   const [bulkOutletId,setBulkOutletId]= useState("");
   const [bulkCount,   setBulkCount]   = useState(1);
+  // Nur Kästen anzeigen, die an einem Hauptanschluss oder an einem anderen Kasten hängen
+  const activeInstances = instances.filter(i=>i.mainConnectionId||i.parentId);
+
   useEffect(()=>{
-    if(!activePlan&&instances.length) setActivePlan(instances[0].id);
-  },[instances,activePlan,setActivePlan]);
+    if(activeInstances.length&&(!activePlan||!activeInstances.find(i=>i.id===activePlan)))
+      setActivePlan(activeInstances[0].id);
+  },[activeInstances,activePlan,setActivePlan]);
 
   if(instances.length===0)
     return <Section title="Steckplan"><p style={S.empty}>Aktiviere zuerst Kästen unter „1 · Konfiguration".</p></Section>;
 
-  const inst   = instances.find(i=>i.id===activePlan)||instances[0];
+  if(activeInstances.length===0)
+    return <Section title="Steckplan"><p style={S.empty}>Keine Kästen angeschlossen. Bitte unter „1 · Konfiguration" Kästen an einen Hauptanschluss oder anderen Kasten anschließen.</p></Section>;
+
+  const inst   = activeInstances.find(i=>i.id===activePlan)||activeInstances[0];
   const type   = boxTypeById[inst.typeId];
   const rows   = placements.filter(p=>p.instanceId===inst.id);
   const own    = ownLoad(inst.id);
@@ -838,7 +845,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
 
       {/* Kasten tabs */}
       <div style={S.boxTabs}>
-        {instances.map(i=>{
+        {activeInstances.map(i=>{
           const ol=isOverloaded(i.id);
           const ud=isUnderdimensioned(i.id);
           const ad=isAdapted(i.id);

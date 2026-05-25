@@ -44790,12 +44790,16 @@ Fortfahren?`);
     const [bulkLoadId, setBulkLoadId] = (0, import_react.useState)("");
     const [bulkOutletId, setBulkOutletId] = (0, import_react.useState)("");
     const [bulkCount, setBulkCount] = (0, import_react.useState)(1);
+    const activeInstances = instances.filter((i) => i.mainConnectionId || i.parentId);
     (0, import_react.useEffect)(() => {
-      if (!activePlan && instances.length) setActivePlan(instances[0].id);
-    }, [instances, activePlan, setActivePlan]);
+      if (activeInstances.length && (!activePlan || !activeInstances.find((i) => i.id === activePlan)))
+        setActivePlan(activeInstances[0].id);
+    }, [activeInstances, activePlan, setActivePlan]);
     if (instances.length === 0)
       return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Steckplan" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, 'Aktiviere zuerst K\xE4sten unter \u201E1 \xB7 Konfiguration".'));
-    const inst = instances.find((i) => i.id === activePlan) || instances[0];
+    if (activeInstances.length === 0)
+      return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Steckplan" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, 'Keine K\xE4sten angeschlossen. Bitte unter \u201E1 \xB7 Konfiguration" K\xE4sten an einen Hauptanschluss oder anderen Kasten anschlie\xDFen.'));
+    const inst = activeInstances.find((i) => i.id === activePlan) || activeInstances[0];
     const type = boxTypeById[inst.typeId];
     const rows = placements.filter((p) => p.instanceId === inst.id);
     const own = ownLoad(inst.id);
@@ -44836,7 +44840,7 @@ Fortfahren?`);
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
         return /* @__PURE__ */ import_react.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.phaseVal, color: col, fontSize: 16 } }, round2(a), " A"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phasePct }, rMax ? `${Math.round(pct)}% von ${rMax}A` : ""));
       })));
-    })), /* @__PURE__ */ import_react.default.createElement("div", { style: S.boxTabs }, instances.map((i) => {
+    })), /* @__PURE__ */ import_react.default.createElement("div", { style: S.boxTabs }, activeInstances.map((i) => {
       const ol = isOverloaded(i.id);
       const ud = isUnderdimensioned(i.id);
       const ad = isAdapted(i.id);
