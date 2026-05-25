@@ -1350,7 +1350,7 @@ const SICHT_ITEMS = [
 function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnById, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults }) {
   const updMeta = (patch) => setInspMeta(s=>({...s,...patch}));
 
-  const IR_DEF = { voltL1N:"",voltL2N:"",voltL3N:"",voltL1L2:"",voltL2L3:"",voltL1L3:"",voltNPE:"",voltL1PE:"",voltL2PE:"",voltL3PE:"",phaseRot:"",rPE:"",rIso:"",zs:"",ik:"",sicht:[null,null,null,null,null,null,null,null],bemerkung:"",outlets:{} };
+  const IR_DEF = { voltL1N:"",voltL2N:"",voltL3N:"",voltL1L2:"",voltL2L3:"",voltL1L3:"",voltNPE:"",voltL1PE:"",voltL2PE:"",voltL3PE:"",phaseRot:"",rPE:"",rIso:"",zs:"",ik:"",sicht:[null,null,null,null,null,null,null,null],bemerkung:"",bemerkungSchwere:"bad",outlets:{} };
   const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...IR_DEF,...sv,sicht:sv.sicht?[...sv.sicht]:[...IR_DEF.sicht],outlets:sv.outlets||{}}; };
   const updIR = (iid,patch) => setInspResults(s=>({...s,[iid]:{...getIR(iid),...patch}}));
 
@@ -1363,8 +1363,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
 
   const cycleSicht = (iid,idx) => {
     const ir=getIR(iid); const sicht=[...(ir.sicht||Array(8).fill(null))];
-    const v=sicht[idx];
-    sicht[idx]=v===null?true:v===true?false:v===false?"warn":null;
+    sicht[idx]=sicht[idx]===true?null:true;   // toggle: ok ↔ nicht eingetragen
     updIR(iid,{sicht});
   };
 
@@ -1387,7 +1386,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
     const pdfChk=(val,lo,hi)=>{if(val===""||val===undefined||val===null)return"";const n=parseFloat(val);if(isNaN(n))return"";if(lo!==undefined&&n<lo)return"bad";if(hi!==undefined&&n>hi)return"bad";return"ok";};
     const pdfChkAll=(vals,lo,hi)=>{const vs=vals.filter(v=>v!=="");if(!vs.length)return"";return vs.some(v=>pdfChk(v,lo,hi)==="bad")?"bad":"ok";};
     const badge=(r)=>r==="ok"?`<span class="ok">✓ ok</span>`:r==="bad"?`<span class="bad">✕ Mangel</span>`:`<span class="muted">–</span>`;
-    const sichtBadge=(v)=>v===true?`<span class="ok">✓ ok</span>`:v===false?`<span class="bad">✕ Mangel</span>`:v==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="muted">–</span>`;
+    const sichtBadge=(v)=>v===true?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`;
     const fv=(...vals)=>vals.filter(v=>v!=="").map(v=>esc(v)+"&thinsp;V").join(" / ")||"–";
 
     const css=`:root{--ep-accent:#f5a623;--ep-dark:#1c2127;--ep-ink:#1c2127;--ep-ink2:#4a5159;--ep-ink3:#7a8290;--ep-rule:#c8ccd1;--ep-rule2:#e6e9ec;--ep-band:#f3f4f6;--ep-paper:#ffffff;--ep-ok:#1c7a3e;--ep-bad:#b91c1c;--ep-warn:#8a5500;--ep-badrow:#fcf2f2;--ep-warnrow:#fdf7e6;--ep-font:'Segoe UI',system-ui,-apple-system,sans-serif;--ep-pad-x:44px;--ep-row-pad:4px 10px;--ep-gap-y:10px}
@@ -1435,11 +1434,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     const maengel=[];
     sorted2.forEach(inst=>{
       const ir=getIR(inst.id);
-      (ir.sicht||[]).forEach((v,idx)=>{
-        if(v===false) maengel.push({inst,item:SICHT_ITEMS[idx],type:"bad"});
-        else if(v==="warn") maengel.push({inst,item:SICHT_ITEMS[idx],type:"warn"});
-      });
-      if(ir.bemerkung) maengel.push({inst,item:ir.bemerkung,type:"warn"});
+      if(ir.bemerkung) maengel.push({inst,item:ir.bemerkung,type:ir.bemerkungSchwere||"bad"});
     });
 
     // Stats
@@ -1449,7 +1444,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const type=boxTypeById[inst.typeId];
       const outlets=type?sortOutlets(type.outlets):[];
       totalPunkte+=(ir.sicht||[]).filter(v=>v!==null).length;
-      totalMangel+=(ir.sicht||[]).filter(v=>v===false||v==="warn").length;
+      if(ir.bemerkung) totalMangel++;
       outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO").forEach(o=>{if(getOR(inst.id,o.id).rcdT1!=="")totalRCD++;});
     });
 
@@ -1496,17 +1491,21 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const n=instIdx+1;
       const pageNum=String(n+1).padStart(2,"0");
       const totalPages=total+2;
-      const hasMangel=sicht.some(v=>v===false);
-      const hasHinweis=sicht.some(v=>v==="warn");
+      const hasMangel=!!(ir.bemerkung&&(ir.bemerkungSchwere||"bad")==="bad");
+      const hasHinweis=!!(ir.bemerkung&&ir.bemerkungSchwere==="warn");
       const befundCls=hasMangel?"bad":hasHinweis?"warn":"ok";
-      const befundLbl=hasMangel?"✕ Mangel":hasHinweis?"! Hinweise":"✓ Bestanden";
+      const befundLbl=hasMangel?"✕ Mangel":hasHinweis?"! Hinweis":"✓ Bestanden";
 
-      const ckPE=pdfChk(ir.rPE,undefined,0.5), ckIso=pdfChk(ir.rIso,1,undefined), ckZs=pdfChk(ir.zs,undefined,1.5);
+      const feedAmpPdf=type?.feedAmp||16;
+      const zsLimitPdf=230/(feedAmpPdf*10);
+      const ikLimitPdf=feedAmpPdf*10;
+      const ckZs=pdfChk(ir.zs,undefined,zsLimitPdf);
+      const ckIk=pdfChk(ir.ik,ikLimitPdf,undefined);
       const phaseR=ir.phaseRot==="rechts"?"ok":ir.phaseRot==="links"?"bad":"";
-      const ckVLN=pdfChkAll([ir.voltL1N,ir.voltL2N,ir.voltL3N],207,253);
-      const ckVLL=pdfChkAll([ir.voltL1L2,ir.voltL2L3,ir.voltL1L3],360,440);
-      const ckVNPE=pdfChk(ir.voltNPE,undefined,2);
-      const ckVLPE=pdfChkAll([ir.voltL1PE,ir.voltL2PE,ir.voltL3PE],207,253);
+      const ckVLN=pdfChkAll([ir.voltL1N,ir.voltL2N,ir.voltL3N],207,244);
+      const ckVLL=pdfChkAll([ir.voltL1L2,ir.voltL2L3,ir.voltL1L3],360,424);
+      const ckVNPE=pdfChk(ir.voltNPE,undefined,1);
+      const ckVLPE=pdfChkAll([ir.voltL1PE,ir.voltL2PE,ir.voltL3PE],207,244);
 
       let secIdx=4; // starts after Stammdaten(1), Sicht(2), Mess(3)
       const rcdSec=rcdOutlets.length?secIdx++:0;
@@ -1531,25 +1530,22 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       </div></div></section>
     <section class="block"><header class="bar"><span><strong>${n}.2 · Sichtprüfung</strong><span class="bar-sub">8 Punkte</span></span></header>
       <div class="block-body"><div class="dual">
-        ${SICHT_ITEMS.map((item,idx)=>`<div class="sicht-cell${sicht[idx]===false?" row-bad":sicht[idx]==="warn"?" row-warn":""}${idx%2===0?" cell-bright":""}${idx>=6?" cell-blast":""}"><span class="muted">${n}.2.${idx+1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
+        ${SICHT_ITEMS.map((item,idx)=>`<div class="sicht-cell${sicht[idx]===false?" row-bad":""}${idx%2===0?" cell-bright":""}${idx>=6?" cell-blast":""}"><span class="muted">${n}.2.${idx+1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
       </div></div></section>
-    <section class="block"><header class="bar"><span><strong>${n}.3 · Messungen</strong><span class="bar-sub">R_PE · R_iso · Z_s · I_k · Drehfeld · U</span></span></header>
+    <section class="block"><header class="bar"><span><strong>${n}.3 · Messungen</strong><span class="bar-sub">Z_s · I_k · Drehfeld · U</span></span></header>
       <div class="block-body">
-        <div class="thead" style="grid-template-columns:1fr 180px 110px 80px"><span>Prüfung</span><span class="r">Wert</span><span class="r">Grenzwert</span><span class="r">Befund</span></div>
-        <div class="trow" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.1</span>Durchgängigkeit Schutzleiter (R_PE)</span><span class="r"><strong>${ir.rPE?esc(ir.rPE)+" Ω":"–"}</strong></span><span class="r muted">≤ 0,5 Ω</span><span class="r">${badge(ckPE)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.2</span>Isolationswiderstand gegen PE (R_iso)</span><span class="r"><strong>${ir.rIso?esc(ir.rIso)+" MΩ":"–"}</strong></span><span class="r muted">≥ 1 MΩ</span><span class="r">${badge(ckIso)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.3</span>Schleifenimpedanz Z_s</span><span class="r"><strong>${ir.zs?esc(ir.zs)+" Ω":"–"}</strong></span><span class="r muted">≤ 1,5 Ω</span><span class="r">${badge(ckZs)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.4</span>Kurzschlussstrom I_k</span><span class="r"><strong>${ir.ik?esc(ir.ik)+" kA":"–"}</strong></span><span class="r muted">≥ I_LS</span><span class="r">${ir.ik?badge("ok"):badge("")}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.5</span>Drehfeldrichtung</span><span class="r"><strong>${ir.phaseRot==="rechts"?"rechts":ir.phaseRot==="links"?"links":"–"}</strong></span><span class="r muted">rechts</span><span class="r">${badge(phaseR)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.6</span>U L–N (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1N,ir.voltL2N,ir.voltL3N)}</strong></span><span class="r muted">207–253 V</span><span class="r">${badge(ckVLN)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.7</span>U L–L (L1-L2 / L2-L3 / L1-L3)</span><span class="r"><strong>${fv(ir.voltL1L2,ir.voltL2L3,ir.voltL1L3)}</strong></span><span class="r muted">360–440 V</span><span class="r">${badge(ckVLL)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.8</span>U N–PE</span><span class="r"><strong>${ir.voltNPE?esc(ir.voltNPE)+"&thinsp;V":"–"}</strong></span><span class="r muted">≤ 2 V</span><span class="r">${badge(ckVNPE)}</span></div>
-        <div class="trow row-last" style="grid-template-columns:1fr 180px 110px 80px"><span><span class="muted no">${n}.3.9</span>U L–PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE,ir.voltL2PE,ir.voltL3PE)}</strong></span><span class="r muted">207–253 V</span><span class="r">${badge(ckVLPE)}</span></div>
+        <div class="thead" style="grid-template-columns:1fr 210px 130px 80px"><span>Prüfung</span><span class="r">Wert</span><span class="r">Grenzwert</span><span class="r">Befund</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.1</span>Schleifenimpedanz Z_s / Kurzschlussstrom I_k</span><span class="r"><strong>${ir.zs?esc(ir.zs)+" Ω":"–"}&ensp;·&ensp;${ir.ik?esc(ir.ik)+" A":"–"}</strong></span><span class="r muted">I_k ≥ ${ikLimitPdf} A</span><span class="r">${badge(ckIk)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.2</span>Drehfeldrichtung</span><span class="r"><strong>${ir.phaseRot==="rechts"?"rechts":ir.phaseRot==="links"?"links":"–"}</strong></span><span class="r muted">rechts</span><span class="r">${badge(phaseR)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.3</span>U L–N (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1N,ir.voltL2N,ir.voltL3N)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLN)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.4</span>U L–L (L1-L2 / L2-L3 / L1-L3)</span><span class="r"><strong>${fv(ir.voltL1L2,ir.voltL2L3,ir.voltL1L3)}</strong></span><span class="r muted">360–424 V</span><span class="r">${badge(ckVLL)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U N–PE</span><span class="r"><strong>${ir.voltNPE?esc(ir.voltNPE)+"&thinsp;V":"–"}</strong></span><span class="r muted">Spannungsfrei</span><span class="r">${badge(ckVNPE)}</span></div>
+        <div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.6</span>U L–PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE,ir.voltL2PE,ir.voltL3PE)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLPE)}</span></div>
       </div></section>
     ${rcdOutlets.length?`<section class="block"><header class="bar"><span><strong>${n}.4 · RCD-Prüfung</strong><span class="bar-sub">${rcdOutlets.length} Stk.</span></span></header>
       <div class="block-body">
-        <div class="thead" style="grid-template-columns:90px 70px 80px 80px 1fr 70px"><span>Anschluss</span><span>Typ</span><span class="r">I_an (mA)</span><span class="r">t_A (ms)</span><span class="r">Grenzwert</span><span class="r">OK</span></div>
-        ${rcdOutlets.map((o,i)=>{const or=getOR(inst.id,o.id);const okT=pdfChk(or.rcdT1,undefined,300);return`<div class="trow${i===rcdOutlets.length-1?" row-last":""}" style="grid-template-columns:90px 70px 80px 80px 1fr 70px"><span><span class="id">${esc(o.label)}</span></span><span class="muted">${esc(o.protection)}</span><span class="r"><strong>${esc(or.rcdIan)||"–"}</strong></span><span class="r"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r muted">≤ 300 ms</span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
+        <div class="thead" style="grid-template-columns:1fr 80px 90px 90px 60px"><span>Anschluss</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">≤ I_Δn</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">≤ 300 ms</span></span><span class="r">OK</span></div>
+        ${rcdOutlets.map((o,i)=>{const or=getOR(inst.id,o.id);const okT=pdfChk(or.rcdT1,undefined,300);return`<div class="trow${i===rcdOutlets.length-1?" row-last":""}" style="grid-template-columns:1fr 80px 90px 90px 60px"><span><span class="id">${esc(o.label)}</span></span><span class="muted">${esc(o.protection)}</span><span class="r"><strong>${esc(or.rcdIan)||"–"}</strong></span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
       </div></section>`:""}
     <section class="block"><header class="bar"><span><strong>${n}.${rcdOutlets.length?5:4} · Abgänge</strong><span class="bar-sub">${outlets.length} Stk.</span></span></header>
       <div class="block-body"><div class="dual">
@@ -1562,8 +1558,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           return `<div class="abg-cell${isLeft?" cell-bright":""}${isLast?" cell-blast":""}"><span class="id">${esc(o.label)}</span><span class="ell">${esc(lbl)} <span class="muted">· ${sub}</span></span></div>`;
         }).join("")}
       </div></div></section>
-    ${ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${rcdOutlets.length?6:5} · Bemerkung</strong></span></header>
-      <div class="block-body"><div class="bemerkung">${esc(ir.bemerkung)}</div></div></section>`:""}
+    ${ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${rcdOutlets.length?6:5} · Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere||"bad")==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="bad">✕ Mangel</span>`}</span></header>
+      <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere||"bad")==="warn"?"":" row-bad"}">${esc(ir.bemerkung)}</div></div></section>`:""}
   </main>
   <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pageNum} / ${totalPages}</span></footer>
 </article>`;
@@ -1644,10 +1640,13 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const sicht     = ir.sicht || Array(8).fill(null);
           const rcdOutlets = outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO");
 
-          const okV1=chk(ir.voltL1N,207,253), okV2=chk(ir.voltL2N,207,253), okV3=chk(ir.voltL3N,207,253);
-          const okL12=chk(ir.voltL1L2,360,440), okL23=chk(ir.voltL2L3,360,440), okL13=chk(ir.voltL1L3,360,440);
-          const okNPE=chk(ir.voltNPE,undefined,2), okL1PE=chk(ir.voltL1PE,207,253), okL2PE=chk(ir.voltL2PE,207,253), okL3PE=chk(ir.voltL3PE,207,253);
-          const okRPE=chk(ir.rPE,undefined,0.5), okRIso=chk(ir.rIso,1,undefined), okZs=chk(ir.zs,undefined,1.5);
+          const okV1=chk(ir.voltL1N,207,244), okV2=chk(ir.voltL2N,207,244), okV3=chk(ir.voltL3N,207,244);
+          const okL12=chk(ir.voltL1L2,360,424), okL23=chk(ir.voltL2L3,360,424), okL13=chk(ir.voltL1L3,360,424);
+          const okNPE=chk(ir.voltNPE,undefined,1), okL1PE=chk(ir.voltL1PE,207,244), okL2PE=chk(ir.voltL2PE,207,244), okL3PE=chk(ir.voltL3PE,207,244);
+          const zsLimitUi=type?.feedAmp?(230/(type.feedAmp*10)):1.5;
+          const ikLimitUi=type?.feedAmp?(type.feedAmp*10):null;
+          const okZs=chk(ir.zs,undefined,zsLimitUi);
+          const okIk=ikLimitUi?chk(ir.ik,ikLimitUi,undefined):null;
 
           return (
             <Section key={inst.id}
@@ -1662,8 +1661,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                     const v=sicht[idx];
                     return (
                       <div key={idx} style={{display:"flex",alignItems:"center",gap:7,background:"#1b2026",borderRadius:5,padding:"5px 8px",border:`1px solid ${LINE}`}}>
-                        <button onClick={()=>cycleSicht(inst.id,idx)} title={v===true?"OK":v===false?"Mangel":v==="warn"?"Hinweis":"Nicht geprüft"} style={{width:26,height:26,borderRadius:4,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,flexShrink:0,background:v===true?"#1a5c2e":v===false?"#5c1a1a":v==="warn"?"#4a3500":"#2d343d",color:v===true?"#2ecc71":v===false?"#e74c3c":v==="warn"?"#f5a623":"#7c8794"}}>
-                          {v===true?"✓":v===false?"✗":v==="warn"?"!":"–"}
+                        <button onClick={()=>cycleSicht(inst.id,idx)} title={v===true?"OK – klicken zum Zurücksetzen":"Nicht eingetragen – klicken für OK"} style={{width:22,height:22,borderRadius:4,border:`2px solid ${v===true?"#2ecc71":"#3a424c"}`,cursor:"pointer",fontWeight:700,fontSize:12,flexShrink:0,background:v===true?"#1a5c2e":"transparent",color:v===true?"#2ecc71":"#555",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                          {v===true?"✓":""}
                         </button>
                         <span style={{fontSize:11,color:"#e8eaed"}}>{item}</span>
                       </div>
@@ -1674,36 +1673,28 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 
               {/* ── Kasten-Messungen ── */}
               <div style={{...S.metaGrid,gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",marginBottom:6}}>
-                <Field label="R_PE (Ω)">
-                  <input style={{...S.inputSm,...inpBorder(okRPE)}} value={ir.rPE||""} onChange={e=>updIR(inst.id,{rPE:e.target.value})}/>
-                  <span style={S.normHint}>≤ 0,5 Ω</span>
-                </Field>
-                <Field label="R_iso (MΩ)">
-                  <input style={{...S.inputSm,...inpBorder(okRIso)}} value={ir.rIso||""} onChange={e=>updIR(inst.id,{rIso:e.target.value})}/>
-                  <span style={S.normHint}>≥ 1 MΩ</span>
-                </Field>
                 <Field label="Z_s (Ω)">
                   <input style={{...S.inputSm,...inpBorder(okZs)}} value={ir.zs||""} onChange={e=>updIR(inst.id,{zs:e.target.value})}/>
-                  <span style={S.normHint}>≤ 1,5 Ω</span>
+                  <span style={S.normHint}>≤ {type?.feedAmp?(230/(type.feedAmp*10)).toFixed(2).replace(".",",")+" Ω":"1,5 Ω"}</span>
                 </Field>
-                <Field label="I_k (kA)">
-                  <input style={S.inputSm} value={ir.ik||""} onChange={e=>updIR(inst.id,{ik:e.target.value})}/>
-                  <span style={S.normHint}>≥ I_LS</span>
+                <Field label="I_k (A)">
+                  <input style={{...S.inputSm,...(okIk!==null?inpBorder(okIk):{})}} value={ir.ik||""} onChange={e=>updIR(inst.id,{ik:e.target.value})}/>
+                  <span style={S.normHint}>≥ {ikLimitUi?ikLimitUi+" A":"I_LS"}</span>
                 </Field>
               </div>
 
               {/* ── Spannungsmessung + Drehfeld ── */}
               <div style={{...S.metaGrid,gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",marginBottom:6}}>
-                <Field label="U L1–N (V)"><input style={{...S.inputSm,...inpBorder(okV1)}} value={ir.voltL1N||""} onChange={e=>updIR(inst.id,{voltL1N:e.target.value})}/><span style={S.normHint}>207–253 V</span></Field>
-                <Field label="U L2–N (V)"><input style={{...S.inputSm,...inpBorder(okV2)}} value={ir.voltL2N||""} onChange={e=>updIR(inst.id,{voltL2N:e.target.value})}/><span style={S.normHint}>207–253 V</span></Field>
-                <Field label="U L3–N (V)"><input style={{...S.inputSm,...inpBorder(okV3)}} value={ir.voltL3N||""} onChange={e=>updIR(inst.id,{voltL3N:e.target.value})}/><span style={S.normHint}>207–253 V</span></Field>
-                <Field label="U L1–L2 (V)"><input style={{...S.inputSm,...inpBorder(okL12)}} value={ir.voltL1L2||""} onChange={e=>updIR(inst.id,{voltL1L2:e.target.value})}/><span style={S.normHint}>360–440 V</span></Field>
-                <Field label="U L2–L3 (V)"><input style={{...S.inputSm,...inpBorder(okL23)}} value={ir.voltL2L3||""} onChange={e=>updIR(inst.id,{voltL2L3:e.target.value})}/><span style={S.normHint}>360–440 V</span></Field>
-                <Field label="U L1–L3 (V)"><input style={{...S.inputSm,...inpBorder(okL13)}} value={ir.voltL1L3||""} onChange={e=>updIR(inst.id,{voltL1L3:e.target.value})}/><span style={S.normHint}>360–440 V</span></Field>
-                <Field label="U N–PE (V)"><input style={{...S.inputSm,...inpBorder(okNPE)}} value={ir.voltNPE||""} onChange={e=>updIR(inst.id,{voltNPE:e.target.value})}/><span style={S.normHint}>≤ 2 V</span></Field>
-                <Field label="U L1–PE (V)"><input style={{...S.inputSm,...inpBorder(okL1PE)}} value={ir.voltL1PE||""} onChange={e=>updIR(inst.id,{voltL1PE:e.target.value})}/><span style={S.normHint}>207–253 V</span></Field>
-                <Field label="U L2–PE (V)"><input style={{...S.inputSm,...inpBorder(okL2PE)}} value={ir.voltL2PE||""} onChange={e=>updIR(inst.id,{voltL2PE:e.target.value})}/><span style={S.normHint}>207–253 V</span></Field>
-                <Field label="U L3–PE (V)"><input style={{...S.inputSm,...inpBorder(okL3PE)}} value={ir.voltL3PE||""} onChange={e=>updIR(inst.id,{voltL3PE:e.target.value})}/><span style={S.normHint}>207–253 V</span></Field>
+                <Field label="U L1–N (V)"><input style={{...S.inputSm,...inpBorder(okV1)}} value={ir.voltL1N||""} onChange={e=>updIR(inst.id,{voltL1N:e.target.value})}/><span style={S.normHint}>207–244 V</span></Field>
+                <Field label="U L2–N (V)"><input style={{...S.inputSm,...inpBorder(okV2)}} value={ir.voltL2N||""} onChange={e=>updIR(inst.id,{voltL2N:e.target.value})}/><span style={S.normHint}>207–244 V</span></Field>
+                <Field label="U L3–N (V)"><input style={{...S.inputSm,...inpBorder(okV3)}} value={ir.voltL3N||""} onChange={e=>updIR(inst.id,{voltL3N:e.target.value})}/><span style={S.normHint}>207–244 V</span></Field>
+                <Field label="U L1–L2 (V)"><input style={{...S.inputSm,...inpBorder(okL12)}} value={ir.voltL1L2||""} onChange={e=>updIR(inst.id,{voltL1L2:e.target.value})}/><span style={S.normHint}>360–424 V</span></Field>
+                <Field label="U L2–L3 (V)"><input style={{...S.inputSm,...inpBorder(okL23)}} value={ir.voltL2L3||""} onChange={e=>updIR(inst.id,{voltL2L3:e.target.value})}/><span style={S.normHint}>360–424 V</span></Field>
+                <Field label="U L1–L3 (V)"><input style={{...S.inputSm,...inpBorder(okL13)}} value={ir.voltL1L3||""} onChange={e=>updIR(inst.id,{voltL1L3:e.target.value})}/><span style={S.normHint}>360–424 V</span></Field>
+                <Field label="U N–PE (V)"><input style={{...S.inputSm,...inpBorder(okNPE)}} value={ir.voltNPE||""} onChange={e=>updIR(inst.id,{voltNPE:e.target.value})}/><span style={S.normHint}>Spannungsfrei</span></Field>
+                <Field label="U L1–PE (V)"><input style={{...S.inputSm,...inpBorder(okL1PE)}} value={ir.voltL1PE||""} onChange={e=>updIR(inst.id,{voltL1PE:e.target.value})}/><span style={S.normHint}>207–244 V</span></Field>
+                <Field label="U L2–PE (V)"><input style={{...S.inputSm,...inpBorder(okL2PE)}} value={ir.voltL2PE||""} onChange={e=>updIR(inst.id,{voltL2PE:e.target.value})}/><span style={S.normHint}>207–244 V</span></Field>
+                <Field label="U L3–PE (V)"><input style={{...S.inputSm,...inpBorder(okL3PE)}} value={ir.voltL3PE||""} onChange={e=>updIR(inst.id,{voltL3PE:e.target.value})}/><span style={S.normHint}>207–244 V</span></Field>
                 <Field label="Drehfeld">
                   <select style={{...S.inputSm,width:"100%"}} value={ir.phaseRot||""} onChange={e=>updIR(inst.id,{phaseRot:e.target.value})}>
                     <option value="">— nicht geprüft —</option>
@@ -1721,8 +1712,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                     <thead><tr>
                       <th style={S.th}>Anschluss</th>
                       <th style={S.th}>Schutz</th>
-                      <th style={S.th}>t @ IΔn (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>
-                      <th style={S.th}>I_an (mA)</th>
+                      <th style={S.th}>I_An (mA)<br/><span style={S.normHint}>≤ I_Δn</span></th>
+                      <th style={S.th}>t_A (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>
                       <th style={S.th}>OK?</th>
                     </tr></thead>
                     <tbody>
@@ -1733,8 +1724,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                           <tr key={outlet.id}>
                             <td style={S.td}>{outlet.label}</td>
                             <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{outlet.protection} {outlet.breaker}</td>
-                            <td style={cellBg(okT)}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okT)}} value={or.rcdT1||""} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/></td>
                             <td style={S.td}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80}} value={or.rcdIan||""} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/></td>
+                            <td style={cellBg(okT)}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okT)}} value={or.rcdT1||""} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/></td>
                             <td style={{...S.td,textAlign:"center"}}><input type="checkbox" checked={or.ok||false} onChange={e=>updOR(inst.id,outlet.id,{ok:e.target.checked})}/></td>
                           </tr>
                         );
@@ -1745,9 +1736,23 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
               )}
 
               {/* ── Bemerkung / Auflage ── */}
-              <Field label="Bemerkung / Auflage">
-                <textarea style={{...S.input,width:"100%",minHeight:54,resize:"vertical"}} value={ir.bemerkung||""} onChange={e=>updIR(inst.id,{bemerkung:e.target.value})} placeholder="Freiwillig: Hinweis, Mangel, Auflage…"/>
-              </Field>
+              <div style={{marginTop:8}}>
+                <div style={{display:"flex",gap:8,alignItems:"flex-end",flexWrap:"wrap"}}>
+                  <div style={{flex:"1 1 300px"}}>
+                    <Field label="Bemerkung / Auflage">
+                      <textarea style={{...S.input,width:"100%",minHeight:54,resize:"vertical"}} value={ir.bemerkung||""} onChange={e=>updIR(inst.id,{bemerkung:e.target.value})} placeholder="Freiwillig: Hinweis oder Mangel eintragen…"/>
+                    </Field>
+                  </div>
+                  <div style={{width:130,paddingBottom:2}}>
+                    <Field label="Schweregrad">
+                      <select style={S.input} value={ir.bemerkungSchwere||"bad"} onChange={e=>updIR(inst.id,{bemerkungSchwere:e.target.value})} disabled={!ir.bemerkung}>
+                        <option value="bad">✕ Mangel</option>
+                        <option value="warn">! Hinweis</option>
+                      </select>
+                    </Field>
+                  </div>
+                </div>
+              </div>
             </Section>
           );
         })
