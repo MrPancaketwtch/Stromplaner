@@ -1551,7 +1551,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const or=getOR(inst.id,o.id);
           const oAmp=o.amp||type?.feedAmp||16;
           const ikLimO=oAmp*10;
-          const zsLimO=230/(oAmp*10);
+          const zsLimO=parseFloat((230/(oAmp*10)).toFixed(2));
           const ckZsO=pdfChk(or.zs,undefined,zsLimO);
           const ckIkO=pdfChk(or.ik,ikLimO,undefined);
           const ckO=ckIkO==="bad"||ckZsO==="bad"?"bad":ckIkO==="ok"||ckZsO==="ok"?"ok":"";
@@ -1733,7 +1733,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                       {outlets.map(outlet=>{
                         const or=getOR(inst.id,outlet.id);
                         const oAmp=outlet.amp||type?.feedAmp||16;
-                        const zsLimO=230/(oAmp*10);
+                        const zsLimO=parseFloat((230/(oAmp*10)).toFixed(2));
                         const ikLimO=oAmp*10;
                         const okZsO=chk(or.zs,undefined,zsLimO);
                         const okIkO=chk(or.ik,ikLimO,undefined);

@@ -45295,7 +45295,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const or = getOR(inst.id, o.id);
           const oAmp = o.amp || type?.feedAmp || 16;
           const ikLimO = oAmp * 10;
-          const zsLimO = 230 / (oAmp * 10);
+          const zsLimO = parseFloat((230 / (oAmp * 10)).toFixed(2));
           const ckZsO = pdfChk(or.zs, void 0, zsLimO);
           const ckIkO = pdfChk(or.ik, ikLimO, void 0);
           const ckO = ckIkO === "bad" || ckZsO === "bad" ? "bad" : ckIkO === "ok" || ckZsO === "ok" ? "ok" : "";
@@ -45385,7 +45385,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         outlets.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto", marginBottom: 14 } }, /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Schleifenimpedanz"), /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, width: "100%" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Z_s (\u03A9)"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "I_k (A)"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, outlets.map((outlet) => {
           const or = getOR(inst.id, outlet.id);
           const oAmp = outlet.amp || type?.feedAmp || 16;
-          const zsLimO = 230 / (oAmp * 10);
+          const zsLimO = parseFloat((230 / (oAmp * 10)).toFixed(2));
           const ikLimO = oAmp * 10;
           const okZsO = chk(or.zs, void 0, zsLimO);
           const okIkO = chk(or.ik, ikLimO, void 0);
