@@ -912,16 +912,11 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
               <th style={S.th}>Phase</th><th style={S.th}>W</th><th style={S.th}>A</th><th style={S.th}></th>
             </tr></thead>
             <tbody>
-              {(()=>{
-                // Nur Anschlüsse mit mindestens einer Belegung anzeigen
-                const usedOutletIds=new Set(rows.filter(p=>p.outletId).map(p=>p.outletId));
-                return rows.map(p=>{
+              {rows.map(p=>{
                 const l=loadById[p.loadId];
                 const outlet=type?.outlets.find(o=>o.id===p.outletId);
                 const avail=getAvailableOutlets(p.loadId);
-                const outletOptions=avail
-                  .filter(o=>!p.outletId||usedOutletIds.has(o.id)||o.id===p.outletId)
-                  .map(o=>({
+                const outletOptions=avail.map(o=>({
                   value:o.id,
                   label:`${o.label} (${CONN[o.connector]?.label||o.connector} · ${o.breaker}${o.amp}A · ${o.protection})`,
                 }));
@@ -956,7 +951,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
                     <td style={S.td}><button style={S.dangerBtn} onClick={()=>removePlacement(p.id)}>✕</button></td>
                   </tr>
                 );
-              });})()}
+              })}
             </tbody>
           </table>
           </div>
