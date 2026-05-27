@@ -420,7 +420,7 @@ export default function App() {
   };
 
   const addPlacement=(instanceId)=>setPlacements(s=>[...s,{id:uid(),instanceId,outletId:"",mcSlot:null,loadId:""}]);
-  const addPlacementsFilled=(instanceId,loadId,outletId,count)=>setPlacements(s=>[...s,...Array.from({length:count},()=>({id:uid(),instanceId,outletId:outletId||"",mcSlot:null,loadId:loadId||""}))]);
+  const addPlacementsFilled=(instanceId,loadId,outletId,count,startMcSlot=null)=>setPlacements(s=>[...s,...Array.from({length:count},(_,i)=>({id:uid(),instanceId,outletId:outletId||"",mcSlot:startMcSlot!==null?startMcSlot+i:null,loadId:loadId||""}))]);
   const updatePlacement=(id,patch)=>setPlacements(s=>s.map(p=>p.id===id?{...p,...patch}:p));
   const removePlacement=(id)=>setPlacements(s=>s.filter(p=>p.id!==id));
 
@@ -893,23 +893,35 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
           const bulkAvail=bulkLoad?getAvailableOutlets(bulkLoadId):sortedOutlets;
           const bulkOutletOpts=bulkAvail.map(o=>({value:o.id,label:`${o.label} (${CONN[o.connector]?.label||o.connector} · ${o.breaker||""}${o.amp}A · ${o.protection})`}));
           const canAdd=!!bulkLoadId;
+          // MC-Auto-Slot: nächster freier Slot berechnen
+          const bulkOutletObj=bulkOutletId?type?.outlets.find(o=>o.id===bulkOutletId):null;
+          const isBulkMC=bulkOutletObj&&isMulticore(bulkOutletObj.connector);
+          const getNextMcSlot=(outletId)=>{
+            const used=rows.filter(p=>p.outletId===outletId&&p.mcSlot!=null).map(p=>p.mcSlot);
+            if(!used.length) return 1;
+            return Math.max(...used)+1;
+          };
           return (
             <div style={{display:"flex",alignItems:"flex-end",gap:8,marginTop:14,padding:"10px 12px",background:"#1b2026",borderRadius:7,border:`1px solid ${LINE}`,flexWrap:"wrap"}}>
               <span style={{fontSize:11,color:"#9aa4af",fontWeight:600,width:"100%",marginBottom:2}}>Schnellerfassung</span>
+              <div style={{flex:"2 1 200px"}}>
+                <div style={S.fieldLabel}>Anschluss</div>
+                <FilterSelect options={bulkOutletOpts} value={bulkOutletId} onChange={v=>{setBulkOutletId(v);}} placeholder="Wählen…"/>
+              </div>
               <div style={{flex:"2 1 180px"}}>
                 <div style={S.fieldLabel}>Verbraucher</div>
                 <InlineSelect options={loadOptions} value={bulkLoadId} onChange={v=>{setBulkLoadId(v);setBulkOutletId("");}} placeholder="Wählen…"/>
-              </div>
-              <div style={{flex:"2 1 200px"}}>
-                <div style={S.fieldLabel}>Anschluss</div>
-                <FilterSelect options={bulkOutletOpts} value={bulkOutletId} onChange={setBulkOutletId} placeholder="Wählen…"/>
               </div>
               <div style={{width:70}}>
                 <div style={S.fieldLabel}>Menge</div>
                 <input type="number" min="1" max="50" style={{...S.inputSm,width:"100%",textAlign:"center"}} value={bulkCount} onChange={e=>setBulkCount(Math.max(1,parseInt(e.target.value)||1))}/>
               </div>
               <button style={{...S.primaryBtn,alignSelf:"flex-end"}} disabled={!canAdd}
-                onClick={()=>{ addPlacementsFilled(inst.id,bulkLoadId,bulkOutletId,Math.max(1,Math.min(50,bulkCount))); }}>
+                onClick={()=>{
+                  const n=Math.max(1,Math.min(50,bulkCount));
+                  const startSlot=isBulkMC?getNextMcSlot(bulkOutletId):null;
+                  addPlacementsFilled(inst.id,bulkLoadId,bulkOutletId,n,startSlot);
+                }}>
                 {bulkCount>1?`${bulkCount}× hinzufügen`:"Hinzufügen"}
               </button>
               <button style={{...S.ghostBtn,alignSelf:"flex-end"}} onClick={()=>addPlacement(inst.id)} title="Leere Zeile hinzufügen">+ leer</button>
@@ -921,7 +933,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
           <div style={{overflowX:"auto"}}>
           <table style={S.table}>
             <thead><tr>
-              <th style={S.th}>Verbraucher</th><th style={S.th}>Anschluss</th><th style={S.th}>Steckplatz</th>
+              <th style={S.th}>Anschluss</th><th style={S.th}>Steckplatz</th><th style={S.th}>Verbraucher</th>
               <th style={S.th}>Phase</th><th style={S.th}>W</th><th style={S.th}>A</th><th style={S.th}></th>
             </tr></thead>
             <tbody>
@@ -945,9 +957,6 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
                 return (
                   <tr key={p.id}>
                     <td style={S.td}>
-                      <InlineSelect options={loadOptions} value={p.loadId} onChange={v=>updatePlacement(p.id,{loadId:v,outletId:"",mcSlot:null})} placeholder="Verbraucher…" style={{minWidth:180}}/>
-                    </td>
-                    <td style={S.td}>
                       <FilterSelect options={outletOptions} value={p.outletId} onChange={v=>updatePlacement(p.id,{outletId:v,mcSlot:null})} placeholder="Anschluss…" style={{minWidth:200}}/>
                     </td>
                     <td style={S.td}>
@@ -957,6 +966,9 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
                           {mcOptions.map(s=><option key={s.slotNum} value={s.slotNum}>Steckplatz {s.slotNum} ({s.phase})</option>)}
                         </select>
                       ) : <span style={{color:"#555",fontSize:11}}>—</span>}
+                    </td>
+                    <td style={S.td}>
+                      <InlineSelect options={loadOptions} value={p.loadId} onChange={v=>updatePlacement(p.id,{loadId:v,outletId:"",mcSlot:null})} placeholder="Verbraucher…" style={{minWidth:180}}/>
                     </td>
                     <td style={S.td}><span style={{fontSize:12,color:phDisplay==="—"?"#555":"#fff"}}>{phDisplay}</span></td>
                     <td style={S.td}>{l?l.watt:"-"}</td>
@@ -1539,6 +1551,12 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const ir=getIR(inst.id);
       const sicht=ir.sicht||Array(6).fill(null);
       const rcdOutlets=outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO");
+      // Multicore-RCBO → je Steckplatz eine Zeile im PDF
+      const pdfRcdRows=[];
+      rcdOutlets.forEach(o=>{
+        if(isMulticore(o.connector)){const slots=o.mcSlots||6;for(let s=1;s<=slots;s++)pdfRcdRows.push({outlet:o,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`});}
+        else pdfRcdRows.push({outlet:o,oid:o.id,rowLabel:o.label});
+      });
       const parent=inst.parentId?instById[inst.parentId]:null;
       const n=instIdx+1;
       const pageNum=String(n+1).padStart(2,"0");
@@ -1555,7 +1573,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const ckVLPE=pdfChkAll([ir.voltL1PE,ir.voltL2PE,ir.voltL3PE],207,244);
 
       let secIdx=4; // starts after Stammdaten(1), Sicht(2), Mess(3)
-      const rcdSec=rcdOutlets.length?secIdx++:0;
+      const rcdSec=pdfRcdRows.length?secIdx++:0;
       const abgSec=secIdx++;
       const bemSec=ir.bemerkung?secIdx:0;
 
@@ -1588,12 +1606,12 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.4</span>U N–PE</span><span class="r"><strong>${ir.voltNPE?esc(ir.voltNPE)+"&thinsp;V":"–"}</strong></span><span class="r muted">Spannungsfrei</span><span class="r">${badge(ckVNPE)}</span></div>
         <div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U L–PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE,ir.voltL2PE,ir.voltL3PE)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLPE)}</span></div>
       </div></section>
-    ${rcdOutlets.length?`<section class="block"><header class="bar"><span><strong>${n}.4 · RCD-Prüfung</strong><span class="bar-sub">${rcdOutlets.length} Stk.</span></span></header>
+    ${pdfRcdRows.length?`<section class="block"><header class="bar"><span><strong>${n}.4 · RCD-Prüfung</strong><span class="bar-sub">${pdfRcdRows.length} Stk.</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:1fr 80px 90px 90px 60px"><span>Anschluss</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">≤ I_Δn</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">≤ 300 ms</span></span><span class="r">OK</span></div>
-        ${rcdOutlets.map((o,i)=>{const or=getOR(inst.id,o.id);const okT=pdfChk(or.rcdT1,undefined,300);return`<div class="trow${i===rcdOutlets.length-1?" row-last":""}" style="grid-template-columns:1fr 80px 90px 90px 60px"><span><span class="id">${esc(o.label)}</span></span><span class="muted">${esc(o.protection)}</span><span class="r"><strong>${esc(or.rcdIan)||"–"}</strong></span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
+        ${pdfRcdRows.map(({outlet,oid,rowLabel},i)=>{const or=getOR(inst.id,oid);const okT=pdfChk(or.rcdT1,undefined,300);return`<div class="trow${i===pdfRcdRows.length-1?" row-last":""}" style="grid-template-columns:1fr 80px 90px 90px 60px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(outlet.protection)}</span><span class="r"><strong>${esc(or.rcdIan)||"–"}</strong></span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
       </div></section>`:""}
-    <section class="block"><header class="bar"><span><strong>${n}.${rcdOutlets.length?5:4} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${outlets.length} Stk.</span></span></header>
+    <section class="block"><header class="bar"><span><strong>${n}.${pdfRcdRows.length?5:4} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${outlets.length} Stk.</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:65px 1fr 80px 95px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
         ${outlets.map((o,i)=>{
@@ -1610,7 +1628,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           return `<div class="trow${i===outlets.length-1?" row-last":""}" style="grid-template-columns:65px 1fr 80px 95px 55px"><span class="id">${esc(o.label)}</span><span class="ell">${esc(lbl)}</span><span class="r">${or.zs?esc(or.zs)+" Ω":"–"}</span><span class="r"><strong>${or.ik?esc(or.ik)+" A":"–"}</strong><br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
         }).join("")}
       </div></section>
-    ${ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${rcdOutlets.length?6:5} · Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere||"bad")==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="bad">✕ Mangel</span>`}</span></header>
+    ${ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${pdfRcdRows.length?6:5} · Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere||"bad")==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="bad">✕ Mangel</span>`}</span></header>
       <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere||"bad")==="warn"?"":" row-bad"}">${esc(ir.bemerkung)}</div></div></section>`:""}
   </main>
   <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pageNum} / ${totalPages}</span></footer>
@@ -1658,8 +1676,20 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     return result;
   })();
 
+  // #9: Enter → nächstes Feld
+  const inspRef = useRef(null);
+  const handleEnterNav = (e) => {
+    if (e.key !== 'Enter') return;
+    if (e.target.tagName.toLowerCase() !== 'input') return;
+    e.preventDefault();
+    if (!inspRef.current) return;
+    const all = [...inspRef.current.querySelectorAll('input:not([disabled])')];
+    const idx = all.indexOf(e.target);
+    if (idx >= 0 && idx < all.length - 1) { all[idx+1].focus(); all[idx+1].select?.(); }
+  };
+
   return (
-    <div>
+    <div ref={inspRef} onKeyDown={handleEnterNav}>
       <Section title="Prüfungsdetails">
         <div style={S.metaGrid}>
           <Field label="Prüfer"><input style={S.input} value={inspMeta.inspector} onChange={e=>updMeta({inspector:e.target.value})}/></Field>
@@ -1691,6 +1721,16 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const ir        = getIR(inst.id);
           const sicht     = ir.sicht || Array(6).fill(null);
           const rcdOutlets = outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO");
+          // #10: Multicore-RCBO → eine Zeile pro Steckplatz
+          const expandedRcdRows = [];
+          rcdOutlets.forEach(o=>{
+            if(isMulticore(o.connector)){
+              const slots=o.mcSlots||6;
+              for(let s=1;s<=slots;s++) expandedRcdRows.push({outlet:o,slotNum:s,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`});
+            } else {
+              expandedRcdRows.push({outlet:o,slotNum:null,oid:o.id,rowLabel:o.label});
+            }
+          });
 
           const okV1=chk(ir.voltL1N,207,244), okV2=chk(ir.voltL2N,207,244), okV3=chk(ir.voltL3N,207,244);
           const okL12=chk(ir.voltL1L2,360,424), okL23=chk(ir.voltL2L3,360,424), okL13=chk(ir.voltL1L3,360,424);
@@ -1741,7 +1781,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
               </div>
 
               {/* ── RCD-Prüfung ── */}
-              {rcdOutlets.length>0&&(
+              {expandedRcdRows.length>0&&(
                 <div style={{overflowX:"auto",marginBottom:14}}>
                   <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCD-Prüfung</p>
                   <table style={{...S.table,width:"100%"}}>
@@ -1753,17 +1793,17 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                       <th style={S.th}>OK?</th>
                     </tr></thead>
                     <tbody>
-                      {rcdOutlets.map(outlet=>{
-                        const or=getOR(inst.id,outlet.id);
+                      {expandedRcdRows.map(({outlet,oid,rowLabel})=>{
+                        const or=getOR(inst.id,oid);
                         const okT=chk(or.rcdT1,undefined,300);
                         return (
-                          <tr key={outlet.id}>
-                            <td style={S.td}>{outlet.label}</td>
+                          <tr key={oid}>
+                            <td style={S.td}>{rowLabel}</td>
                             <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{outlet.protection} {outlet.breaker}</td>
-                            <td style={S.td}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80}} value={or.rcdIan||""} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/></td>
-                            <td style={cellBg(okT)}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okT)}} value={or.rcdT1||""} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/></td>
+                            <td style={S.td}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80}} value={or.rcdIan||""} onChange={e=>updOR(inst.id,oid,{rcdIan:e.target.value})}/></td>
+                            <td style={cellBg(okT)}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okT)}} value={or.rcdT1||""} onChange={e=>updOR(inst.id,oid,{rcdT1:e.target.value})}/></td>
                             <td style={{...S.td,textAlign:"center"}}>
-                              <button onClick={()=>updOR(inst.id,outlet.id,{ok:!or.ok})} title={or.ok?"OK – klicken zum Zurücksetzen":"Nicht OK – klicken für OK"} style={{width:22,height:22,borderRadius:4,border:`2px solid ${or.ok?"#2ecc71":"#3a424c"}`,cursor:"pointer",fontWeight:700,fontSize:12,background:or.ok?"#1a5c2e":"transparent",color:or.ok?"#2ecc71":"#555",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                              <button onClick={()=>updOR(inst.id,oid,{ok:!or.ok})} title={or.ok?"OK – klicken zum Zurücksetzen":"Nicht OK – klicken für OK"} style={{width:22,height:22,borderRadius:4,border:`2px solid ${or.ok?"#2ecc71":"#3a424c"}`,cursor:"pointer",fontWeight:700,fontSize:12,background:or.ok?"#1a5c2e":"transparent",color:or.ok?"#2ecc71":"#555",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
                                 {or.ok?"✓":""}
                               </button>
                             </td>
@@ -1775,43 +1815,42 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                 </div>
               )}
 
-              {/* ── Schleifenimpedanz (pro Abgang) ── */}
+              {/* ── Schleifenimpedanz (pro Abgang) – 2-Spalten-Grid ── */}
               {outlets.length>0&&(
-                <div style={{overflowX:"auto",marginBottom:14}}>
+                <div style={{marginBottom:14}}>
                   <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Schleifenimpedanz</p>
-                  <table style={{...S.table,width:"100%"}}>
-                    <thead><tr>
-                      <th style={S.th}>Anschluss</th>
-                      <th style={S.th}>Z_s (Ω)</th>
-                      <th style={S.th}>I_k (A)</th>
-                    </tr></thead>
-                    <tbody>
-                      {outlets.map(outlet=>{
-                        const or=getOR(inst.id,outlet.id);
-                        const oAmp=outlet.amp||type?.feedAmp||16;
-                        const zsLimO=parseFloat((230/(oAmp*10)).toFixed(2));
-                        const ikLimO=oAmp*10;
-                        const okZsO=chk(or.zs,undefined,zsLimO);
-                        const okIkO=chk(or.ik,ikLimO,undefined);
-                        return (
-                          <tr key={outlet.id}>
-                            <td style={S.td}>
-                              {outlet.label}
-                              <span style={{fontSize:11,color:"#9aa4af",marginLeft:6}}>{CONN[outlet.connector]?.label||""} {outlet.amp}A</span>
-                            </td>
-                            <td style={cellBg(okZsO)}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:4}}>
+                    {outlets.map(outlet=>{
+                      const or=getOR(inst.id,outlet.id);
+                      const oAmp=outlet.amp||type?.feedAmp||16;
+                      const zsLimO=parseFloat((230/(oAmp*10)).toFixed(2));
+                      const ikLimO=oAmp*10;
+                      const okZsO=chk(or.zs,undefined,zsLimO);
+                      const okIkO=chk(or.ik,ikLimO,undefined);
+                      const anyBad=okZsO===false||okIkO===false;
+                      const anyOk=okZsO===true||okIkO===true;
+                      return (
+                        <div key={outlet.id} style={{background:anyBad?"rgba(231,76,60,0.08)":anyOk?"rgba(46,204,113,0.06)":"#1b2026",border:`1px solid ${anyBad?"#e74c3c":anyOk?"#2ecc71":LINE}`,borderRadius:5,padding:"6px 8px"}}>
+                          <div style={{fontSize:11,color:"#9aa4af",marginBottom:5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                            {outlet.label}
+                            <span style={{fontWeight:400,marginLeft:5,color:"#666"}}>{CONN[outlet.connector]?.label||""} {outlet.amp}A</span>
+                          </div>
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                            <div>
+                              <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>Z_s (Ω)</div>
                               <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okZsO)}} value={or.zs||""} onChange={e=>updOR(inst.id,outlet.id,{zs:e.target.value})}/>
                               <span style={S.normHint}>≤ {zsLimO.toFixed(2).replace(".",",")} Ω</span>
-                            </td>
-                            <td style={cellBg(okIkO)}>
+                            </div>
+                            <div>
+                              <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>I_k (A)</div>
                               <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okIkO)}} value={or.ik||""} onChange={e=>updOR(inst.id,outlet.id,{ik:e.target.value})}/>
                               <span style={S.normHint}>≥ {ikLimO} A</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
