@@ -316,7 +316,7 @@ export default function App() {
     const type   = inst ? boxTypeById[inst.typeId] : null;
     const outlet = type?.outlets.find(o=>o.id===p.outletId);
     if(!outlet) return {L1:0,L2:0,L3:0};
-    const totalAmp = load.watt/VOLT;
+    const totalAmp = (load.watt||0)/VOLT;
     const r={L1:0,L2:0,L3:0};
     if(load.threePhase){
       r.L1=totalAmp; r.L2=totalAmp; r.L3=totalAmp;
@@ -515,7 +515,7 @@ export default function App() {
         ["Verbraucher","Anschluss","Steckplatz","Phase","W","A","Sich.","Schutz"]];
       placements.filter(p=>p.instanceId===inst.id).forEach(p=>{
         const l=loadById[p.loadId]; const out=type?.outlets.find(o=>o.id===p.outletId);
-        const amp=l?round2(l.watt/VOLT):"";
+        const amp=l&&l.watt?round2(l.watt/VOLT):"";
         let ph=""; let slot="";
         if(l?.threePhase){ ph="L1+L2+L3"; }
         else if(out&&isMulticore(out.connector)){ const s=p.mcSlot||1; ph=PHASES[(s-1)%3]; slot=`Steckplatz ${s}`; }
@@ -530,7 +530,7 @@ export default function App() {
     });
     // Verbraucher
     const lRows=[["VERBRAUCHER"],[],["Name","W","A","3-phasig"]];
-    loads.forEach(l=>lRows.push([l.name,l.watt,round2(l.watt/VOLT),l.threePhase?"Ja":"Nein"]));
+    loads.forEach(l=>lRows.push([l.name,l.watt||"",l.watt?round2(l.watt/VOLT):"",l.threePhase?"Ja":"Nein"]));
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(lRows),"Verbraucher");
     XLSX.writeFile(wb,`Stromplan_${meta.production.replace(/\s+/g,"_")}.xlsx`);
   };
@@ -565,7 +565,7 @@ export default function App() {
       const rows2=placements.filter(p=>p.instanceId===inst.id).map(p=>{
         const l=loadById[p.loadId]; const out=type?.outlets.find(o=>o.id===p.outletId);
         if(!l) return null;
-        const amp=round2(l.watt/VOLT);
+        const amp=l.watt?round2(l.watt/VOLT):0;
         let ph="",slot="";
         if(l.threePhase){ ph="L1+L2+L3"; }
         else if(out&&isMulticore(out.connector)){ const s=p.mcSlot||1; ph=PHASES[(s-1)%3]; slot=`Steckplatz ${s}`; }
@@ -696,6 +696,12 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                   // Familien-fremde Verbindungen blocken (z.B. CEE3P nicht auf Schuko)
                   if(type?.feedConnector&&CONN_FAMILY[type.feedConnector]!==CONN_FAMILY[o.connector]) return false;
                   return true;
+                }).sort((a,b)=>{
+                  // Gleicher Steckertyp zuerst, Adapter-Kompatible danach
+                  const aExact=type?.feedConnector&&a.connector===type.feedConnector?0:1;
+                  const bExact=type?.feedConnector&&b.connector===type.feedConnector?0:1;
+                  if(aExact!==bExact) return aExact-bExact;
+                  return a.label.localeCompare(b.label,"de",{numeric:true});
                 });
                 // Only show Hauptanschluss picker for root instances
                 const isRoot=!inst.parentId;
@@ -783,7 +789,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
   };
 
   const sortedLoads=alphaSort(loads,"name");
-  const loadOptions=sortedLoads.map(l=>({ value:l.id, label:`${l.name} (${l.watt}W${l.threePhase?" 3ph":""})` }));
+  const loadOptions=sortedLoads.map(l=>({ value:l.id, label:`${l.name} (${l.watt||"?"}W${l.threePhase?" 3ph":""})` }));
 
   // Compute per-mainConn totals for header
   const mainConnTotals = mainConns.map(mc=>{
@@ -932,7 +938,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
                 if(l?.threePhase) phDisplay="L1+L2+L3";
                 else if(outlet&&isMulticore(outlet.connector)&&p.mcSlot) phDisplay=PHASES[(p.mcSlot-1)%3];
                 else if(outlet) phDisplay=outlet.phase||"—";
-                const amp=l?round2(l.watt/VOLT):"";
+                const amp=l&&l.watt?round2(l.watt/VOLT):"";
                 // Multicore slot options
                 const showMcSlot=outlet&&isMulticore(outlet.connector);
                 const mcOptions=showMcSlot?mcSlotOptions(outlet):[];
@@ -1072,7 +1078,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
    TAB: Verbraucher
 ══════════════════════════════════════════════════════════════════════════ */
 function LoadsTab({ loads,setLoads }) {
-  const add=()=>setLoads(s=>[{id:uid(),name:"Neuer Verbraucher",watt:100,threePhase:false},...s]);
+  const add=()=>setLoads(s=>[{id:uid(),name:"Neuer Verbraucher",watt:"",threePhase:false},...s]);
   const update=(id,patch)=>setLoads(s=>s.map(l=>l.id===id?{...l,...patch}:l));
   const remove=(id)=>setLoads(s=>s.filter(l=>l.id!==id));
   return (
@@ -1084,8 +1090,8 @@ function LoadsTab({ loads,setLoads }) {
           {loads.map(l=>(
             <tr key={l.id}>
               <td style={S.td}><input style={S.inputSm} value={l.name} onChange={e=>update(l.id,{name:e.target.value})}/></td>
-              <td style={S.td}><input type="number" style={{...S.inputSm,width:90}} value={l.watt} onChange={e=>update(l.id,{watt:+e.target.value})}/></td>
-              <td style={S.td}>{l.threePhase?`${round2(l.watt/VOLT)}/Ph`:round2(l.watt/VOLT)}</td>
+              <td style={S.td}><input type="number" style={{...S.inputSm,width:90}} value={l.watt} onChange={e=>update(l.id,{watt:e.target.value===""?"":+e.target.value})}/></td>
+              <td style={S.td}>{l.watt?(l.threePhase?`${round2(l.watt/VOLT)}/Ph`:round2(l.watt/VOLT)):""}</td>
               <td style={S.td}><input type="checkbox" checked={l.threePhase||false} onChange={e=>update(l.id,{threePhase:e.target.checked})}/></td>
               <td style={S.td}><button style={S.dangerBtn} onClick={()=>remove(l.id)}>✕</button></td>
             </tr>
@@ -1187,29 +1193,32 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
         });
         const rows=Object.values(counts).sort((a,b)=>a.load.name.localeCompare(b.load.name,"de",{numeric:true}));
         if(!rows.length) return null;
-        const totalW=rows.reduce((s,r)=>s+r.load.watt*r.count,0);
+        const totalW=rows.reduce((s,r)=>s+(r.load.watt||0)*r.count,0);
         return (
           <Section title="Verbraucher – Mengen nach Typ" subtitle="Alle platzierten Verbraucher, summiert nach Typ.">
             <table style={S.table}>
               <thead><tr>
-                <th style={S.th}>Verbraucher</th><th style={S.th}>Menge</th>
-                <th style={S.th}>W / Stk.</th><th style={S.th}>Gesamt W</th><th style={S.th}>3-Ph</th>
+                <th style={S.th}>Verbraucher</th>
+                <th style={{...S.th,textAlign:"right"}}>Menge</th>
+                <th style={{...S.th,textAlign:"right"}}>W / Stk.</th>
+                <th style={{...S.th,textAlign:"right"}}>Gesamt W</th>
+                <th style={S.th}>3-Ph</th>
               </tr></thead>
               <tbody>
                 {rows.map(r=>(
                   <tr key={r.load.id}>
                     <td style={S.td}>{r.load.name}</td>
-                    <td style={{...S.td,fontWeight:700}}>{r.count}×</td>
-                    <td style={S.td}>{r.load.watt} W</td>
-                    <td style={{...S.td,fontWeight:600}}>{r.load.watt*r.count} W</td>
+                    <td style={{...S.td,fontWeight:700,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{r.count}</td>
+                    <td style={{...S.td,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{r.load.watt||"–"} W</td>
+                    <td style={{...S.td,fontWeight:600,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{(r.load.watt||0)*r.count} W</td>
                     <td style={S.td}>{r.load.threePhase?"3ph":""}</td>
                   </tr>
                 ))}
                 <tr style={{borderTop:`2px solid #3a424c`}}>
                   <td style={{...S.td,fontWeight:700}}>Gesamt</td>
-                  <td style={{...S.td,fontWeight:700}}>{rows.reduce((s,r)=>s+r.count,0)}×</td>
+                  <td style={{...S.td,fontWeight:700,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{rows.reduce((s,r)=>s+r.count,0)}</td>
                   <td style={S.td}></td>
-                  <td style={{...S.td,fontWeight:700,color:"#f5a623"}}>{totalW} W</td>
+                  <td style={{...S.td,fontWeight:700,textAlign:"right",fontVariantNumeric:"tabular-nums",color:"#f5a623"}}>{totalW} W</td>
                   <td style={S.td}></td>
                 </tr>
               </tbody>
@@ -1227,7 +1236,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
           const lc={};
           pl.forEach(p=>{ const l=loadById[p.loadId]; if(!l) return; if(!lc[p.loadId]) lc[p.loadId]={load:l,count:0}; lc[p.loadId].count++; });
           const rows=Object.values(lc).sort((a,b)=>a.load.name.localeCompare(b.load.name,"de",{numeric:true}));
-          return {inst,rows,totalW:rows.reduce((s,r)=>s+r.load.watt*r.count,0)};
+          return {inst,rows,totalW:rows.reduce((s,r)=>s+(r.load.watt||0)*r.count,0)};
         }).filter(Boolean);
         if(!boxRows.length) return null;
         return (
@@ -1241,15 +1250,18 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
                 </div>
                 <table style={{...S.table,marginBottom:0}}>
                   <thead><tr>
-                    <th style={S.th}>Verbraucher</th><th style={S.th}>Menge</th><th style={S.th}>W / Stk.</th><th style={S.th}>Gesamt W</th>
+                    <th style={S.th}>Verbraucher</th>
+                    <th style={{...S.th,textAlign:"right"}}>Menge</th>
+                    <th style={{...S.th,textAlign:"right"}}>W / Stk.</th>
+                    <th style={{...S.th,textAlign:"right"}}>Gesamt W</th>
                   </tr></thead>
                   <tbody>
                     {rows.map(r=>(
                       <tr key={r.load.id}>
                         <td style={S.td}>{r.load.name}</td>
-                        <td style={{...S.td,fontWeight:700}}>{r.count}×</td>
-                        <td style={S.td}>{r.load.watt} W</td>
-                        <td style={{...S.td,fontWeight:600}}>{r.load.watt*r.count} W</td>
+                        <td style={{...S.td,fontWeight:700,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{r.count}</td>
+                        <td style={{...S.td,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{r.load.watt||"–"} W</td>
+                        <td style={{...S.td,fontWeight:600,textAlign:"right",fontVariantNumeric:"tabular-nums"}}>{(r.load.watt||0)*r.count} W</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1290,7 +1302,7 @@ function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,m
   const edges=instances.filter(i=>i.parentId&&positions[i.id]&&positions[i.parentId]).map(inst=>{ const from=positions[inst.parentId],to=positions[inst.id]; return {x1:from.x+NODE_W,y1:from.y+NODE_H/2,x2:to.x,y2:to.y+NODE_H/2,inst}; });
 
   return (
-    <Section title="Schaltbild" subtitle="Grün = OK · Orange = >80% · Rot = Überlast · ⚡ = Unterdimensioniert. Zahlen = Gesamtlast inkl. aufgesteckter Kästen.">
+    <Section title="Schaltbild" subtitle="Grün = OK · Orange = >80% · Rot = Überlast · Unterdim. = Unterdimensioniert. Zahlen = Gesamtlast inkl. aufgesteckter Kästen.">
       <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"75vh",background:"#1b2026",borderRadius:8,padding:12}}>
         <svg width={svgW} height={svgH} style={{display:"block",minWidth:svgW}}>
           {/* Hauptanschluss boxes */}
@@ -1325,35 +1337,41 @@ function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,m
           {/* Nodes */}
           {instances.map(inst=>{ const pos=positions[inst.id]; if(!pos) return null;
             const type=boxTypeById[inst.typeId]; const t=totalLoad(inst.id); const maxA=type?.feedAmp||0;
-            const peak=Math.max(t.L1,t.L2,t.L3); const pct=maxA?Math.round((peak/maxA)*100):0;
+            // Effektiver Max-Strom: Anschluss-Ampere des übergeordneten Abgangs (wenn vorhanden)
+            const parentInstN=inst.parentId?instById[inst.parentId]:null;
+            const parentTypeN=parentInstN?boxTypeById[parentInstN.typeId]:null;
+            const parentOutletN=parentTypeN?.outlets.find(o=>o.id===inst.parentOutletId);
+            const effectiveMaxA=parentOutletN?parentOutletN.amp:maxA;
+            const peak=Math.max(t.L1,t.L2,t.L3); const pct=effectiveMaxA?Math.round((peak/effectiveMaxA)*100):0;
             const col=nodeColor(inst); const conn=type?(CONN[type.feedConnector]?.label||""):"";
+            const isUnderdim=isUnderdimensioned(inst.id);
             return (
               <g key={inst.id} transform={`translate(${pos.x},${pos.y})`}>
                 <rect width={NODE_W} height={NODE_H} rx={8} fill="#252b33" stroke={col} strokeWidth={2}/>
                 <rect width={NODE_W} height={22} rx={8} fill={col} opacity={0.9}/>
                 <rect y={14} width={NODE_W} height={8} fill={col} opacity={0.9}/>
-                <text x={NODE_W/2} y={15} textAnchor="middle" fill="#fff" fontSize={11} fontWeight="bold">{inst.name.length>22?inst.name.slice(0,20)+"…":inst.name}</text>
-                {isUnderdimensioned(inst.id)&&(
-                  <g><title>{`Unterdimensioniert: Kasten-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) > Anschluss-Ampere`}</title>
-                    <text x={NODE_W-5} y={15} textAnchor="end" fill="#f5a623" fontSize={12} fontWeight="bold">⚡</text>
+                <text x={isUnderdim||isAdapted(inst.id)?NODE_W/2-18:NODE_W/2} y={15} textAnchor="middle" fill="#fff" fontSize={11} fontWeight="bold">{inst.name.length>20?inst.name.slice(0,18)+"…":inst.name}</text>
+                {isUnderdim&&(
+                  <g><title>{`Unterdimensioniert: Kasten-Eingang (${type?.feedAmp}A) > Anschluss-Ampere (${parentOutletN?.amp||"?"}A)`}</title>
+                    <text x={NODE_W-5} y={15} textAnchor="end" fill="#f5a623" fontSize={8} fontWeight="bold">Unterdim.</text>
                   </g>
                 )}
-                {!isUnderdimensioned(inst.id)&&isAdapted(inst.id)&&(
+                {!isUnderdim&&isAdapted(inst.id)&&(
                   <g><title>Adapter: Steckertyp des Kastens stimmt nicht mit Anschluss überein</title>
                     <text x={NODE_W-5} y={15} textAnchor="end" fill="#a78bfa" fontSize={12} fontWeight="bold">🔌</text>
                   </g>
                 )}
                 <text x={6}       y={34} fill="#9aa4af" fontSize={9}>{conn}</text>
-                <text x={NODE_W-6} y={34} textAnchor="end" fill="#9aa4af" fontSize={9}>max {maxA}A</text>
+                <text x={NODE_W-6} y={34} textAnchor="end" fill={isUnderdim?"#f5a623":"#9aa4af"} fontSize={9}>max {effectiveMaxA}A</text>
                 {PHASES.map((ph,pi)=>(
                   <g key={ph} transform={`translate(${pi*(NODE_W/3)},36)`}>
                     <text x={NODE_W/6} y={13} textAnchor="middle" fill="#666" fontSize={9}>{ph}</text>
                     <text x={NODE_W/6} y={25} textAnchor="middle" fill="#e8eaed" fontSize={11} fontWeight="700">{round2(t[ph])}</text>
                   </g>
                 ))}
-                {maxA>0&&(<>
+                {effectiveMaxA>0&&(<>
                   <rect x={6} y={NODE_H-10} width={NODE_W-12} height={5} rx={2} fill="#1b2026"/>
-                  <rect x={6} y={NODE_H-10} width={Math.min((NODE_W-12)*(peak/maxA),NODE_W-12)} height={5} rx={2} fill={col}/>
+                  <rect x={6} y={NODE_H-10} width={Math.min((NODE_W-12)*(peak/effectiveMaxA),NODE_W-12)} height={5} rx={2} fill={col}/>
                   <text x={NODE_W-6} y={NODE_H-3} textAnchor="end" fill={col} fontSize={8}>{pct}%</text>
                 </>)}
               </g>
@@ -1690,11 +1708,11 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                   {SICHT_ITEMS.map((item,idx)=>{
                     const v=sicht[idx];
                     return (
-                      <div key={idx} style={{display:"flex",alignItems:"center",gap:7,background:"#1b2026",borderRadius:5,padding:"5px 8px",border:`1px solid ${LINE}`}}>
-                        <button onClick={()=>cycleSicht(inst.id,idx)} title={v===true?"OK – klicken zum Zurücksetzen":"Nicht eingetragen – klicken für OK"} style={{width:22,height:22,borderRadius:4,border:`2px solid ${v===true?"#2ecc71":"#3a424c"}`,cursor:"pointer",fontWeight:700,fontSize:12,flexShrink:0,background:v===true?"#1a5c2e":"transparent",color:v===true?"#2ecc71":"#555",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                      <div key={idx} onClick={()=>cycleSicht(inst.id,idx)} title={v===true?"OK – klicken zum Zurücksetzen":"Nicht eingetragen – klicken für OK"} style={{display:"flex",alignItems:"center",gap:7,background:v===true?"rgba(26,92,46,0.35)":"#1b2026",borderRadius:5,padding:"5px 8px",border:`1px solid ${v===true?"#2ecc71":LINE}`,cursor:"pointer",userSelect:"none",transition:"background .1s"}}>
+                        <div style={{width:22,height:22,borderRadius:4,border:`2px solid ${v===true?"#2ecc71":"#3a424c"}`,fontWeight:700,fontSize:12,flexShrink:0,background:v===true?"#1a5c2e":"transparent",color:v===true?"#2ecc71":"#555",display:"flex",alignItems:"center",justifyContent:"center"}}>
                           {v===true?"✓":""}
-                        </button>
-                        <span style={{fontSize:11,color:"#e8eaed"}}>{item}</span>
+                        </div>
+                        <span style={{fontSize:11,color:v===true?"#2ecc71":"#e8eaed"}}>{item}</span>
                       </div>
                     );
                   })}
@@ -1744,7 +1762,11 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                             <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{outlet.protection} {outlet.breaker}</td>
                             <td style={S.td}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80}} value={or.rcdIan||""} onChange={e=>updOR(inst.id,outlet.id,{rcdIan:e.target.value})}/></td>
                             <td style={cellBg(okT)}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okT)}} value={or.rcdT1||""} onChange={e=>updOR(inst.id,outlet.id,{rcdT1:e.target.value})}/></td>
-                            <td style={{...S.td,textAlign:"center"}}><input type="checkbox" checked={or.ok||false} onChange={e=>updOR(inst.id,outlet.id,{ok:e.target.checked})}/></td>
+                            <td style={{...S.td,textAlign:"center"}}>
+                              <button onClick={()=>updOR(inst.id,outlet.id,{ok:!or.ok})} title={or.ok?"OK – klicken zum Zurücksetzen":"Nicht OK – klicken für OK"} style={{width:22,height:22,borderRadius:4,border:`2px solid ${or.ok?"#2ecc71":"#3a424c"}`,cursor:"pointer",fontWeight:700,fontSize:12,background:or.ok?"#1a5c2e":"transparent",color:or.ok?"#2ecc71":"#555",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                                {or.ok?"✓":""}
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
