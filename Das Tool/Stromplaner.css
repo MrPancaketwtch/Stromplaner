@@ -1,0 +1,48 @@
+/* ── Stromplaner – Global CSS ─────────────────────────────────────────────
+   Wird vom build.js statisch in <head> injiziert.
+   Dynamische Werte (Farben) als CSS Custom Properties:          */
+
+:root {
+  --sp-accent: #f5a623;
+  --sp-dark:   #1c2127;
+  --sp-panel:  #252b33;
+  --sp-line:   #3a424c;
+  --sp-bg:     #15191e;
+}
+
+/* Reset */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--sp-bg); }
+
+/* Focus */
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--sp-accent);
+  outline-offset: -1px;
+}
+
+/* Buttons */
+button:hover { filter: brightness(1.1); }
+button:active { filter: brightness(0.95); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--sp-line); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #4a5563; }
+
+/* Utility classes */
+.sp-norm-hint {
+  font-size: 10px;
+  color: #7c8794;
+  margin-top: 2px;
+  display: block;
+}
+.sp-section-label {
+  font-size: 11px;
+  color: #9aa4af;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 6px;
+}
+.sp-tabular { font-variant-numeric: tabular-nums; }

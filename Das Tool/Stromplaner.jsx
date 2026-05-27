@@ -601,7 +601,6 @@ export default function App() {
 
   return (
     <div style={S.app}>
-      <style>{CSS}</style>
       <header style={S.header}>
         <div style={S.logo}>⚡ STROMPLANER</div>
         <div style={S.headerMeta}>{meta.production} · v{meta.version} · {meta.date}</div>
@@ -618,18 +617,33 @@ export default function App() {
         ))}
       </nav>
       <main style={S.main}>
-        {tab==="config"   && <ConfigTab   {...sharedProps} meta={meta} setMeta={setMeta} boxTypes={boxTypes}
+        {/* Alle Tabs bleiben gemountet – nur CSS display:none beim Verstecken */}
+        <div style={{display:tab==="config"?"block":"none"}}>
+          <ConfigTab {...sharedProps} meta={meta} setMeta={setMeta} boxTypes={boxTypes}
             addInstance={addInstance} removeInstance={removeInstance} updateInstance={updateInstance}
             setParentWithValidation={setParentWithValidation}
-            mainConns={mainConns} addMainConn={addMainConn} updateMainConn={updateMainConn} removeMainConn={removeMainConn} />}
-        {tab==="plan"     && <PlanTab     {...sharedProps} loads={loads} loadById={loadById}
+            mainConns={mainConns} addMainConn={addMainConn} updateMainConn={updateMainConn} removeMainConn={removeMainConn} />
+        </div>
+        <div style={{display:tab==="plan"?"block":"none"}}>
+          <PlanTab {...sharedProps} loads={loads} loadById={loadById}
             placements={placements} addPlacement={addPlacement} addPlacementsFilled={addPlacementsFilled} updatePlacement={updatePlacement} removePlacement={removePlacement}
-            activePlan={activePlan} setActivePlan={setActivePlan} ownLoad={ownLoad} meta={meta} />}
-        {tab==="overview" && <OverviewTab {...sharedProps} meta={meta} placements={placements} loads={loads} loadById={loadById} />}
-        {tab==="schematic"&& <SchematicTab {...sharedProps} meta={meta} />}
-        {tab==="boxtypes" && <BoxTypesTab  boxTypes={boxTypes} setBoxTypes={setBoxTypes} instances={instances} />}
-        {tab==="loads"       && <LoadsTab       loads={loads} setLoads={setLoads} />}
-        {tab==="inspection"  && <InspectionTab  {...sharedProps} meta={meta} placements={placements} loadById={loadById} inspMeta={inspMeta} setInspMeta={setInspMeta} inspResults={inspResults} setInspResults={setInspResults} />}
+            activePlan={activePlan} setActivePlan={setActivePlan} ownLoad={ownLoad} meta={meta} />
+        </div>
+        <div style={{display:tab==="overview"?"block":"none"}}>
+          <OverviewTab {...sharedProps} meta={meta} placements={placements} loads={loads} loadById={loadById} />
+        </div>
+        <div style={{display:tab==="schematic"?"block":"none"}}>
+          <SchematicTab {...sharedProps} meta={meta} />
+        </div>
+        <div style={{display:tab==="boxtypes"?"block":"none"}}>
+          <BoxTypesTab boxTypes={boxTypes} setBoxTypes={setBoxTypes} instances={instances} />
+        </div>
+        <div style={{display:tab==="loads"?"block":"none"}}>
+          <LoadsTab loads={loads} setLoads={setLoads} />
+        </div>
+        <div style={{display:tab==="inspection"?"block":"none"}}>
+          <InspectionTab {...sharedProps} meta={meta} placements={placements} loadById={loadById} inspMeta={inspMeta} setInspMeta={setInspMeta} inspResults={inspResults} setInspResults={setInspResults} />
+        </div>
       </main>
     </div>
   );
@@ -1014,9 +1028,30 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
   const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,outlets:[]},...s]); setOpenId(id); };
   const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Kasten-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Kasten-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
+
+  const exportBoxTypes=()=>{
+    const blob=new Blob([JSON.stringify({_format:"stromplaner-boxtypes",boxTypes},null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="Kasten-Typen.json"; a.click(); URL.revokeObjectURL(url);
+  };
+  const importBoxTypes=(e)=>{
+    const file=e.target.files?.[0]; if(!file) return;
+    const r=new FileReader(); r.onload=(ev)=>{
+      try {
+        const d=JSON.parse(ev.target.result);
+        if(d._format!=="stromplaner-boxtypes"&&d._format!=="stromplaner"){ alert("Kein gültiger Kasten-Typen-Export."); return; }
+        const imported=(d.boxTypes||[]).map(migrateBoxType);
+        setBoxTypes(s=>{ const ids=new Set(s.map(b=>b.id)); const neu=imported.filter(b=>!ids.has(b.id)); alert(`${neu.length} Kasten-Typen hinzugefügt.`); return alphaSort([...neu,...s],"name"); });
+      } catch(err){ alert("Fehler: "+err.message); }
+    }; r.readAsText(file); e.target.value="";
+  };
+
   return (
     <Section title="Kasten-Typen" subtitle="Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
-      <button style={S.primaryBtn} onClick={addType}>+ Neuen Kasten-Typ</button>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
+        <button style={S.primaryBtn} onClick={addType}>+ Neuen Kasten-Typ</button>
+        <button style={S.ghostBtn} onClick={exportBoxTypes}>⬇ Exportieren</button>
+        <label style={S.ghostBtn}>↥ Importieren<input type="file" accept=".json" onChange={importBoxTypes} style={{display:"none"}}/></label>
+      </div>
       <div style={{marginTop:16}}>
         {boxTypes.map(b=>(
           <div key={b.id} style={S.card}>
@@ -1093,9 +1128,30 @@ function LoadsTab({ loads,setLoads }) {
   const add=()=>setLoads(s=>[{id:uid(),name:"Neuer Verbraucher",watt:"",threePhase:false},...s]);
   const update=(id,patch)=>setLoads(s=>s.map(l=>l.id===id?{...l,...patch}:l));
   const remove=(id)=>setLoads(s=>s.filter(l=>l.id!==id));
+
+  const exportLoads=()=>{
+    const blob=new Blob([JSON.stringify({_format:"stromplaner-loads",loads},null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="Verbraucher.json"; a.click(); URL.revokeObjectURL(url);
+  };
+  const importLoads=(e)=>{
+    const file=e.target.files?.[0]; if(!file) return;
+    const r=new FileReader(); r.onload=(ev)=>{
+      try {
+        const d=JSON.parse(ev.target.result);
+        if(d._format!=="stromplaner-loads"&&d._format!=="stromplaner"){ alert("Kein gültiger Verbraucher-Export."); return; }
+        const imported=(d.loads||[]);
+        setLoads(s=>{ const ids=new Set(s.map(l=>l.id)); const neu=imported.filter(l=>!ids.has(l.id)).map(l=>({...l,threePhase:l.threePhase||false})); alert(`${neu.length} Verbraucher hinzugefügt.`); return [...neu,...s]; });
+      } catch(err){ alert("Fehler: "+err.message); }
+    }; r.readAsText(file); e.target.value="";
+  };
+
   return (
     <Section title="Verbraucher-Stammdaten" subtitle="3-phasige Verbraucher werden gleichmäßig auf L1/L2/L3 verteilt und können nur auf CEE-Rot / Powerlock Anschlüsse gesteckt werden.">
-      <button style={S.primaryBtn} onClick={add}>+ Verbraucher</button>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
+        <button style={S.primaryBtn} onClick={add}>+ Verbraucher</button>
+        <button style={S.ghostBtn} onClick={exportLoads}>⬇ Exportieren</button>
+        <label style={S.ghostBtn}>↥ Importieren<input type="file" accept=".json" onChange={importLoads} style={{display:"none"}}/></label>
+      </div>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Name</th><th style={S.th}>W</th><th style={S.th}>A</th><th style={S.th}>3-phasig</th><th style={S.th}></th></tr></thead>
         <tbody>
@@ -1939,4 +1995,4 @@ const S={
   dropdownItem:     {padding:"6px 8px",borderRadius:4,cursor:"pointer",fontSize:13,color:"#e8eaed"},
   dropdownItemActive:{background:ACCENT,color:"#1c2127",fontWeight:600},
 };
-const CSS=`*{box-sizing:border-box}body{margin:0}input:focus,select:focus{outline:2px solid ${ACCENT};outline-offset:-1px}button:hover{filter:brightness(1.1)}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:${LINE};border-radius:4px}div[style*="cursor: pointer"]:hover,div[style*='cursor: pointer']:hover{filter:brightness(1.05)}`;
+// CSS wird vom build.js als statische <style>-Datei injiziert (Stromplaner.css)
