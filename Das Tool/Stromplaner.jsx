@@ -35,7 +35,7 @@ const CONN_FAMILY = {
 };
 
 const BREAKER_TYPES    = ["B","C","D","K"];
-const PROTECTION_TYPES = ["LS","RCD","RCBO"];
+const PROTECTION_TYPES = ["LS","RCBO","Keine"];
 
 const is3ph        = (c) => (CONN[c]?.phases||1)===3;
 const isMulticore  = (c) => !!CONN[c]?.isMulticore;
@@ -54,11 +54,28 @@ const migrateOutlet = (o, idx) => ({
   ...o,
   phase:      o.phase      || (is3ph(o.connector) ? "L1L2L3" : PHASES[idx%3]),
   breaker:    o.breaker    || "C",
-  protection: o.protection || (o.connector==="SCHUKO"||o.connector==="MC" ? "RCBO" : "LS"),
+  protection: (o.protection==="RCD") ? "Keine" : (o.protection || (o.connector==="SCHUKO"||o.connector==="MC" ? "RCBO" : "LS")),
+  rcdId:      o.rcdId ?? null,
   // Multicore: number of slots (default 6 if not set)
   mcSlots:    isMulticore(o.connector) ? (o.mcSlots||6) : undefined,
 });
-const migrateBoxType = (bt) => ({ ...bt, outlets: bt.outlets.map((o,i)=>migrateOutlet(o,i)) });
+const migrateBoxType = (bt) => {
+  // Auto-migrate: old protection:"RCD" outlets → RCD-group object + protection:"Keine"
+  let rcds = bt.rcds ? [...bt.rcds] : [];
+  const rcdMigMap = {};
+  bt.outlets.forEach(o => {
+    if (o.protection === "RCD" && !o.rcdId) {
+      const newId = uid();
+      rcds.push({ id: newId, label: o.label + " RCD", mA: 30 });
+      rcdMigMap[o.id] = newId;
+    }
+  });
+  const outlets = bt.outlets.map((o,i) => {
+    const extra = rcdMigMap[o.id] ? { rcdId: rcdMigMap[o.id] } : {};
+    return migrateOutlet({...o,...extra}, i);
+  });
+  return { ...bt, rcds, outlets };
+};
 const migrateInstance = (i) => ({ mainConnectionId: null, ...i });
 
 /* ── Defaults ───────────────────────────────────────────────────────────── */
@@ -1024,10 +1041,19 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
       })};
     }));
   };
-  const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Anschluss ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO"}]}));
+  const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Anschluss ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdId:null}]}));
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
-  const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,outlets:[]},...s]); setOpenId(id); };
+  const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,rcds:[],outlets:[]},...s]); setOpenId(id); };
   const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Kasten-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Kasten-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
+  const addRcd=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:[...(b.rcds||[]),{id:uid(),label:"RCD",mA:30}]}));
+  const updateRcd=(boxId,rcdId,patch)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:(b.rcds||[]).map(r=>r.id===rcdId?{...r,...patch}:r)}));
+  const removeRcd=(boxId,rcdId)=>{
+    if(!confirm("RCD-Gruppe loeschen? Zugeordnete Anschluesse verlieren ihre RCD-Zuordnung."))return;
+    setBoxTypes(s=>s.map(b=>{
+      if(b.id!==boxId) return b;
+      return {...b,rcds:(b.rcds||[]).filter(r=>r.id!==rcdId),outlets:b.outlets.map(o=>o.rcdId===rcdId?{...o,rcdId:null}:o)};
+    }));
+  };
 
   const exportBoxTypes=()=>{
     const blob=new Blob([JSON.stringify({_format:"stromplaner-boxtypes",boxTypes},null,2)],{type:"application/json"});
@@ -1073,11 +1099,31 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                 <div style={{textAlign:"right",marginTop:4}}>
                   <button style={S.dangerBtnWide} onClick={()=>removeType(b.id)}>Löschen</button>
                 </div>
+
+                {/* RCD-Gruppen */}
+                <div style={{marginTop:12,marginBottom:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
+                  <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 8px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCD-Gruppen</p>
+                  {(b.rcds||[]).length===0
+                    ? <p style={{...S.hint,margin:"0 0 6px"}}>Keine RCD-Gruppen — Anschlüsse werden nur per LS / RCBO geschützt.</p>
+                    : <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                        {(b.rcds||[]).map(rcd=>(
+                          <div key={rcd.id} style={{display:"flex",gap:4,alignItems:"center",background:"#252b33",border:"1px solid #3a424c",borderRadius:5,padding:"4px 6px"}}>
+                            <input style={{...S.inputSm,width:120}} value={rcd.label} placeholder="Bezeichnung" onChange={e=>updateRcd(b.id,rcd.id,{label:e.target.value})}/>
+                            <input type="number" min={10} max={500} style={{...S.inputSm,width:58}} value={rcd.mA} onChange={e=>updateRcd(b.id,rcd.id,{mA:+e.target.value})}/>
+                            <span style={{fontSize:10,color:"#7c8794",whiteSpace:"nowrap"}}>mA</span>
+                            <button style={S.dangerBtn} onClick={()=>removeRcd(b.id,rcd.id)}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                  }
+                  <button style={S.secondaryBtn} onClick={()=>addRcd(b.id)}>+ RCD hinzufügen</button>
+                </div>
+
                 <div style={{overflowX:"auto"}}>
                 <table style={S.table}>
                   <thead><tr>
                     <th style={S.th}>Name / Steckplatz</th><th style={S.th}>Stecker</th><th style={S.th}>A</th>
-                    <th style={S.th}>Phase</th><th style={S.th}>Steckplätze*</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}></th>
+                    <th style={S.th}>Phase</th><th style={S.th}>Steckpl.*</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}>RCD-Gruppe</th><th style={S.th}></th>
                   </tr></thead>
                   <tbody>
                     {b.outlets.map(o=>(
@@ -1102,8 +1148,16 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                             <input type="number" min={1} max={48} style={{...S.inputSm,width:55}} value={o.mcSlots||6} onChange={e=>updateOutlet(b.id,o.id,{mcSlots:+e.target.value})}/>:
                             <span style={{color:"#555",fontSize:11}}>—</span>}
                         </td>
-                        <td style={S.td}>{o.protection==="RCD" ? <span style={{color:"#555",fontSize:11}}>—</span> : <select style={{...S.selectSm,width:55}} value={o.breaker||"C"} onChange={e=>updateOutlet(b.id,o.id,{breaker:e.target.value})}>{BREAKER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select>}</td>
+                        <td style={S.td}><select style={{...S.selectSm,width:55}} value={o.breaker||"C"} onChange={e=>updateOutlet(b.id,o.id,{breaker:e.target.value})}>{BREAKER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></td>
                         <td style={S.td}><select style={{...S.selectSm,width:70}} value={o.protection||"LS"} onChange={e=>updateOutlet(b.id,o.id,{protection:e.target.value})}>{PROTECTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></td>
+                        <td style={S.td}>
+                          {(b.rcds||[]).length>0
+                            ? <select style={{...S.selectSm,width:100}} value={o.rcdId||""} onChange={e=>updateOutlet(b.id,o.id,{rcdId:e.target.value||null})}>
+                                <option value="">— kein —</option>
+                                {(b.rcds||[]).map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+                              </select>
+                            : <span style={{color:"#555",fontSize:11}}>—</span>}
+                        </td>
                         <td style={S.td}><button style={S.dangerBtn} onClick={()=>removeOutlet(b.id,o.id)}>✕</button></td>
                       </tr>
                     ))}
@@ -1565,7 +1619,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const outlets=type?sortOutlets(type.outlets):[];
       totalPunkte+=(ir.sicht||[]).filter(v=>v!==null).length;
       if(ir.bemerkung) totalMangel++;
-      outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO").forEach(o=>{if(getOR(inst.id,o.id).rcdT1!=="")totalRCD++;});
+      (type?.rcds||[]).forEach(rcd=>{if(getOR(inst.id,`rcd_${rcd.id}`).rcdT1!=="")totalRCD++;});
+      outlets.filter(o=>o.protection==="RCBO").forEach(o=>{if(isMulticore(o.connector)){const sl=o.mcSlots||6;for(let s=1;s<=sl;s++){if(getOR(inst.id,`${o.id}_s${s}`).rcdT1!=="")totalRCD++;}}else{if(getOR(inst.id,o.id).rcdT1!=="")totalRCD++;}});
     });
 
     // ── Deckblatt ──────────────────────────────────────────────────────────
@@ -1606,12 +1661,12 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const outlets=type?sortOutlets(type.outlets):[];
       const ir=getIR(inst.id);
       const sicht=ir.sicht||Array(6).fill(null);
-      const rcdOutlets=outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO");
-      // Multicore-RCBO → je Steckplatz eine Zeile im PDF
+      // #16: RCD-Gruppen + RCBO im PDF
       const pdfRcdRows=[];
-      rcdOutlets.forEach(o=>{
-        if(isMulticore(o.connector)){const slots=o.mcSlots||6;for(let s=1;s<=slots;s++)pdfRcdRows.push({outlet:o,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`});}
-        else pdfRcdRows.push({outlet:o,oid:o.id,rowLabel:o.label});
+      (type?.rcds||[]).forEach(rcd=>pdfRcdRows.push({rowType:"rcd",rcd,outlet:null,oid:`rcd_${rcd.id}`,rowLabel:rcd.label,iAnLimit:rcd.mA,protLabel:`RCD ${rcd.mA} mA`}));
+      outlets.filter(o=>o.protection==="RCBO").forEach(o=>{
+        if(isMulticore(o.connector)){const slots=o.mcSlots||6;for(let s=1;s<=slots;s++)pdfRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`,iAnLimit:null,protLabel:`RCBO ${o.breaker} ${o.amp}A`});}
+        else pdfRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:o.id,rowLabel:o.label,iAnLimit:null,protLabel:`RCBO ${o.breaker} ${o.amp}A`});
       });
       const parent=inst.parentId?instById[inst.parentId]:null;
       const n=instIdx+1;
@@ -1664,8 +1719,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       </div></section>
     ${pdfRcdRows.length?`<section class="block"><header class="bar"><span><strong>${n}.4 · RCD-Prüfung</strong><span class="bar-sub">${pdfRcdRows.length} Stk.</span></span></header>
       <div class="block-body">
-        <div class="thead" style="grid-template-columns:1fr 80px 90px 90px 60px"><span>Anschluss</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">≤ I_Δn</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">≤ 300 ms</span></span><span class="r">OK</span></div>
-        ${pdfRcdRows.map(({outlet,oid,rowLabel},i)=>{const or=getOR(inst.id,oid);const okT=pdfChk(or.rcdT1,undefined,300);return`<div class="trow${i===pdfRcdRows.length-1?" row-last":""}" style="grid-template-columns:1fr 80px 90px 90px 60px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(outlet.protection)}</span><span class="r"><strong>${esc(or.rcdIan)||"–"}</strong></span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
+        <div class="thead" style="grid-template-columns:1fr 80px 100px 90px 60px"><span>Anschluss / RCD</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">&le; Nennwert</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">&le; 300 ms</span></span><span class="r">OK</span></div>
+        ${pdfRcdRows.map(({rowType,rcd,outlet,oid,rowLabel,iAnLimit,protLabel},i)=>{const or=getOR(inst.id,oid);const okT=pdfChk(or.rcdT1,undefined,300);const okIan=iAnLimit?pdfChk(or.rcdIan,undefined,iAnLimit):"";const bgStyle=rowType==="rcd"?"background:rgba(245,166,35,0.04);":"";return`<div class="trow${i===pdfRcdRows.length-1?" row-last":""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px 60px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan==="bad"?" bad":""}"><strong>${esc(or.rcdIan)||"–"}</strong>${iAnLimit?`<br><span class="muted" style="font-size:8px">&le; ${iAnLimit}&thinsp;mA</span>`:""}</span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
       </div></section>`:""}
     <section class="block"><header class="bar"><span><strong>${n}.${pdfRcdRows.length?5:4} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${outlets.length} Stk.</span></span></header>
       <div class="block-body">
@@ -1776,15 +1831,19 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const outlets   = type ? sortOutlets(type.outlets) : [];
           const ir        = getIR(inst.id);
           const sicht     = ir.sicht || Array(6).fill(null);
-          const rcdOutlets = outlets.filter(o=>o.protection==="RCD"||o.protection==="RCBO");
-          // #10: Multicore-RCBO → eine Zeile pro Steckplatz
+          // #16: RCD-Gruppen als eigene Zeilen, danach RCBO-Anschlüsse (Multicore expandiert)
+          const rcdGroups = type?.rcds || [];
+          const rcboOutlets = outlets.filter(o=>o.protection==="RCBO");
           const expandedRcdRows = [];
-          rcdOutlets.forEach(o=>{
+          rcdGroups.forEach(rcd=>{
+            expandedRcdRows.push({rowType:"rcd",rcd,outlet:null,oid:`rcd_${rcd.id}`,rowLabel:rcd.label,iAnLimit:rcd.mA,protLabel:`RCD ${rcd.mA} mA`});
+          });
+          rcboOutlets.forEach(o=>{
             if(isMulticore(o.connector)){
               const slots=o.mcSlots||6;
-              for(let s=1;s<=slots;s++) expandedRcdRows.push({outlet:o,slotNum:s,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`});
+              for(let s=1;s<=slots;s++) expandedRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`,iAnLimit:null,protLabel:`RCBO ${o.breaker} ${o.amp}A`});
             } else {
-              expandedRcdRows.push({outlet:o,slotNum:null,oid:o.id,rowLabel:o.label});
+              expandedRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:o.id,rowLabel:o.label,iAnLimit:null,protLabel:`RCBO ${o.breaker} ${o.amp}A`});
             }
           });
 
@@ -1842,21 +1901,25 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                   <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCD-Prüfung</p>
                   <table style={{...S.table,width:"100%"}}>
                     <thead><tr>
-                      <th style={S.th}>Anschluss</th>
+                      <th style={S.th}>Anschluss / RCD</th>
                       <th style={S.th}>Schutz</th>
-                      <th style={S.th}>I_An (mA)<br/><span style={S.normHint}>≤ I_Δn</span></th>
+                      <th style={S.th}>I_An (mA)<br/><span style={S.normHint}>≤ Nennwert</span></th>
                       <th style={S.th}>t_A (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>
                       <th style={S.th}>OK?</th>
                     </tr></thead>
                     <tbody>
-                      {expandedRcdRows.map(({outlet,oid,rowLabel})=>{
+                      {expandedRcdRows.map(({rowType,rcd,outlet,oid,rowLabel,iAnLimit,protLabel})=>{
                         const or=getOR(inst.id,oid);
                         const okT=chk(or.rcdT1,undefined,300);
+                        const okIan=iAnLimit?chk(or.rcdIan,undefined,iAnLimit):null;
                         return (
-                          <tr key={oid}>
-                            <td style={S.td}>{rowLabel}</td>
-                            <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{outlet.protection} {outlet.breaker}</td>
-                            <td style={S.td}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80}} value={or.rcdIan||""} onChange={e=>updOR(inst.id,oid,{rcdIan:e.target.value})}/></td>
+                          <tr key={oid} style={rowType==="rcd"?{background:"rgba(245,166,35,0.06)"}:{}}>
+                            <td style={S.td}><span style={rowType==="rcd"?{color:"#f5a623",fontWeight:600}:{}}>{rowLabel}</span></td>
+                            <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{protLabel}</td>
+                            <td style={cellBg(okIan)}>
+                              <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okIan)}} value={or.rcdIan||""} onChange={e=>updOR(inst.id,oid,{rcdIan:e.target.value})}/>
+                              {iAnLimit&&<span style={S.normHint}>&le; {iAnLimit}&thinsp;mA</span>}
+                            </td>
                             <td style={cellBg(okT)}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okT)}} value={or.rcdT1||""} onChange={e=>updOR(inst.id,oid,{rcdT1:e.target.value})}/></td>
                             <td style={{...S.td,textAlign:"center"}}>
                               <button onClick={()=>updOR(inst.id,oid,{ok:!or.ok})} title={or.ok?"OK – klicken zum Zurücksetzen":"Nicht OK – klicken für OK"} style={{width:22,height:22,borderRadius:4,border:`2px solid ${or.ok?"#2ecc71":"#3a424c"}`,cursor:"pointer",fontWeight:700,fontSize:12,background:or.ok?"#1a5c2e":"transparent",color:or.ok?"#2ecc71":"#555",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
