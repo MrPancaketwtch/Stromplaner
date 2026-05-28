@@ -37,6 +37,28 @@ const CONN_FAMILY = {
 const BREAKER_TYPES    = ["B","C","D","K"];
 const PROTECTION_TYPES = ["LS","RCBO","Keine"];
 
+/* ── Leitungsdimensionierung / Spannungsfall ────────────────────────────── */
+const KAPPA_CU     = 56;   // m/(Ω·mm²), Kupfer 20 °C
+const CABLE_CS_MM2 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150];
+// Strombelastbarkeit (A), Verlegemethode B2, Cu, PVC (DIN VDE 0298-4)
+const I_CAP_B2 = {1.5:15.5,2.5:19.5,4:26,6:34,10:46,16:61,25:80,35:99,50:119,70:151,95:182,120:210,150:240};
+
+const calcVoltDrop = (I, l, A, cosPhi, threePhase) => {
+  if(!+l||!+A||!+cosPhi) return null;
+  const fac = threePhase ? Math.sqrt(3) : 2;
+  const duV = fac * (+I) * (+l) * (+cosPhi) / (KAPPA_CU * (+A));
+  return { V: round2(duV), pct: round2(duV / 230 * 100) };
+};
+const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
+  if(!+l||!+cosPhi||!+I) return null;
+  const fac = threePhase ? Math.sqrt(3) : 2;
+  return round2(fac * (+I) * (+l) * (+cosPhi) / (KAPPA_CU * (maxPct/100) * 230));
+};
+const minCsCurrent = (I_N) => {
+  for(const cs of CABLE_CS_MM2){ if((I_CAP_B2[cs]||0) >= +I_N) return cs; }
+  return null;
+};
+
 const is3ph        = (c) => (CONN[c]?.phases||1)===3;
 const isMulticore  = (c) => !!CONN[c]?.isMulticore;
 const uid          = () => Math.random().toString(36).slice(2,9);
@@ -612,7 +634,7 @@ export default function App() {
   const TABS=[
     ["config","1 · Konfiguration"],["plan","2 · Steckplan"],
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
-    ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],
+    ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],["erweitert","Erweitert"],
   ];
   const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById };
 
@@ -630,7 +652,9 @@ export default function App() {
       </header>
       <nav style={S.nav}>
         {TABS.map(([k,label])=>(
-          <button key={k} style={{...S.navBtn,...(tab===k?S.navBtnActive:{})}} onClick={()=>setTab(k)}>{label}</button>
+          <button key={k}
+            style={{...S.navBtn,...(tab===k?S.navBtnActive:{}),...(k==="erweitert"?{color:tab===k?"#f5a623":"#c08030",borderColor:tab===k?"#f5a623":"transparent"}:{})}}
+            onClick={()=>setTab(k)}>{label}</button>
         ))}
       </nav>
       <main style={S.main}>
@@ -660,6 +684,9 @@ export default function App() {
         </div>
         <div style={{display:tab==="inspection"?"block":"none"}}>
           <InspectionTab {...sharedProps} meta={meta} placements={placements} loadById={loadById} inspMeta={inspMeta} setInspMeta={setInspMeta} inspResults={inspResults} setInspResults={setInspResults} />
+        </div>
+        <div style={{display:tab==="erweitert"?"block":"none"}}>
+          <ErweitertTab instances={instances} instById={instById} boxTypeById={boxTypeById} inspResults={inspResults} setInspResults={setInspResults}/>
         </div>
       </main>
     </div>
@@ -1521,6 +1548,128 @@ const SICHT_ITEMS = [
   "Basisschutz",
 ];
 
+/* ══════════════════════════════════════════════════════════════════════════
+   TAB: Erweitert – Leitungsdimensionierung & Spannungsfall
+══════════════════════════════════════════════════════════════════════════ */
+function ErweitertTab({ instances, instById, boxTypeById, inspResults, setInspResults }) {
+  const OR_DEF_L = {rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",cableLen:"",cableA:"",cosPhi:"0.95"};
+  const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...sv,outlets:sv.outlets||{}}; };
+  const getOR = (iid,oid) => ({...OR_DEF_L,...((getIR(iid).outlets||{})[oid]||{})});
+  const updOR = (iid,oid,patch) => {
+    const ir=getIR(iid);
+    setInspResults(s=>({...s,[iid]:{...ir,outlets:{...(ir.outlets||{}),[oid]:{...getOR(iid,oid),...patch}}}}));
+  };
+
+  // Topologische Sortierung (BFS, alphabetisch je Ebene)
+  const sorted = (()=>{
+    const result=[]; const visited=new Set();
+    const visit=(parentId)=>{
+      alphaSort(instances.filter(i=>i.parentId===parentId),"name").forEach(inst=>{
+        if(!visited.has(inst.id)){ visited.add(inst.id); result.push(inst); visit(inst.id); }
+      });
+    };
+    alphaSort(instances.filter(i=>!i.parentId),"name").forEach(inst=>{
+      if(!visited.has(inst.id)){ visited.add(inst.id); result.push(inst); visit(inst.id); }
+    });
+    return result;
+  })();
+
+  const LINE = "#3a424c";
+
+  if(sorted.length===0) return (
+    <Section title="Leitungsdimensionierung & Spannungsfall" subtitle="Querschnitt nach Stromtragfaehigkeit (B2, Cu, PVC) · Spannungsfall DIN VDE 0100-520">
+      <p style={{color:"#666",fontSize:13}}>Keine Kaesten aktiviert. Bitte zuerst im Tab &bdquo;Konfiguration&ldquo; Kaesten hinzufuegen.</p>
+    </Section>
+  );
+
+  return (
+    <Section title="Leitungsdimensionierung & Spannungsfall"
+             subtitle="Querschnitt nach Stromtragfaehigkeit (Vmethode B2, Cu, PVC, DIN VDE 0298-4) und delta-U &le; 3 % (DIN VDE 0100-520)">
+      {sorted.map(inst=>{
+        const type = boxTypeById[inst.typeId];
+        const outlets = type ? sortOutlets(type.outlets) : [];
+        if(!outlets.length) return null;
+        return (
+          <div key={inst.id} style={{marginBottom:18}}>
+            <p style={{fontSize:13,fontWeight:700,color:"#e8eaed",margin:"0 0 6px",display:"flex",alignItems:"center",gap:8}}>
+              <span style={{color:"#f5a623"}}>&#9679;</span> {inst.name}
+              <span style={{fontSize:11,fontWeight:400,color:"#9aa4af"}}>&nbsp;&mdash;&nbsp;{type?.name||"?"} &middot; {outlets.length} Abg.</span>
+            </p>
+            <div style={{overflowX:"auto"}}>
+              <table style={{...{borderCollapse:"collapse",width:"100%",fontSize:12}}}>
+                <thead>
+                  <tr style={{background:"#1b2026"}}>
+                    <th style={{padding:"5px 8px",textAlign:"left",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>Abgang</th>
+                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>I_N (A)</th>
+                    <th style={{padding:"5px 8px",textAlign:"left",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>&ell; (m)</th>
+                    <th style={{padding:"5px 8px",textAlign:"left",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>A (mm&sup2;)</th>
+                    <th style={{padding:"5px 8px",textAlign:"left",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>cos &phi;</th>
+                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>&Delta;U (V)</th>
+                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>&Delta;U (%)</th>
+                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>Min A&Delta;U</th>
+                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>Min A_I</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outlets.map((o,ri)=>{
+                    const or=getOR(inst.id,o.id);
+                    const du=calcVoltDrop(o.amp,or.cableLen,or.cableA,or.cosPhi,is3ph(o.connector));
+                    const minAdu=minCsVoltDrop(o.amp,or.cableLen,or.cosPhi,is3ph(o.connector));
+                    const minAi=minCsCurrent(o.amp);
+                    const duColor=du?(du.pct<=3?"#2ecc71":du.pct<=5?"#f5a623":"#e74c3c"):"#9aa4af";
+                    const rowBg=ri%2===0?"#1b2026":"#1f252c";
+                    const td={padding:"4px 8px",border:`1px solid ${LINE}`,background:rowBg,verticalAlign:"middle"};
+                    return (
+                      <tr key={o.id}>
+                        <td style={{...td,color:"#e8eaed",whiteSpace:"nowrap"}}>{o.label}</td>
+                        <td style={{...td,textAlign:"right",color:"#9aa4af",fontVariantNumeric:"tabular-nums"}}>{o.amp}</td>
+                        <td style={td}>
+                          <input type="number" min="0" step="0.5"
+                            style={{background:"#252b33",border:"1px solid #3a424c",borderRadius:4,color:"#e8eaed",padding:"3px 6px",width:70,fontSize:12}}
+                            value={or.cableLen} placeholder="–"
+                            onChange={e=>updOR(inst.id,o.id,{cableLen:e.target.value})}/>
+                        </td>
+                        <td style={td}>
+                          <select style={{background:"#252b33",border:"1px solid #3a424c",borderRadius:4,color:"#e8eaed",padding:"3px 4px",width:70,fontSize:12}}
+                            value={or.cableA||""} onChange={e=>updOR(inst.id,o.id,{cableA:e.target.value})}>
+                            <option value="">—</option>
+                            {CABLE_CS_MM2.map(cs=><option key={cs} value={cs}>{cs}</option>)}
+                          </select>
+                        </td>
+                        <td style={td}>
+                          <input type="number" step="0.05" min="0.5" max="1"
+                            style={{background:"#252b33",border:"1px solid #3a424c",borderRadius:4,color:"#e8eaed",padding:"3px 6px",width:60,fontSize:12}}
+                            value={or.cosPhi||"0.95"}
+                            onChange={e=>updOR(inst.id,o.id,{cosPhi:e.target.value})}/>
+                        </td>
+                        <td style={{...td,textAlign:"right",color:duColor,fontVariantNumeric:"tabular-nums"}}>
+                          {du ? du.V.toFixed(2)+" V" : "–"}
+                        </td>
+                        <td style={{...td,textAlign:"right",fontWeight:600,color:duColor,fontVariantNumeric:"tabular-nums"}}>
+                          {du ? du.pct.toFixed(2)+" %" : "–"}
+                        </td>
+                        <td style={{...td,textAlign:"right",color:"#9aa4af",fontVariantNumeric:"tabular-nums",fontSize:11}}>
+                          {minAdu!=null ? ">= "+minAdu+" mm²" : "–"}
+                        </td>
+                        <td style={{...td,textAlign:"right",color:"#9aa4af",fontSize:11}}>
+                          {minAi!=null ? minAi+" mm²" : "–"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
+      <p style={{fontSize:10,color:"#666",marginTop:16}}>
+        Berechnung: &Delta;U = (2 &times; I &times; &ell; &times; cos&phi;) / (&kappa; &times; A) [1-phasig] bzw. &radic;3-Faktor [3-phasig]; &kappa;(Cu) = 56 m/(&Omega;&middot;mm&sup2;); Verlegemethode B2
+      </p>
+    </Section>
+  );
+}
+
 function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnById, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults }) {
   const updMeta = (patch) => setInspMeta(s=>({...s,...patch}));
 
@@ -1528,7 +1677,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
   const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...IR_DEF,...sv,sicht:sv.sicht?[...sv.sicht]:[...IR_DEF.sicht],outlets:sv.outlets||{}}; };
   const updIR = (iid,patch) => setInspResults(s=>({...s,[iid]:{...getIR(iid),...patch}}));
 
-  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"" };
+  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",cableLen:"",cableA:"",cosPhi:"0.95" };
   const getOR = (iid,oid) => ({...OR_DEF,...((getIR(iid).outlets||{})[oid]||{})});
   const updOR = (iid,oid,patch) => {
     const ir=getIR(iid);
@@ -1686,6 +1835,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       let secIdx=4; // starts after Stammdaten(1), Sicht(2), Mess(3)
       const rcdSec=pdfRcdRows.length?secIdx++:0;
       const abgSec=secIdx++;
+      const cableRows=outlets.filter(o=>getOR(inst.id,o.id).cableLen!=="");
+      const cableSec=cableRows.length?secIdx++:0;
       const bemSec=ir.bemerkung?secIdx:0;
 
       pages+=`<article class="page">
@@ -1717,12 +1868,12 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.4</span>U N–PE</span><span class="r"><strong>${ir.voltNPE?esc(ir.voltNPE)+"&thinsp;V":"–"}</strong></span><span class="r muted">Spannungsfrei</span><span class="r">${badge(ckVNPE)}</span></div>
         <div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U L–PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE,ir.voltL2PE,ir.voltL3PE)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLPE)}</span></div>
       </div></section>
-    ${pdfRcdRows.length?`<section class="block"><header class="bar"><span><strong>${n}.4 · RCD-Prüfung</strong><span class="bar-sub">${pdfRcdRows.length} Stk.</span></span></header>
+    ${pdfRcdRows.length?`<section class="block"><header class="bar"><span><strong>${n}.${rcdSec} · RCD-Prüfung</strong><span class="bar-sub">${pdfRcdRows.length} Stk.</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:1fr 80px 100px 90px 60px"><span>Anschluss / RCD</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">&le; Nennwert</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">&le; 300 ms</span></span><span class="r">OK</span></div>
         ${pdfRcdRows.map(({rowType,rcd,outlet,oid,rowLabel,iAnLimit,protLabel},i)=>{const or=getOR(inst.id,oid);const okT=pdfChk(or.rcdT1,undefined,300);const okIan=iAnLimit?pdfChk(or.rcdIan,undefined,iAnLimit):"";const bgStyle=rowType==="rcd"?"background:rgba(245,166,35,0.04);":"";return`<div class="trow${i===pdfRcdRows.length-1?" row-last":""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px 60px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan==="bad"?" bad":""}"><strong>${esc(or.rcdIan)||"–"}</strong>${iAnLimit?`<br><span class="muted" style="font-size:8px">&le; ${iAnLimit}&thinsp;mA</span>`:""}</span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
       </div></section>`:""}
-    <section class="block"><header class="bar"><span><strong>${n}.${pdfRcdRows.length?5:4} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${outlets.length} Stk.</span></span></header>
+    <section class="block"><header class="bar"><span><strong>${n}.${abgSec} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${outlets.length} Stk.</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:65px 1fr 80px 95px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
         ${outlets.map((o,i)=>{
@@ -1739,7 +1890,12 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           return `<div class="trow${i===outlets.length-1?" row-last":""}" style="grid-template-columns:65px 1fr 80px 95px 55px"><span class="id">${esc(o.label)}</span><span class="ell">${esc(lbl)}</span><span class="r">${or.zs?esc(or.zs)+" Ω":"–"}</span><span class="r"><strong>${or.ik?esc(or.ik)+" A":"–"}</strong><br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
         }).join("")}
       </div></section>
-    ${ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${pdfRcdRows.length?6:5} · Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere||"bad")==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="bad">✕ Mangel</span>`}</span></header>
+    ${cableRows.length?`<section class="block"><header class="bar"><span><strong>${n}.${cableSec} · Leitungen &amp; Spannungsfall</strong><span class="bar-sub">${cableRows.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span>Abgang</span><span class="r">I_N</span><span class="r">&ell; (m)</span><span class="r">A (mm&sup2;)</span><span class="r">&Delta;U (V)</span><span class="r">&Delta;U (%)</span><span class="r">Befund</span></div>
+        ${cableRows.map((o,i)=>{const or=getOR(inst.id,o.id);const du=calcVoltDrop(o.amp,or.cableLen,or.cableA,or.cosPhi,is3ph(o.connector));const befund=du?(du.pct<=3?"ok":du.pct<=5?"warn":"bad"):"";return`<div class="trow${i===cableRows.length-1?" row-last":""}" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span class="id">${esc(o.label)}</span><span class="r muted">${o.amp}A</span><span class="r">${esc(or.cableLen)||"–"}&thinsp;m</span><span class="r">${esc(or.cableA)||"–"}&thinsp;mm&sup2;</span><span class="r">${du?du.V.toFixed(2)+"&thinsp;V":"–"}</span><span class="r${du&&du.pct>5?" bad":du&&du.pct>3?" warn":""}"><strong>${du?du.pct.toFixed(2)+"&thinsp;%":"–"}</strong></span><span class="r">${badge(befund)}</span></div>`;}).join("")}
+      </div></section>`:""}
+    ${ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${bemSec} · Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere||"bad")==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="bad">✕ Mangel</span>`}</span></header>
       <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere||"bad")==="warn"?"":" row-bad"}">${esc(ir.bemerkung)}</div></div></section>`:""}
   </main>
   <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pageNum} / ${totalPages}</span></footer>
