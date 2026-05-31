@@ -1739,8 +1739,10 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
       const outlet=parentType?.outlets.find(o=>o.id===inst.parentOutletId);
       const y1=outletAbsY(inst.parentId, inst.parentOutletId);
       const toPos=positions[inst.id];
+      // y2 = Mitte der Einspeisungs-Zeile des Kind-Kastens
+      const feedMidY = toPos.y + HDR_H + FEED_H/2;
       return { x1:positions[inst.parentId].x+NODE_W, y1,
-               x2:toPos.x, y2:toPos.y+nodeH(inst)/2,
+               x2:toPos.x, y2:feedMidY,
                inst, outlet, adapted:isAdapted(inst.id) };
     });
 
@@ -1771,7 +1773,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
                 {mc.amp&&<text x={bx-22} y={cy+22} textAnchor="end" fill="#f5a623" fontSize={9} opacity="0.75">{mc.amp} A</text>}
                 {connInsts.map(ri=>{
                   const pos=positions[ri.id]; if(!pos) return null;
-                  return <line key={ri.id} x1={bx} y1={cy} x2={pos.x} y2={pos.y+nodeH(instById[ri.id])/2}
+                  return <line key={ri.id} x1={bx} y1={cy} x2={pos.x} y2={pos.y+HDR_H+FEED_H/2}
                                stroke="#f5a623" strokeWidth={1.2} strokeDasharray="5,4" opacity={0.4}/>;
                 })}
               </g>
@@ -1839,6 +1841,21 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
                   <circle cx={NODE_W-9} cy={HDR_H/2} r={4} fill="#a78bfa" opacity="0.9">
                     <title>Adapter: Stecker passt nicht zum Eltern-Anschluss</title>
                   </circle>
+                )}
+
+                {/* ── Socket-Symbol am linken Eingang (wenn Kind-Kasten) ─────── */}
+                {inst.parentId&&(
+                  <g transform={`translate(0,${HDR_H+FEED_H/2})`}>
+                    {/* Buchsen-Gehäuse links, ragt leicht aus dem Rahmen heraus */}
+                    <rect x={-10} y={-5} width={10} height={10} rx={1.5}
+                          stroke="#4a7494" strokeWidth={1.1} fill="#21282f"/>
+                    {/* Buchsen-Löcher */}
+                    <circle cx={-7} cy={-1} r={1.4} stroke="#4a7494" strokeWidth={0.9} fill="none"/>
+                    <circle cx={-3} cy={-1} r={1.4} stroke="#4a7494" strokeWidth={0.9} fill="none"/>
+                    {/* Verbindungslinie Buchse → Innen */}
+                    <line x1={0} y1={0} x2={FeedSym?22:7} y2={0}
+                          stroke="#4a7494" strokeWidth={0.8} strokeDasharray="2,2"/>
+                  </g>
                 )}
 
                 {/* ── Einspeisungs-Zeile ───────────────────────────────────── */}
