@@ -43,6 +43,31 @@ const CABLE_CS_MM2 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150];
 // Strombelastbarkeit (A), Verlegemethode B2, Cu, PVC (DIN VDE 0298-4)
 const I_CAP_B2 = {1.5:15.5,2.5:19.5,4:26,6:34,10:46,16:61,25:80,35:99,50:119,70:151,95:182,120:210,150:240};
 
+// H07RN-F Nennstrom frei in Luft (Basis, DIN VDE 0298-4 Tafel 11)
+const CABLE_CS_H07 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95];
+const I_CAP_H07 = {1.5:23,2.5:30,4:38,6:48,10:64,16:84,25:109,35:135,50:162,70:202,95:245};
+
+// Korrekturfaktoren DIN VDE 0298-4 (PVC 70 °C)
+const F_TEMP = {10:1.22,15:1.17,20:1.12,25:1.06,30:1.00,35:0.94,40:0.87,45:0.79,50:0.71};
+const F_ADERN = {2:1.00,3:0.70,4:0.65,5:0.60,6:0.57};
+const F_LAGEN = {1:0.85,2:0.65,3:0.45};
+const F_HAE_EINL   = {1:1.00,2:0.85,3:0.79,4:0.75,5:0.73,6:0.72,7:0.72,8:0.71,9:0.70,10:0.70};
+const F_HAE_GEBUND = {1:1.00,2:0.80,3:0.75,4:0.70,5:0.68,6:0.65,7:0.65,8:0.62,9:0.62,10:0.60};
+
+// Belastbarkeit nach Querschnitt + Korrekturfaktoren (→ { base, fTotal, izul })
+const calcDim = (cableA, fTemp, fAdern, fLagen, fArt, fN) => {
+  const base = I_CAP_H07[+cableA]; if(!base) return null;
+  let f = 1;
+  if(fTemp  && F_TEMP[+fTemp])   f *= F_TEMP[+fTemp];
+  if(fAdern && F_ADERN[+fAdern]) f *= F_ADERN[+fAdern];
+  if(fLagen && F_LAGEN[+fLagen]) f *= F_LAGEN[+fLagen];
+  if(fArt && fN) {
+    const tbl = fArt==="einl" ? F_HAE_EINL : F_HAE_GEBUND;
+    if(tbl[Math.min(+fN,10)]) f *= tbl[Math.min(+fN,10)];
+  }
+  return { base, fTotal:round2(f), izul:round2(base*f) };
+};
+
 const calcVoltDrop = (I, l, A, cosPhi, threePhase) => {
   if(!+l||!+A||!+cosPhi) return null;
   const fac = threePhase ? Math.sqrt(3) : 2;
@@ -303,6 +328,9 @@ export default function App() {
   const [activePlan,   setActivePlan]   = useState(null);
   const [inspMeta,     setInspMeta]     = useState({ inspector:"", date:new Date().toISOString().slice(0,10), time:"", equipment:"", address:"", location:"", netType:"" });
   const [inspResults,  setInspResults]  = useState({});
+  const [cableCalcs,   setCableCalcs]   = useState([]);
+  const [voltCalcs,    setVoltCalcs]    = useState([]);
+  const [erweiterSubTab, setErweiterSubTab] = useState("dim");
   const [loaded,       setLoaded]       = useState(false); // prevent save before first load
 
   /* ── Autosave ──────────────────────────────────────────────────────────── */
@@ -321,6 +349,8 @@ export default function App() {
           if(d.placements)  setPlacements(d.placements);
           if(d.inspMeta)    setInspMeta(d.inspMeta);
           if(d.inspResults) setInspResults(d.inspResults);
+          if(d.cableCalcs)  setCableCalcs(d.cableCalcs);
+          if(d.voltCalcs)   setVoltCalcs(d.voltCalcs);
         }
       }
     } catch(e){ console.warn("Autosave load error",e); }
@@ -335,12 +365,12 @@ export default function App() {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(()=>{
       try {
-        const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults};
+        const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs};
         localStorage.setItem(LS_KEY, JSON.stringify(data));
       } catch(e){ console.warn("Autosave error",e); }
     },600);
     return ()=>clearTimeout(saveTimer.current);
-  },[meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,loaded]);
+  },[meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,loaded]);
 
   /* ── Derived ───────────────────────────────────────────────────────────── */
   const boxTypeById  = useMemo(()=>{ const m={}; boxTypes.forEach(b=>m[b.id]=b);   return m; },[boxTypes]);
@@ -756,6 +786,16 @@ export default function App() {
             style={{...S.navBtn,...(tab===k?S.navBtnActive:{}),...(k==="erweitert"?{color:tab===k?"#f5a623":"#c08030",borderColor:tab===k?"#f5a623":"transparent"}:{})}}
             onClick={()=>setTab(k)}>{label}</button>
         ))}
+        {tab==="erweitert" && <>
+          <span style={{color:"#3a424c",alignSelf:"center",margin:"0 2px",fontSize:16}}>&rsaquo;</span>
+          {[["dim","Leitungsdimensionierung"],["volt","Spannungsfall"]].map(([k,lbl])=>(
+            <button key={k} style={{
+              ...S.navBtn,
+              ...(erweiterSubTab===k ? S.navBtnActive : {}),
+              ...(erweiterSubTab===k ? {color:"#f5a623",borderColor:"#f5a623"} : {color:"#c08030"})
+            }} onClick={()=>setErweiterSubTab(k)}>{lbl}</button>
+          ))}
+        </>}
       </nav>
       <main style={S.main}>
         {/* Alle Tabs bleiben gemountet – nur CSS display:none beim Verstecken */}
@@ -786,7 +826,9 @@ export default function App() {
           <InspectionTab {...sharedProps} meta={meta} placements={placements} loadById={loadById} inspMeta={inspMeta} setInspMeta={setInspMeta} inspResults={inspResults} setInspResults={setInspResults} />
         </div>
         <div style={{display:tab==="erweitert"?"block":"none"}}>
-          <ErweitertTab instances={instances} instById={instById} boxTypeById={boxTypeById} inspResults={inspResults} setInspResults={setInspResults}/>
+          <ErweitertTab cableCalcs={cableCalcs} setCableCalcs={setCableCalcs}
+            voltCalcs={voltCalcs} setVoltCalcs={setVoltCalcs}
+            subTab={erweiterSubTab}/>
         </div>
       </main>
     </div>
@@ -2155,122 +2197,269 @@ const SICHT_ITEMS = [
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Erweitert – Leitungsdimensionierung & Spannungsfall
 ══════════════════════════════════════════════════════════════════════════ */
-function ErweitertTab({ instances, instById, boxTypeById, inspResults, setInspResults }) {
-  const OR_DEF_L = {rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",cableLen:"",cableA:"",cosPhi:"0.95"};
-  const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...sv,outlets:sv.outlets||{}}; };
-  const getOR = (iid,oid) => ({...OR_DEF_L,...((getIR(iid).outlets||{})[oid]||{})});
-  const updOR = (iid,oid,patch) => {
-    const ir=getIR(iid);
-    setInspResults(s=>({...s,[iid]:{...ir,outlets:{...(ir.outlets||{}),[oid]:{...getOR(iid,oid),...patch}}}}));
-  };
+function ErweitertTab({ cableCalcs, setCableCalcs, voltCalcs, setVoltCalcs, subTab }) {
+  /* ── Leitungsdimensionierung ────────────────────────────────────────────── */
+  const newCalc = () => ({id:uid(),label:"",I_B:"",I_n:"",cableA:"",fTemp:"",fAdern:"",fLagen:"",fArt:"",fN:""});
+  const addCalc = () => setCableCalcs(s=>[...s, newCalc()]);
+  const delCalc = (id) => setCableCalcs(s=>s.filter(c=>c.id!==id));
+  const upd = (id,patch) => setCableCalcs(s=>s.map(c=>c.id===id?{...c,...patch}:c));
 
-  // Topologische Sortierung (BFS, alphabetisch je Ebene)
-  const sorted = (()=>{
-    const result=[]; const visited=new Set();
-    const visit=(parentId)=>{
-      alphaSort(instances.filter(i=>i.parentId===parentId),"name").forEach(inst=>{
-        if(!visited.has(inst.id)){ visited.add(inst.id); result.push(inst); visit(inst.id); }
-      });
-    };
-    alphaSort(instances.filter(i=>!i.parentId),"name").forEach(inst=>{
-      if(!visited.has(inst.id)){ visited.add(inst.id); result.push(inst); visit(inst.id); }
-    });
-    return result;
-  })();
-
-  const LINE = "#3a424c";
-
-  if(sorted.length===0) return (
-    <Section title="Leitungsdimensionierung & Spannungsfall" subtitle="Querschnitt nach Stromtragfaehigkeit (B2, Cu, PVC) · Spannungsfall DIN VDE 0100-520">
-      <p style={{color:"#666",fontSize:13}}>Keine Kaesten aktiviert. Bitte zuerst im Tab &bdquo;Konfiguration&ldquo; Kaesten hinzufuegen.</p>
-    </Section>
-  );
+  /* ── Spannungsfall ──────────────────────────────────────────────────────── */
+  const newVolt = () => ({id:uid(),label:"",I:"",l:"",cosPhi:"",cableA:"",threePhase:""});
+  const addVolt = () => setVoltCalcs(s=>[...s, newVolt()]);
+  const delVolt = (id) => setVoltCalcs(s=>s.filter(c=>c.id!==id));
+  const updV = (id,patch) => setVoltCalcs(s=>s.map(c=>c.id===id?{...c,...patch}:c));
 
   return (
-    <Section title="Leitungsdimensionierung & Spannungsfall"
-             subtitle="Querschnitt nach Stromtragfaehigkeit (Vmethode B2, Cu, PVC, DIN VDE 0298-4) und delta-U &le; 3 % (DIN VDE 0100-520)">
-      {sorted.map(inst=>{
-        const type = boxTypeById[inst.typeId];
-        const outlets = type ? sortOutlets(type.outlets) : [];
-        if(!outlets.length) return null;
-        return (
-          <div key={inst.id} style={{marginBottom:18}}>
-            <p style={{fontSize:13,fontWeight:700,color:"#e8eaed",margin:"0 0 6px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{color:"#f5a623"}}>&#9679;</span> {inst.name}
-              <span style={{fontSize:11,fontWeight:400,color:"#9aa4af"}}>&nbsp;&mdash;&nbsp;{type?.name||"?"} &middot; {outlets.length} Abg.</span>
-            </p>
-            <div style={{overflowX:"auto"}}>
-              <table style={{...{borderCollapse:"collapse",width:"100%",fontSize:12}}}>
-                <thead>
-                  <tr style={{background:"#1b2026"}}>
-                    <th style={{padding:"5px 8px",textAlign:"left",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>Abgang</th>
-                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>I_N (A)</th>
-                    <th style={{padding:"5px 8px",textAlign:"left",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>&ell; (m)</th>
-                    <th style={{padding:"5px 8px",textAlign:"left",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>A (mm&sup2;)</th>
-                    <th style={{padding:"5px 8px",textAlign:"left",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>cos &phi;</th>
-                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>&Delta;U (V)</th>
-                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>&Delta;U (%)</th>
-                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>Min A&Delta;U</th>
-                    <th style={{padding:"5px 8px",textAlign:"right",color:"#9aa4af",fontWeight:600,fontSize:11,border:`1px solid ${LINE}`,whiteSpace:"nowrap"}}>Min A_I</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outlets.map((o,ri)=>{
-                    const or=getOR(inst.id,o.id);
-                    const du=calcVoltDrop(o.amp,or.cableLen,or.cableA,or.cosPhi,is3ph(o.connector));
-                    const minAdu=minCsVoltDrop(o.amp,or.cableLen,or.cosPhi,is3ph(o.connector));
-                    const minAi=minCsCurrent(o.amp);
-                    const duColor=du?(du.pct<=3?"#2ecc71":du.pct<=5?"#f5a623":"#e74c3c"):"#9aa4af";
-                    const rowBg=ri%2===0?"#1b2026":"#1f252c";
-                    const td={padding:"4px 8px",border:`1px solid ${LINE}`,background:rowBg,verticalAlign:"middle"};
-                    return (
-                      <tr key={o.id}>
-                        <td style={{...td,color:"#e8eaed",whiteSpace:"nowrap"}}>{o.label}</td>
-                        <td style={{...td,textAlign:"right",color:"#9aa4af",fontVariantNumeric:"tabular-nums"}}>{o.amp}</td>
-                        <td style={td}>
-                          <input type="number" min="0" step="0.5"
-                            style={{background:"#252b33",border:"1px solid #3a424c",borderRadius:4,color:"#e8eaed",padding:"3px 6px",width:70,fontSize:12}}
-                            value={or.cableLen} placeholder="–"
-                            onChange={e=>updOR(inst.id,o.id,{cableLen:e.target.value})}/>
-                        </td>
-                        <td style={td}>
-                          <select style={{background:"#252b33",border:"1px solid #3a424c",borderRadius:4,color:"#e8eaed",padding:"3px 4px",width:70,fontSize:12}}
-                            value={or.cableA||""} onChange={e=>updOR(inst.id,o.id,{cableA:e.target.value})}>
-                            <option value="">—</option>
-                            {CABLE_CS_MM2.map(cs=><option key={cs} value={cs}>{cs}</option>)}
-                          </select>
-                        </td>
-                        <td style={td}>
-                          <input type="number" step="0.05" min="0.5" max="1"
-                            style={{background:"#252b33",border:"1px solid #3a424c",borderRadius:4,color:"#e8eaed",padding:"3px 6px",width:60,fontSize:12}}
-                            value={or.cosPhi||"0.95"}
-                            onChange={e=>updOR(inst.id,o.id,{cosPhi:e.target.value})}/>
-                        </td>
-                        <td style={{...td,textAlign:"right",color:duColor,fontVariantNumeric:"tabular-nums"}}>
-                          {du ? du.V.toFixed(2)+" V" : "–"}
-                        </td>
-                        <td style={{...td,textAlign:"right",fontWeight:600,color:duColor,fontVariantNumeric:"tabular-nums"}}>
-                          {du ? du.pct.toFixed(2)+" %" : "–"}
-                        </td>
-                        <td style={{...td,textAlign:"right",color:"#9aa4af",fontVariantNumeric:"tabular-nums",fontSize:11}}>
-                          {minAdu!=null ? ">= "+minAdu+" mm²" : "–"}
-                        </td>
-                        <td style={{...td,textAlign:"right",color:"#9aa4af",fontSize:11}}>
-                          {minAi!=null ? minAi+" mm²" : "–"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+    <>
+      {/* ── Leitungsdimensionierung ─────────────────────────────────────── */}
+      <div style={{display:subTab==="dim"?"block":"none"}}>
+        <Section title="Leitungsdimensionierung"
+                 subtitle="H07RN-F · DIN VDE 0298-4 · Prüfkette Iʙ ≤ Iₙ ≤ Iₘ">
+          <div style={{marginBottom:16}}>
+            <button style={S.primaryBtn} onClick={addCalc}>+ Neue Rechnung</button>
           </div>
-        );
-      })}
-      <p style={{fontSize:10,color:"#666",marginTop:16}}>
-        Berechnung: &Delta;U = (2 &times; I &times; &ell; &times; cos&phi;) / (&kappa; &times; A) [1-phasig] bzw. &radic;3-Faktor [3-phasig]; &kappa;(Cu) = 56 m/(&Omega;&middot;mm&sup2;); Verlegemethode B2
-      </p>
-    </Section>
+          {cableCalcs.length===0 && (
+            <p style={{color:"#666",fontSize:13}}>Noch keine Rechnungen vorhanden. Über &bdquo;+ Neue Rechnung&ldquo; eine neue anlegen.</p>
+          )}
+          {cableCalcs.map(calc=>{
+            const dim = calcDim(calc.cableA,calc.fTemp,calc.fAdern,calc.fLagen,calc.fArt,calc.fN);
+            const ready = calc.I_B!==""&&calc.I_n!==""&&calc.cableA!=="";
+            const chk1 = ready && +calc.I_B<=+calc.I_n;
+            const chk2 = ready && dim!=null && +calc.I_n<=dim.izul;
+            const allOk = chk1&&chk2;
+            const resBg = !ready ? {} : allOk
+              ? {background:"rgba(46,204,113,0.08)",border:"1px solid rgba(46,204,113,0.28)"}
+              : {background:"rgba(231,76,60,0.08)",border:"1px solid rgba(231,76,60,0.28)"};
+            return (
+              <div key={calc.id} style={{...S.card,marginBottom:12}}>
+                {/* Kopfzeile */}
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:"1px solid #3a424c"}}>
+                  <input style={{...S.inputSm,flex:1}} placeholder="Bezeichnung (optional)"
+                    value={calc.label} onChange={e=>upd(calc.id,{label:e.target.value})}/>
+                  <button style={S.dangerBtn} onClick={()=>delCalc(calc.id)}>&#x2715;</button>
+                </div>
+                {/* Ströme & Querschnitt */}
+                <div style={{padding:"10px 14px",borderBottom:"1px solid #3a424c"}}>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-end"}}>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Iʙ &ndash; Betriebsstrom
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <input type="number" min="0" step="0.1" style={{...S.inputSm,width:80}}
+                          value={calc.I_B} placeholder="&mdash;"
+                          onChange={e=>upd(calc.id,{I_B:e.target.value})}/>
+                        <span style={{fontSize:12,color:"#9aa4af"}}>A</span>
+                      </div>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Iₙ &ndash; Nennstrom Sicherung
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <input type="number" min="0" step="1" style={{...S.inputSm,width:80}}
+                          value={calc.I_n} placeholder="&mdash;"
+                          onChange={e=>upd(calc.id,{I_n:e.target.value})}/>
+                        <span style={{fontSize:12,color:"#9aa4af"}}>A</span>
+                      </div>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Querschnitt
+                      <select style={{...S.selectSm,width:90}} value={calc.cableA}
+                        onChange={e=>upd(calc.id,{cableA:e.target.value})}>
+                        <option value="">&mdash;</option>
+                        {CABLE_CS_H07.map(cs=><option key={cs} value={cs}>{cs} mm&sup2;</option>)}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                {/* Korrekturfaktoren */}
+                <div style={{padding:"10px 14px",borderBottom:"1px solid #3a424c"}}>
+                  <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:8,letterSpacing:".04em"}}>
+                    KORREKTURFAKTOREN
+                    <span style={{fontWeight:400,color:"#555",marginLeft:6,textTransform:"none"}}>(leer = Faktor entfällt)</span>
+                  </div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:10,alignItems:"flex-end"}}>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Umgebungstemperatur
+                      <select style={{...S.selectSm,width:110}} value={calc.fTemp}
+                        onChange={e=>upd(calc.id,{fTemp:e.target.value})}>
+                        <option value="">&mdash;</option>
+                        {Object.keys(F_TEMP).map(t=><option key={t} value={t}>{t} °C</option>)}
+                      </select>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Stromf. Adern
+                      <select style={{...S.selectSm,width:95}} value={calc.fAdern}
+                        onChange={e=>upd(calc.id,{fAdern:e.target.value})}>
+                        <option value="">&mdash;</option>
+                        {Object.keys(F_ADERN).map(n=><option key={n} value={n}>{n} Adern</option>)}
+                      </select>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Aufgewickelt
+                      <select style={{...S.selectSm,width:105}} value={calc.fLagen}
+                        onChange={e=>upd(calc.id,{fLagen:e.target.value})}>
+                        <option value="">&mdash;</option>
+                        {Object.keys(F_LAGEN).map(n=><option key={n} value={n}>{n==="1"?"1 Lage":n+" Lagen"}</option>)}
+                      </select>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Häufung – Verlegeart
+                      <select style={{...S.selectSm,width:115}} value={calc.fArt}
+                        onChange={e=>upd(calc.id,{fArt:e.target.value,fN:""})}>
+                        <option value="">&mdash;</option>
+                        <option value="einl">Einlagig</option>
+                        <option value="gebund">Gebündelt</option>
+                      </select>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Häufung – Anz. Leitungen
+                      <select style={{...S.selectSm,width:115}} value={calc.fN}
+                        disabled={!calc.fArt}
+                        onChange={e=>upd(calc.id,{fN:e.target.value})}>
+                        <option value="">&mdash;</option>
+                        {Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                {/* Ergebnis */}
+                {ready && dim && (
+                  <div style={{...resBg,padding:"10px 14px",borderRadius:"0 0 8px 8px"}}>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:16,alignItems:"center",marginBottom:8}}>
+                      <span style={{fontSize:12,color:"#9aa4af"}}>
+                        Gesamtfaktor: <strong style={{color:"#e8eaed"}}>{dim.fTotal.toFixed(2)}</strong>
+                      </span>
+                      <span style={{fontSize:12,color:"#9aa4af"}}>
+                        Iₘ Basis: <strong style={{color:"#e8eaed"}}>{dim.base} A</strong>
+                      </span>
+                      <span style={{fontSize:12,color:"#9aa4af"}}>
+                        Iₘ korrigiert:{" "}
+                        <strong style={{color:chk2?"#2ecc71":"#e74c3c",fontSize:14}}>{dim.izul} A</strong>
+                      </span>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      <div style={{fontSize:13,color:chk1?"#2ecc71":"#e74c3c",display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontWeight:700}}>{chk1?"✓":"✗"}</span>
+                        <span>Iʙ ({calc.I_B} A) {chk1?"≤":">"} Iₙ ({calc.I_n} A)</span>
+                        {!chk1&&<span style={{fontSize:11,marginLeft:4}}>&mdash; Betriebsstrom übersteigt Sicherung!</span>}
+                      </div>
+                      <div style={{fontSize:13,color:chk2?"#2ecc71":"#e74c3c",display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontWeight:700}}>{chk2?"✓":"✗"}</span>
+                        <span>Iₙ ({calc.I_n} A) {chk2?"≤":">"} Iₘ ({dim.izul} A)</span>
+                        {!chk2&&<span style={{fontSize:11,marginLeft:4}}>&mdash; Kabel zu klein!</span>}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {ready && !dim && (
+                  <div style={{padding:"10px 14px",color:"#666",fontSize:12}}>Kein Querschnitt gewählt oder nicht in Tabelle.</div>
+                )}
+              </div>
+            );
+          })}
+        </Section>
+      </div>
+
+      {/* ── Spannungsfall ───────────────────────────────────────────────── */}
+      <div style={{display:subTab==="volt"?"block":"none"}}>
+        <Section title="Spannungsfall"
+                 subtitle="H07RN-F · DIN VDE 0100-520 · ΔU ≤ 3 % empfohlen">
+          <div style={{marginBottom:16}}>
+            <button style={S.primaryBtn} onClick={addVolt}>+ Neue Rechnung</button>
+          </div>
+          {voltCalcs.length===0 && (
+            <p style={{color:"#666",fontSize:13}}>Noch keine Rechnungen vorhanden. Über &bdquo;+ Neue Rechnung&ldquo; eine neue anlegen.</p>
+          )}
+          {voltCalcs.map(calc=>{
+            const ready = calc.I!==""&&calc.l!==""&&calc.cosPhi!==""&&calc.cableA!==""&&calc.threePhase!=="";
+            const du    = ready ? calcVoltDrop(+calc.I,+calc.l,+calc.cableA,+calc.cosPhi,calc.threePhase==="3ph") : null;
+            const minA  = ready ? minCsVoltDrop(+calc.I,+calc.l,+calc.cosPhi,calc.threePhase==="3ph") : null;
+            const duPct = du?.pct ?? null;
+            const col   = duPct===null ? null : duPct<=3 ? "#2ecc71" : duPct<=5 ? "#f5a623" : "#e74c3c";
+            const resBg = du===null ? {} : duPct<=3
+              ? {background:"rgba(46,204,113,0.08)",border:"1px solid rgba(46,204,113,0.28)"}
+              : duPct<=5
+              ? {background:"rgba(245,166,35,0.10)",border:"1px solid rgba(245,166,35,0.35)"}
+              : {background:"rgba(231,76,60,0.08)",border:"1px solid rgba(231,76,60,0.28)"};
+            return (
+              <div key={calc.id} style={{...S.card,marginBottom:12}}>
+                {/* Kopfzeile */}
+                <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:"1px solid #3a424c"}}>
+                  <input style={{...S.inputSm,flex:1}} placeholder="Bezeichnung (optional)"
+                    value={calc.label} onChange={e=>updV(calc.id,{label:e.target.value})}/>
+                  <button style={S.dangerBtn} onClick={()=>delVolt(calc.id)}>&#x2715;</button>
+                </div>
+                {/* Eingaben */}
+                <div style={{padding:"10px 14px",borderBottom:"1px solid #3a424c"}}>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:12,alignItems:"flex-end"}}>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Strom I
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <input type="number" min="0" step="0.1" style={{...S.inputSm,width:80}}
+                          value={calc.I} placeholder="&mdash;"
+                          onChange={e=>updV(calc.id,{I:e.target.value})}/>
+                        <span style={{fontSize:12,color:"#9aa4af"}}>A</span>
+                      </div>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Länge l
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <input type="number" min="0" step="1" style={{...S.inputSm,width:80}}
+                          value={calc.l} placeholder="&mdash;"
+                          onChange={e=>updV(calc.id,{l:e.target.value})}/>
+                        <span style={{fontSize:12,color:"#9aa4af"}}>m</span>
+                      </div>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      cos φ
+                      <input type="number" min="0" max="1" step="0.01" style={{...S.inputSm,width:70}}
+                        value={calc.cosPhi} placeholder="&mdash;"
+                        onChange={e=>updV(calc.id,{cosPhi:e.target.value})}/>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Querschnitt
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <input type="number" min="0" step="0.5" style={{...S.inputSm,width:75}}
+                          value={calc.cableA} placeholder="&mdash;"
+                          onChange={e=>updV(calc.id,{cableA:e.target.value})}/>
+                        <span style={{fontSize:12,color:"#9aa4af"}}>mm&sup2;</span>
+                      </div>
+                    </label>
+                    <label style={{display:"flex",flexDirection:"column",gap:3,fontSize:11,color:"#9aa4af"}}>
+                      Phasigkeit
+                      <select style={{...S.selectSm,width:105}} value={calc.threePhase}
+                        onChange={e=>updV(calc.id,{threePhase:e.target.value})}>
+                        <option value="">&mdash;</option>
+                        <option value="1ph">1-phasig</option>
+                        <option value="3ph">3-phasig</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                {/* Ergebnis */}
+                {du && (
+                  <div style={{...resBg,padding:"10px 14px",borderRadius:"0 0 8px 8px"}}>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:20,alignItems:"center",marginBottom:6}}>
+                      <span style={{fontSize:13,color:"#9aa4af"}}>
+                        ΔU = <strong style={{color:col,fontSize:16}}>{du.V.toFixed(2)} V</strong>
+                      </span>
+                      <span style={{fontSize:13,color:"#9aa4af"}}>
+                        ΔU = <strong style={{color:col,fontSize:16}}>{du.pct.toFixed(2)} %</strong>
+                      </span>
+                    </div>
+                    {minA!==null && (
+                      <div style={{fontSize:12,color:"#9aa4af"}}>
+                        Min. Querschnitt für ΔU ≤ 3 %:{" "}
+                        <strong style={{color:"#e8eaed"}}>≥ {minA.toFixed(2)} mm²</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </Section>
+      </div>
+    </>
   );
 }
 

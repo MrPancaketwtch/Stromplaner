@@ -44171,8 +44171,26 @@ button:active { filter: brightness(0.95); }
   var BREAKER_TYPES = ["B", "C", "D", "K"];
   var PROTECTION_TYPES = ["LS", "RCBO", "Keine"];
   var KAPPA_CU = 56;
-  var CABLE_CS_MM2 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150];
-  var I_CAP_B2 = { 1.5: 15.5, 2.5: 19.5, 4: 26, 6: 34, 10: 46, 16: 61, 25: 80, 35: 99, 50: 119, 70: 151, 95: 182, 120: 210, 150: 240 };
+  var CABLE_CS_H07 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95];
+  var I_CAP_H07 = { 1.5: 23, 2.5: 30, 4: 38, 6: 48, 10: 64, 16: 84, 25: 109, 35: 135, 50: 162, 70: 202, 95: 245 };
+  var F_TEMP = { 10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71 };
+  var F_ADERN = { 2: 1, 3: 0.7, 4: 0.65, 5: 0.6, 6: 0.57 };
+  var F_LAGEN = { 1: 0.85, 2: 0.65, 3: 0.45 };
+  var F_HAE_EINL = { 1: 1, 2: 0.85, 3: 0.79, 4: 0.75, 5: 0.73, 6: 0.72, 7: 0.72, 8: 0.71, 9: 0.7, 10: 0.7 };
+  var F_HAE_GEBUND = { 1: 1, 2: 0.8, 3: 0.75, 4: 0.7, 5: 0.68, 6: 0.65, 7: 0.65, 8: 0.62, 9: 0.62, 10: 0.6 };
+  var calcDim = (cableA, fTemp, fAdern, fLagen, fArt, fN) => {
+    const base = I_CAP_H07[+cableA];
+    if (!base) return null;
+    let f = 1;
+    if (fTemp && F_TEMP[+fTemp]) f *= F_TEMP[+fTemp];
+    if (fAdern && F_ADERN[+fAdern]) f *= F_ADERN[+fAdern];
+    if (fLagen && F_LAGEN[+fLagen]) f *= F_LAGEN[+fLagen];
+    if (fArt && fN) {
+      const tbl = fArt === "einl" ? F_HAE_EINL : F_HAE_GEBUND;
+      if (tbl[Math.min(+fN, 10)]) f *= tbl[Math.min(+fN, 10)];
+    }
+    return { base, fTotal: round2(f), izul: round2(base * f) };
+  };
   var calcVoltDrop = (I, l, A, cosPhi, threePhase) => {
     if (!+l || !+A || !+cosPhi) return null;
     const fac = threePhase ? Math.sqrt(3) : 2;
@@ -44183,12 +44201,6 @@ button:active { filter: brightness(0.95); }
     if (!+l || !+cosPhi || !+I) return null;
     const fac = threePhase ? Math.sqrt(3) : 2;
     return round2(fac * +I * +l * +cosPhi / (KAPPA_CU * (maxPct / 100) * 230));
-  };
-  var minCsCurrent = (I_N) => {
-    for (const cs of CABLE_CS_MM2) {
-      if ((I_CAP_B2[cs] || 0) >= +I_N) return cs;
-    }
-    return null;
   };
   var is3ph = (c) => (CONN[c]?.phases || 1) === 3;
   var isMulticore = (c) => !!CONN[c]?.isMulticore;
@@ -44406,6 +44418,9 @@ button:active { filter: brightness(0.95); }
     const [activePlan, setActivePlan] = (0, import_react.useState)(null);
     const [inspMeta, setInspMeta] = (0, import_react.useState)({ inspector: "", date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), time: "", equipment: "", address: "", location: "", netType: "" });
     const [inspResults, setInspResults] = (0, import_react.useState)({});
+    const [cableCalcs, setCableCalcs] = (0, import_react.useState)([]);
+    const [voltCalcs, setVoltCalcs] = (0, import_react.useState)([]);
+    const [erweiterSubTab, setErweiterSubTab] = (0, import_react.useState)("dim");
     const [loaded, setLoaded] = (0, import_react.useState)(false);
     (0, import_react.useEffect)(() => {
       try {
@@ -44421,6 +44436,8 @@ button:active { filter: brightness(0.95); }
             if (d.placements) setPlacements(d.placements);
             if (d.inspMeta) setInspMeta(d.inspMeta);
             if (d.inspResults) setInspResults(d.inspResults);
+            if (d.cableCalcs) setCableCalcs(d.cableCalcs);
+            if (d.voltCalcs) setVoltCalcs(d.voltCalcs);
           }
         }
       } catch (e) {
@@ -44435,14 +44452,14 @@ button:active { filter: brightness(0.95); }
       clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         try {
-          const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances, placements, inspMeta, inspResults };
+          const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances, placements, inspMeta, inspResults, cableCalcs, voltCalcs };
           localStorage.setItem(LS_KEY, JSON.stringify(data));
         } catch (e) {
           console.warn("Autosave error", e);
         }
       }, 600);
       return () => clearTimeout(saveTimer.current);
-    }, [meta, mainConns, boxTypes, loads, instances, placements, inspMeta, inspResults, loaded]);
+    }, [meta, mainConns, boxTypes, loads, instances, placements, inspMeta, inspResults, cableCalcs, voltCalcs, loaded]);
     const boxTypeById = (0, import_react.useMemo)(() => {
       const m = {};
       boxTypes.forEach((b) => m[b.id] = b);
@@ -44907,7 +44924,11 @@ Fortfahren?`);
         onClick: () => setTab(k)
       },
       label
-    ))), /* @__PURE__ */ import_react.default.createElement("main", { style: S.main }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "config" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(
+    )), tab === "erweitert" && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#3a424c", alignSelf: "center", margin: "0 2px", fontSize: 16 } }, "\u203A"), [["dim", "Leitungsdimensionierung"], ["volt", "Spannungsfall"]].map(([k, lbl]) => /* @__PURE__ */ import_react.default.createElement("button", { key: k, style: {
+      ...S.navBtn,
+      ...erweiterSubTab === k ? S.navBtnActive : {},
+      ...erweiterSubTab === k ? { color: "#f5a623", borderColor: "#f5a623" } : { color: "#c08030" }
+    }, onClick: () => setErweiterSubTab(k) }, lbl)))), /* @__PURE__ */ import_react.default.createElement("main", { style: S.main }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "config" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(
       ConfigTab,
       {
         ...sharedProps,
@@ -44939,7 +44960,16 @@ Fortfahren?`);
         ownLoad,
         meta
       }
-    )), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "overview" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "schematic" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(SchematicTab, { ...sharedProps, meta, svgRef: schematicSvgRef, placements, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "boxtypes" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "loads" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(LoadsTab, { loads, setLoads })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "inspection" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "erweitert" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(ErweitertTab, { instances, instById, boxTypeById, inspResults, setInspResults }))));
+    )), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "overview" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "schematic" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(SchematicTab, { ...sharedProps, meta, svgRef: schematicSvgRef, placements, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "boxtypes" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "loads" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(LoadsTab, { loads, setLoads })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "inspection" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "erweitert" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(
+      ErweitertTab,
+      {
+        cableCalcs,
+        setCableCalcs,
+        voltCalcs,
+        setVoltCalcs,
+        subTab: erweiterSubTab
+      }
+    ))));
   }
   function ConfigTab({ meta, setMeta, boxTypes, instances, instById, boxTypeById, addInstance, removeInstance, updateInstance, setParentWithValidation, isOverloaded, isUnderdimensioned, isAdapted, mainConns, addMainConn, updateMainConn, removeMainConn }) {
     const [pick, setPick] = (0, import_react.useState)(boxTypes[0]?.id || "");
@@ -45906,94 +45936,199 @@ Fortfahren?`);
     "Kennzeichnung",
     "Basisschutz"
   ];
-  function ErweitertTab({ instances, instById, boxTypeById, inspResults, setInspResults }) {
-    const OR_DEF_L = { rcdT1: "", rcdIan: "", ok: false, zs: "", ik: "", cableLen: "", cableA: "", cosPhi: "0.95" };
-    const getIR = (iid) => {
-      const sv = inspResults[iid] || {};
-      return { ...sv, outlets: sv.outlets || {} };
-    };
-    const getOR = (iid, oid) => ({ ...OR_DEF_L, ...(getIR(iid).outlets || {})[oid] || {} });
-    const updOR = (iid, oid, patch) => {
-      const ir = getIR(iid);
-      setInspResults((s) => ({ ...s, [iid]: { ...ir, outlets: { ...ir.outlets || {}, [oid]: { ...getOR(iid, oid), ...patch } } } }));
-    };
-    const sorted = (() => {
-      const result = [];
-      const visited = /* @__PURE__ */ new Set();
-      const visit = (parentId) => {
-        alphaSort(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
-          if (!visited.has(inst.id)) {
-            visited.add(inst.id);
-            result.push(inst);
-            visit(inst.id);
-          }
-        });
-      };
-      alphaSort(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
-        if (!visited.has(inst.id)) {
-          visited.add(inst.id);
-          result.push(inst);
-          visit(inst.id);
-        }
-      });
-      return result;
-    })();
-    const LINE2 = "#3a424c";
-    if (sorted.length === 0) return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Leitungsdimensionierung & Spannungsfall", subtitle: "Querschnitt nach Stromtragfaehigkeit (B2, Cu, PVC) \xB7 Spannungsfall DIN VDE 0100-520" }, /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#666", fontSize: 13 } }, "Keine Kaesten aktiviert. Bitte zuerst im Tab \u201EKonfiguration\u201C Kaesten hinzufuegen."));
-    return /* @__PURE__ */ import_react.default.createElement(
+  function ErweitertTab({ cableCalcs, setCableCalcs, voltCalcs, setVoltCalcs, subTab }) {
+    const newCalc = () => ({ id: uid(), label: "", I_B: "", I_n: "", cableA: "", fTemp: "", fAdern: "", fLagen: "", fArt: "", fN: "" });
+    const addCalc = () => setCableCalcs((s) => [...s, newCalc()]);
+    const delCalc = (id) => setCableCalcs((s) => s.filter((c) => c.id !== id));
+    const upd = (id, patch) => setCableCalcs((s) => s.map((c) => c.id === id ? { ...c, ...patch } : c));
+    const newVolt = () => ({ id: uid(), label: "", I: "", l: "", cosPhi: "", cableA: "", threePhase: "" });
+    const addVolt = () => setVoltCalcs((s) => [...s, newVolt()]);
+    const delVolt = (id) => setVoltCalcs((s) => s.filter((c) => c.id !== id));
+    const updV = (id, patch) => setVoltCalcs((s) => s.map((c) => c.id === id ? { ...c, ...patch } : c));
+    return /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: subTab === "dim" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(
       Section,
       {
-        title: "Leitungsdimensionierung & Spannungsfall",
-        subtitle: "Querschnitt nach Stromtragfaehigkeit (Vmethode B2, Cu, PVC, DIN VDE 0298-4) und delta-U \u2264 3 % (DIN VDE 0100-520)"
+        title: "Leitungsdimensionierung",
+        subtitle: "H07RN-F \xB7 DIN VDE 0298-4 \xB7 Pr\xFCfkette I\u0299 \u2264 I\u2099 \u2264 I\u2098"
       },
-      sorted.map((inst) => {
-        const type = boxTypeById[inst.typeId];
-        const outlets = type ? sortOutlets(type.outlets) : [];
-        if (!outlets.length) return null;
-        return /* @__PURE__ */ import_react.default.createElement("div", { key: inst.id, style: { marginBottom: 18 } }, /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 13, fontWeight: 700, color: "#e8eaed", margin: "0 0 6px", display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#f5a623" } }, "\u25CF"), " ", inst.name, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, fontWeight: 400, color: "#9aa4af" } }, "\xA0\u2014\xA0", type?.name || "?", " \xB7 ", outlets.length, " Abg.")), /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: { ...{ borderCollapse: "collapse", width: "100%", fontSize: 12 } } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", { style: { background: "#1b2026" } }, /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "left", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "Abgang"), /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "right", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "I_N (A)"), /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "left", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "&ell; (m)"), /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "left", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "A (mm\xB2)"), /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "left", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "cos \u03C6"), /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "right", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "\u0394U (V)"), /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "right", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "\u0394U (%)"), /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "right", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "Min A\u0394U"), /* @__PURE__ */ import_react.default.createElement("th", { style: { padding: "5px 8px", textAlign: "right", color: "#9aa4af", fontWeight: 600, fontSize: 11, border: `1px solid ${LINE2}`, whiteSpace: "nowrap" } }, "Min A_I"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, outlets.map((o, ri) => {
-          const or = getOR(inst.id, o.id);
-          const du = calcVoltDrop(o.amp, or.cableLen, or.cableA, or.cosPhi, is3ph(o.connector));
-          const minAdu = minCsVoltDrop(o.amp, or.cableLen, or.cosPhi, is3ph(o.connector));
-          const minAi = minCsCurrent(o.amp);
-          const duColor = du ? du.pct <= 3 ? "#2ecc71" : du.pct <= 5 ? "#f5a623" : "#e74c3c" : "#9aa4af";
-          const rowBg = ri % 2 === 0 ? "#1b2026" : "#1f252c";
-          const td = { padding: "4px 8px", border: `1px solid ${LINE2}`, background: rowBg, verticalAlign: "middle" };
-          return /* @__PURE__ */ import_react.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: { ...td, color: "#e8eaed", whiteSpace: "nowrap" } }, o.label), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...td, textAlign: "right", color: "#9aa4af", fontVariantNumeric: "tabular-nums" } }, o.amp), /* @__PURE__ */ import_react.default.createElement("td", { style: td }, /* @__PURE__ */ import_react.default.createElement(
-            "input",
-            {
-              type: "number",
-              min: "0",
-              step: "0.5",
-              style: { background: "#252b33", border: "1px solid #3a424c", borderRadius: 4, color: "#e8eaed", padding: "3px 6px", width: 70, fontSize: 12 },
-              value: or.cableLen,
-              placeholder: "\u2013",
-              onChange: (e) => updOR(inst.id, o.id, { cableLen: e.target.value })
-            }
-          )), /* @__PURE__ */ import_react.default.createElement("td", { style: td }, /* @__PURE__ */ import_react.default.createElement(
-            "select",
-            {
-              style: { background: "#252b33", border: "1px solid #3a424c", borderRadius: 4, color: "#e8eaed", padding: "3px 4px", width: 70, fontSize: 12 },
-              value: or.cableA || "",
-              onChange: (e) => updOR(inst.id, o.id, { cableA: e.target.value })
-            },
-            /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014"),
-            CABLE_CS_MM2.map((cs) => /* @__PURE__ */ import_react.default.createElement("option", { key: cs, value: cs }, cs))
-          )), /* @__PURE__ */ import_react.default.createElement("td", { style: td }, /* @__PURE__ */ import_react.default.createElement(
-            "input",
-            {
-              type: "number",
-              step: "0.05",
-              min: "0.5",
-              max: "1",
-              style: { background: "#252b33", border: "1px solid #3a424c", borderRadius: 4, color: "#e8eaed", padding: "3px 6px", width: 60, fontSize: 12 },
-              value: or.cosPhi || "0.95",
-              onChange: (e) => updOR(inst.id, o.id, { cosPhi: e.target.value })
-            }
-          )), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...td, textAlign: "right", color: duColor, fontVariantNumeric: "tabular-nums" } }, du ? du.V.toFixed(2) + " V" : "\u2013"), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...td, textAlign: "right", fontWeight: 600, color: duColor, fontVariantNumeric: "tabular-nums" } }, du ? du.pct.toFixed(2) + " %" : "\u2013"), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...td, textAlign: "right", color: "#9aa4af", fontVariantNumeric: "tabular-nums", fontSize: 11 } }, minAdu != null ? ">= " + minAdu + " mm\xB2" : "\u2013"), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...td, textAlign: "right", color: "#9aa4af", fontSize: 11 } }, minAi != null ? minAi + " mm\xB2" : "\u2013"));
-        })))));
-      }),
-      /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 10, color: "#666", marginTop: 16 } }, "Berechnung: \u0394U = (2 \xD7 I \xD7 &ell; \xD7 cos\u03C6) / (\u03BA \xD7 A) [1-phasig] bzw. \u221A3-Faktor [3-phasig]; \u03BA(Cu) = 56 m/(\u03A9\xB7mm\xB2); Verlegemethode B2")
-    );
+      /* @__PURE__ */ import_react.default.createElement("div", { style: { marginBottom: 16 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addCalc }, "+ Neue Rechnung")),
+      cableCalcs.length === 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#666", fontSize: 13 } }, "Noch keine Rechnungen vorhanden. \xDCber \u201E+ Neue Rechnung\u201C eine neue anlegen."),
+      cableCalcs.map((calc) => {
+        const dim = calcDim(calc.cableA, calc.fTemp, calc.fAdern, calc.fLagen, calc.fArt, calc.fN);
+        const ready = calc.I_B !== "" && calc.I_n !== "" && calc.cableA !== "";
+        const chk1 = ready && +calc.I_B <= +calc.I_n;
+        const chk2 = ready && dim != null && +calc.I_n <= dim.izul;
+        const allOk = chk1 && chk2;
+        const resBg = !ready ? {} : allOk ? { background: "rgba(46,204,113,0.08)", border: "1px solid rgba(46,204,113,0.28)" } : { background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.28)" };
+        return /* @__PURE__ */ import_react.default.createElement("div", { key: calc.id, style: { ...S.card, marginBottom: 12 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid #3a424c" } }, /* @__PURE__ */ import_react.default.createElement(
+          "input",
+          {
+            style: { ...S.inputSm, flex: 1 },
+            placeholder: "Bezeichnung (optional)",
+            value: calc.label,
+            onChange: (e) => upd(calc.id, { label: e.target.value })
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => delCalc(calc.id) }, "\u2715")), /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "10px 14px", borderBottom: "1px solid #3a424c" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" } }, /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "I\u0299 \u2013 Betriebsstrom", /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, /* @__PURE__ */ import_react.default.createElement(
+          "input",
+          {
+            type: "number",
+            min: "0",
+            step: "0.1",
+            style: { ...S.inputSm, width: 80 },
+            value: calc.I_B,
+            placeholder: "\u2014",
+            onChange: (e) => upd(calc.id, { I_B: e.target.value })
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "A"))), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "I\u2099 \u2013 Nennstrom Sicherung", /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, /* @__PURE__ */ import_react.default.createElement(
+          "input",
+          {
+            type: "number",
+            min: "0",
+            step: "1",
+            style: { ...S.inputSm, width: 80 },
+            value: calc.I_n,
+            placeholder: "\u2014",
+            onChange: (e) => upd(calc.id, { I_n: e.target.value })
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "A"))), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Querschnitt", /* @__PURE__ */ import_react.default.createElement(
+          "select",
+          {
+            style: { ...S.selectSm, width: 90 },
+            value: calc.cableA,
+            onChange: (e) => upd(calc.id, { cableA: e.target.value })
+          },
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014"),
+          CABLE_CS_H07.map((cs) => /* @__PURE__ */ import_react.default.createElement("option", { key: cs, value: cs }, cs, " mm\xB2"))
+        )))), /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "10px 14px", borderBottom: "1px solid #3a424c" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginBottom: 8, letterSpacing: ".04em" } }, "KORREKTURFAKTOREN", /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, color: "#555", marginLeft: 6, textTransform: "none" } }, "(leer = Faktor entf\xE4llt)")), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" } }, /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Umgebungstemperatur", /* @__PURE__ */ import_react.default.createElement(
+          "select",
+          {
+            style: { ...S.selectSm, width: 110 },
+            value: calc.fTemp,
+            onChange: (e) => upd(calc.id, { fTemp: e.target.value })
+          },
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014"),
+          Object.keys(F_TEMP).map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t, " \xB0C"))
+        )), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Stromf. Adern", /* @__PURE__ */ import_react.default.createElement(
+          "select",
+          {
+            style: { ...S.selectSm, width: 95 },
+            value: calc.fAdern,
+            onChange: (e) => upd(calc.id, { fAdern: e.target.value })
+          },
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014"),
+          Object.keys(F_ADERN).map((n) => /* @__PURE__ */ import_react.default.createElement("option", { key: n, value: n }, n, " Adern"))
+        )), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Aufgewickelt", /* @__PURE__ */ import_react.default.createElement(
+          "select",
+          {
+            style: { ...S.selectSm, width: 105 },
+            value: calc.fLagen,
+            onChange: (e) => upd(calc.id, { fLagen: e.target.value })
+          },
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014"),
+          Object.keys(F_LAGEN).map((n) => /* @__PURE__ */ import_react.default.createElement("option", { key: n, value: n }, n === "1" ? "1 Lage" : n + " Lagen"))
+        )), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "H\xE4ufung \u2013 Verlegeart", /* @__PURE__ */ import_react.default.createElement(
+          "select",
+          {
+            style: { ...S.selectSm, width: 115 },
+            value: calc.fArt,
+            onChange: (e) => upd(calc.id, { fArt: e.target.value, fN: "" })
+          },
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014"),
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "einl" }, "Einlagig"),
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "gebund" }, "Geb\xFCndelt")
+        )), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "H\xE4ufung \u2013 Anz. Leitungen", /* @__PURE__ */ import_react.default.createElement(
+          "select",
+          {
+            style: { ...S.selectSm, width: 115 },
+            value: calc.fN,
+            disabled: !calc.fArt,
+            onChange: (e) => upd(calc.id, { fN: e.target.value })
+          },
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014"),
+          Array.from({ length: 10 }, (_, i) => i + 1).map((n) => /* @__PURE__ */ import_react.default.createElement("option", { key: n, value: n }, n))
+        )))), ready && dim && /* @__PURE__ */ import_react.default.createElement("div", { style: { ...resBg, padding: "10px 14px", borderRadius: "0 0 8px 8px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", marginBottom: 8 } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "Gesamtfaktor: ", /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: "#e8eaed" } }, dim.fTotal.toFixed(2))), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "I\u2098 Basis: ", /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: "#e8eaed" } }, dim.base, " A")), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "I\u2098 korrigiert:", " ", /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: chk2 ? "#2ecc71" : "#e74c3c", fontSize: 14 } }, dim.izul, " A"))), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 5 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 13, color: chk1 ? "#2ecc71" : "#e74c3c", display: "flex", alignItems: "center", gap: 6 } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 700 } }, chk1 ? "\u2713" : "\u2717"), /* @__PURE__ */ import_react.default.createElement("span", null, "I\u0299 (", calc.I_B, " A) ", chk1 ? "\u2264" : ">", " I\u2099 (", calc.I_n, " A)"), !chk1 && /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, marginLeft: 4 } }, "\u2014 Betriebsstrom \xFCbersteigt Sicherung!")), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 13, color: chk2 ? "#2ecc71" : "#e74c3c", display: "flex", alignItems: "center", gap: 6 } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 700 } }, chk2 ? "\u2713" : "\u2717"), /* @__PURE__ */ import_react.default.createElement("span", null, "I\u2099 (", calc.I_n, " A) ", chk2 ? "\u2264" : ">", " I\u2098 (", dim.izul, " A)"), !chk2 && /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, marginLeft: 4 } }, "\u2014 Kabel zu klein!")))), ready && !dim && /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "10px 14px", color: "#666", fontSize: 12 } }, "Kein Querschnitt gew\xE4hlt oder nicht in Tabelle."));
+      })
+    )), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: subTab === "volt" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(
+      Section,
+      {
+        title: "Spannungsfall",
+        subtitle: "H07RN-F \xB7 DIN VDE 0100-520 \xB7 \u0394U \u2264 3 % empfohlen"
+      },
+      /* @__PURE__ */ import_react.default.createElement("div", { style: { marginBottom: 16 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addVolt }, "+ Neue Rechnung")),
+      voltCalcs.length === 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#666", fontSize: 13 } }, "Noch keine Rechnungen vorhanden. \xDCber \u201E+ Neue Rechnung\u201C eine neue anlegen."),
+      voltCalcs.map((calc) => {
+        const ready = calc.I !== "" && calc.l !== "" && calc.cosPhi !== "" && calc.cableA !== "" && calc.threePhase !== "";
+        const du = ready ? calcVoltDrop(+calc.I, +calc.l, +calc.cableA, +calc.cosPhi, calc.threePhase === "3ph") : null;
+        const minA = ready ? minCsVoltDrop(+calc.I, +calc.l, +calc.cosPhi, calc.threePhase === "3ph") : null;
+        const duPct = du?.pct ?? null;
+        const col = duPct === null ? null : duPct <= 3 ? "#2ecc71" : duPct <= 5 ? "#f5a623" : "#e74c3c";
+        const resBg = du === null ? {} : duPct <= 3 ? { background: "rgba(46,204,113,0.08)", border: "1px solid rgba(46,204,113,0.28)" } : duPct <= 5 ? { background: "rgba(245,166,35,0.10)", border: "1px solid rgba(245,166,35,0.35)" } : { background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.28)" };
+        return /* @__PURE__ */ import_react.default.createElement("div", { key: calc.id, style: { ...S.card, marginBottom: 12 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderBottom: "1px solid #3a424c" } }, /* @__PURE__ */ import_react.default.createElement(
+          "input",
+          {
+            style: { ...S.inputSm, flex: 1 },
+            placeholder: "Bezeichnung (optional)",
+            value: calc.label,
+            onChange: (e) => updV(calc.id, { label: e.target.value })
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => delVolt(calc.id) }, "\u2715")), /* @__PURE__ */ import_react.default.createElement("div", { style: { padding: "10px 14px", borderBottom: "1px solid #3a424c" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end" } }, /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Strom I", /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, /* @__PURE__ */ import_react.default.createElement(
+          "input",
+          {
+            type: "number",
+            min: "0",
+            step: "0.1",
+            style: { ...S.inputSm, width: 80 },
+            value: calc.I,
+            placeholder: "\u2014",
+            onChange: (e) => updV(calc.id, { I: e.target.value })
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "A"))), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "L\xE4nge l", /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, /* @__PURE__ */ import_react.default.createElement(
+          "input",
+          {
+            type: "number",
+            min: "0",
+            step: "1",
+            style: { ...S.inputSm, width: 80 },
+            value: calc.l,
+            placeholder: "\u2014",
+            onChange: (e) => updV(calc.id, { l: e.target.value })
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "m"))), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "cos \u03C6", /* @__PURE__ */ import_react.default.createElement(
+          "input",
+          {
+            type: "number",
+            min: "0",
+            max: "1",
+            step: "0.01",
+            style: { ...S.inputSm, width: 70 },
+            value: calc.cosPhi,
+            placeholder: "\u2014",
+            onChange: (e) => updV(calc.id, { cosPhi: e.target.value })
+          }
+        )), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Querschnitt", /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, /* @__PURE__ */ import_react.default.createElement(
+          "input",
+          {
+            type: "number",
+            min: "0",
+            step: "0.5",
+            style: { ...S.inputSm, width: 75 },
+            value: calc.cableA,
+            placeholder: "\u2014",
+            onChange: (e) => updV(calc.id, { cableA: e.target.value })
+          }
+        ), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "mm\xB2"))), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Phasigkeit", /* @__PURE__ */ import_react.default.createElement(
+          "select",
+          {
+            style: { ...S.selectSm, width: 105 },
+            value: calc.threePhase,
+            onChange: (e) => updV(calc.id, { threePhase: e.target.value })
+          },
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014"),
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "1ph" }, "1-phasig"),
+          /* @__PURE__ */ import_react.default.createElement("option", { value: "3ph" }, "3-phasig")
+        )))), du && /* @__PURE__ */ import_react.default.createElement("div", { style: { ...resBg, padding: "10px 14px", borderRadius: "0 0 8px 8px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 20, alignItems: "center", marginBottom: 6 } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 13, color: "#9aa4af" } }, "\u0394U = ", /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: col, fontSize: 16 } }, du.V.toFixed(2), " V")), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 13, color: "#9aa4af" } }, "\u0394U = ", /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: col, fontSize: 16 } }, du.pct.toFixed(2), " %"))), minA !== null && /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 12, color: "#9aa4af" } }, "Min. Querschnitt f\xFCr \u0394U \u2264 3 %:", " ", /* @__PURE__ */ import_react.default.createElement("strong", { style: { color: "#e8eaed" } }, "\u2265 ", minA.toFixed(2), " mm\xB2"))));
+      })
+    )));
   }
   function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnById, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults }) {
     const updMeta = (patch) => setInspMeta((s) => ({ ...s, ...patch }));
