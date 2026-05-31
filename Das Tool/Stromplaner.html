@@ -45410,6 +45410,12 @@ Fortfahren?`);
     const LEAF_GAP = 6;
     const PAD = 46;
     const ROW_GAP = 20;
+    const mcMaxLabelPx = mainConns.reduce((mx, mc) => {
+      const nW = (mc.name || "").length * 8;
+      const aW = mc.amp ? (String(mc.amp) + " A").length * 7 : 0;
+      return Math.max(mx, nW, aW);
+    }, 0);
+    const LEFT_PAD = Math.max(PAD, mcMaxLabelPx + 16);
     const nodeH = (inst) => {
       const type = boxTypeById[inst?.typeId];
       const nOut = (type?.outlets || []).length;
@@ -45418,8 +45424,17 @@ Fortfahren?`);
     };
     const outletToChild = {};
     instances.forEach((inst) => {
-      if (inst.parentId && inst.parentOutletId)
-        outletToChild[`${inst.parentId}__${inst.parentOutletId}`] = inst.id;
+      if (!inst.parentId) return;
+      const parentType = boxTypeById[instById[inst.parentId]?.typeId];
+      const parentOutlets = parentType?.outlets || [];
+      let oIdx = parentOutlets.findIndex((o) => o.id === inst.parentOutletId);
+      if (oIdx < 0) {
+        const feedConn = boxTypeById[inst.typeId]?.feedConnector;
+        if (feedConn) oIdx = parentOutlets.findIndex((o) => o.connector === feedConn);
+      }
+      oIdx = Math.max(0, oIdx);
+      const resolvedOutlet = parentOutlets[oIdx];
+      if (resolvedOutlet) outletToChild[`${inst.parentId}__${resolvedOutlet.id}`] = inst.id;
     });
     const outletToPlacs = {};
     (placements || []).forEach((p) => {
@@ -45427,28 +45442,66 @@ Fortfahren?`);
       (outletToPlacs[k] = outletToPlacs[k] || []).push(p);
     });
     const getChildren = (pid) => instances.filter((i) => i.parentId === pid);
-    const countLeaves = (id) => {
-      const ch = getChildren(id);
-      return ch.length === 0 ? 1 : ch.reduce((s, c) => s + countLeaves(c.id), 0);
+    const resolveOutletIdx = (childInst, parentOutlets) => {
+      let idx = parentOutlets.findIndex((o) => o.id === childInst.parentOutletId);
+      if (idx < 0) {
+        const feedConn = boxTypeById[childInst.typeId]?.feedConnector;
+        if (feedConn) idx = parentOutlets.findIndex((o) => o.connector === feedConn);
+      }
+      return Math.max(0, idx);
     };
-    const maxNH = instances.reduce((mx, i) => Math.max(mx, nodeH(i)), 0);
-    const ROW_H = maxNH + ROW_GAP;
+    const outY_base = HDR_H + FEED_H + SEP_H + SECT_H;
+    const subtreeH = (id) => {
+      const inst = instById[id];
+      if (!inst) return 60;
+      const h = nodeH(inst);
+      const ch = getChildren(id);
+      if (ch.length === 0) return h;
+      const type = boxTypeById[inst.typeId];
+      const outlets = type?.outlets || [];
+      const sortedCh = ch.slice().sort((a, b) => {
+        const ia = resolveOutletIdx(a, outlets);
+        const ib = resolveOutletIdx(b, outlets);
+        return ia - ib;
+      });
+      let prevBottom = 0;
+      sortedCh.forEach((child) => {
+        const oIdx = resolveOutletIdx(child, outlets);
+        const outletRelY = outY_base + oIdx * OUT_H + OUT_H / 2;
+        const childFeedRelY = HDR_H + FEED_H / 2;
+        const idealChildTop = outletRelY - childFeedRelY;
+        const actualChildTop = Math.max(idealChildTop, prevBottom);
+        prevBottom = actualChildTop + subtreeH(child.id) + ROW_GAP;
+      });
+      return Math.max(h, prevBottom - ROW_GAP);
+    };
     const positions = {};
-    const assignPos = (id, depth, yStart) => {
+    const assignPos = (id, depth, nodeTopY) => {
       const inst = instById[id];
       if (!inst) return;
-      const ch = getChildren(id), leaves = countLeaves(id), h = nodeH(inst);
-      positions[id] = { x: depth * COL_W + PAD, y: yStart + leaves * ROW_H / 2 - h / 2 };
-      let curY = yStart;
-      ch.forEach((c) => {
-        const cl = countLeaves(c.id);
-        assignPos(c.id, depth + 1, curY);
-        curY += cl * ROW_H;
+      positions[id] = { x: depth * COL_W + LEFT_PAD, y: nodeTopY };
+      const type = boxTypeById[inst.typeId];
+      const outlets = type?.outlets || [];
+      const sortedCh = getChildren(id).slice().sort((a, b) => {
+        const ia = resolveOutletIdx(a, outlets);
+        const ib = resolveOutletIdx(b, outlets);
+        return ia - ib;
+      });
+      let prevBottom = nodeTopY;
+      sortedCh.forEach((child) => {
+        const oIdx = resolveOutletIdx(child, outlets);
+        const outletRelY = outY_base + oIdx * OUT_H + OUT_H / 2;
+        const childFeedRelY = HDR_H + FEED_H / 2;
+        const idealChildY = nodeTopY + outletRelY - childFeedRelY;
+        const actualChildY = Math.max(idealChildY, prevBottom + ROW_GAP / 2);
+        assignPos(child.id, depth + 1, actualChildY);
+        prevBottom = actualChildY + subtreeH(child.id) + ROW_GAP / 2;
       });
     };
-    rootInstances.forEach((r, i) => {
-      const prev = rootInstances.slice(0, i).reduce((s, ri) => s + countLeaves(ri.id), 0);
-      assignPos(r.id, 0, prev * ROW_H + PAD);
+    let rootY = PAD;
+    rootInstances.forEach((r) => {
+      assignPos(r.id, 0, rootY);
+      rootY += subtreeH(r.id) + ROW_GAP;
     });
     const outletAbsY = (instId, outletId) => {
       const pos = positions[instId];
@@ -45456,10 +45509,18 @@ Fortfahren?`);
       const type = boxTypeById[instById[instId]?.typeId];
       const outlets = type?.outlets || [];
       const idx = outlets.findIndex((o) => o.id === outletId);
-      if (idx < 0) return pos.y + nodeH(instById[instId]) / 2;
-      return pos.y + HDR_H + FEED_H + SEP_H + SECT_H + idx * OUT_H + OUT_H / 2;
+      if (idx < 0) return pos.y + outY_base + OUT_H / 2;
+      return pos.y + outY_base + idx * OUT_H + OUT_H / 2;
     };
-    const totalLeaves = rootInstances.reduce((s, r) => s + countLeaves(r.id), 0);
+    const childOutletAbsY = (parentInstId, childInst) => {
+      const pos = positions[parentInstId];
+      if (!pos) return 0;
+      const parentType = boxTypeById[instById[parentInstId]?.typeId];
+      const outlets = parentType?.outlets || [];
+      const idx = resolveOutletIdx(childInst, outlets);
+      return pos.y + outY_base + idx * OUT_H + OUT_H / 2;
+    };
+    const totalHeight = rootInstances.reduce((s, r) => s + subtreeH(r.id) + ROW_GAP, 0);
     const maxDepth = instances.reduce((mx, inst) => {
       let d = 0, cur = inst;
       while (cur.parentId) {
@@ -45474,12 +45535,62 @@ Fortfahren?`);
       const t = boxTypeById[i.typeId];
       return (t?.outlets || []).some((o) => (outletToPlacs[`${i.id}__${o.id}`] || []).length > 0);
     });
-    const svgW = (maxDepth + 1) * COL_W + PAD * 2 + NODE_W + (hasLeafConsumers ? COL_W / 2 + LEAF_W + PAD : 0);
-    const svgH = Math.max(totalLeaves * ROW_H + PAD * 2, 260);
+    const consumerStackPositions = {};
+    instances.forEach((inst) => {
+      const type = boxTypeById[inst.typeId];
+      const outlets = type?.outlets || [];
+      const pos = positions[inst.id];
+      if (!pos) return;
+      const leafX = pos.x + NODE_W + Math.round((COL_W - NODE_W) / 2);
+      const blockedRanges = getChildren(inst.id).flatMap((ch) => {
+        const chPos = positions[ch.id];
+        if (!chPos) return [];
+        if (leafX + LEAF_W <= chPos.x || leafX >= chPos.x + NODE_W) return [];
+        return [{ top: chPos.y, bottom: chPos.y + nodeH(instById[ch.id]) }];
+      }).sort((a, b) => a.top - b.top);
+      const claimedRanges = [];
+      outlets.forEach((out) => {
+        const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
+        if (!placs.length) return;
+        const oY = outletAbsY(inst.id, out.id);
+        const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
+        let stackTop = oY - LEAF_H / 2;
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const r of [...blockedRanges, ...claimedRanges].sort((a, b) => a.top - b.top)) {
+            if (stackTop + totalH > r.top && stackTop < r.bottom) {
+              stackTop = r.bottom + 4;
+              changed = true;
+              break;
+            }
+          }
+        }
+        claimedRanges.push({ top: stackTop, bottom: stackTop + totalH });
+        consumerStackPositions[`${inst.id}__${out.id}`] = stackTop;
+      });
+    });
+    const maxLeafBottom = instances.reduce((mx, inst) => {
+      const pos = positions[inst.id];
+      if (!pos) return mx;
+      const type = boxTypeById[inst.typeId];
+      return (type?.outlets || []).reduce((m, out) => {
+        const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
+        if (!placs.length) return m;
+        const stackTop = consumerStackPositions[`${inst.id}__${out.id}`] ?? outletAbsY(inst.id, out.id) - LEAF_H / 2;
+        const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
+        return Math.max(m, stackTop + totalH);
+      }, mx);
+    }, 0);
+    const svgW = LEFT_PAD + maxDepth * COL_W + PAD + NODE_W + (hasLeafConsumers ? COL_W / 2 + LEAF_W + PAD : 0);
+    const svgH = Math.max(totalHeight + PAD * 2, maxLeafBottom + PAD, 260);
     const edges = instances.filter((i) => i.parentId && positions[i.id] && positions[i.parentId]).map((inst) => {
       const parentType = boxTypeById[instById[inst.parentId]?.typeId];
-      const outlet = parentType?.outlets.find((o) => o.id === inst.parentOutletId);
-      const y1 = outletAbsY(inst.parentId, inst.parentOutletId);
+      const parentOutlets = parentType?.outlets || [];
+      const idxByExact = parentOutlets.findIndex((o) => o.id === inst.parentOutletId);
+      const staleCon = idxByExact < 0;
+      const outlet = parentOutlets[resolveOutletIdx(inst, parentOutlets)];
+      const y1 = childOutletAbsY(inst.parentId, inst);
       const toPos = positions[inst.id];
       const feedMidY = toPos.y + HDR_H + FEED_H / 2;
       return {
@@ -45489,7 +45600,8 @@ Fortfahren?`);
         y2: feedMidY,
         inst,
         outlet,
-        adapted: isAdapted(inst.id)
+        adapted: isAdapted(inst.id),
+        staleCon
       };
     });
     const mcCenterY = (mc) => {
@@ -45503,7 +45615,7 @@ Fortfahren?`);
       const cy = mcCenterY(mc);
       if (cy === null) return null;
       const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
-      const bx = PAD + 14;
+      const bx = LEFT_PAD + 14;
       return /* @__PURE__ */ import_react.default.createElement("g", { key: mc.id }, /* @__PURE__ */ import_react.default.createElement("line", { x1: bx, y1: cy - 28, x2: bx, y2: cy + 28, stroke: "#f5a623", strokeWidth: 4, strokeLinecap: "round" }), /* @__PURE__ */ import_react.default.createElement("line", { x1: bx - 20, y1: cy, x2: bx - 1, y2: cy, stroke: "#f5a623", strokeWidth: 1.5 }), /* @__PURE__ */ import_react.default.createElement("polygon", { points: `${bx - 5},${cy - 4} ${bx + 3},${cy} ${bx - 5},${cy + 4}`, fill: "#f5a623" }), /* @__PURE__ */ import_react.default.createElement("text", { x: bx - 22, y: cy - 12, textAnchor: "end", fill: "#f5a623", fontSize: 10, fontWeight: "700" }, mc.name), mc.amp && /* @__PURE__ */ import_react.default.createElement("text", { x: bx - 22, y: cy + 22, textAnchor: "end", fill: "#f5a623", fontSize: 9, opacity: "0.75" }, mc.amp, " A"), connInsts.map((ri) => {
         const pos = positions[ri.id];
         if (!pos) return null;
@@ -45525,8 +45637,9 @@ Fortfahren?`);
     }), edges.map((e, i) => {
       const mx = (e.x1 + e.x2) / 2, my = (e.y1 + e.y2) / 2;
       const lbl = e.outlet ? connShort(e.outlet.connector) : "";
-      const edgeCol = e.adapted ? "#a78bfa" : "#4a5568";
-      const txtCol = e.adapted ? "#c4a8fa" : "#5a6a7a";
+      const edgeCol = e.staleCon ? "#d97706" : e.adapted ? "#a78bfa" : "#4a5568";
+      const txtCol = e.staleCon ? "#f5a623" : e.adapted ? "#c4a8fa" : "#5a6a7a";
+      const dashArr = e.staleCon ? "4,2" : e.adapted ? "6,3" : void 0;
       return /* @__PURE__ */ import_react.default.createElement("g", { key: i }, /* @__PURE__ */ import_react.default.createElement(
         "path",
         {
@@ -45534,7 +45647,7 @@ Fortfahren?`);
           fill: "none",
           stroke: edgeCol,
           strokeWidth: 1.6,
-          strokeDasharray: e.adapted ? "6,3" : void 0
+          strokeDasharray: dashArr
         }
       ), lbl && /* @__PURE__ */ import_react.default.createElement(
         "text",
@@ -45547,6 +45660,17 @@ Fortfahren?`);
           style: { paintOrder: "stroke", stroke: "#1b2026", strokeWidth: 3 }
         },
         lbl
+      ), e.staleCon && /* @__PURE__ */ import_react.default.createElement(
+        "text",
+        {
+          x: mx,
+          y: my + 10,
+          textAnchor: "middle",
+          fill: "#d97706",
+          fontSize: 9,
+          style: { paintOrder: "stroke", stroke: "#1b2026", strokeWidth: 3 }
+        },
+        "\u26A0"
       ));
     }), instances.map((inst) => {
       const pos = positions[inst.id];
@@ -45726,7 +45850,7 @@ Fortfahren?`);
         },
         inst.name
       ));
-    }), leafInsts.flatMap((inst) => {
+    }), instances.flatMap((inst) => {
       const type = boxTypeById[inst.typeId];
       const outlets = type?.outlets || [];
       const pos = positions[inst.id];
@@ -45736,8 +45860,7 @@ Fortfahren?`);
         const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
         if (!placs.length) return [];
         const oY = outletAbsY(inst.id, out.id);
-        const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
-        const stackTop = oY - totalH / 2;
+        const stackTop = consumerStackPositions[`${inst.id}__${out.id}`] ?? oY - LEAF_H / 2;
         return placs.map((plac, pi) => {
           const load = loadById?.[plac.loadId];
           if (!load) return null;
