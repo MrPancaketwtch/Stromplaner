@@ -44977,7 +44977,7 @@ Fortfahren?`);
       ["erweitert", "Erweitert"]
     ];
     const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, isUnderdimensioned, isAdapted, rootInstances, mainConns, mainConnById };
-    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: exportPDF }, "\u{1F5A8} PDF"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportExcel }, "\u2B07 Excel")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
         key: k,
@@ -45475,7 +45475,7 @@ Fortfahren?`);
       outlets.forEach((out) => {
         if (!out.breaker) return;
         const ph = is3ph(out.connector) ? "3P" : isMulticore(out.connector) ? "MC" : "1P";
-        const prot = out.protection === "RCBO" ? "RCBO" : out.protection === "RCD" ? "FI" : "MCB";
+        const prot = out.protection === "RCBO" ? "RCBO" : out.protection === "RCD" ? "RCD" : "MCB";
         const key = `${prot}_${out.breaker}_${out.char || "B"}_${ph}`;
         if (!mcbMap[key]) mcbMap[key] = { prot, breaker: out.breaker, ch: out.char || "B", ph, cnt: 0 };
         mcbMap[key].cnt++;
@@ -45483,7 +45483,7 @@ Fortfahren?`);
       const lines = Object.values(mcbMap).map((g) => `${g.cnt}\xD7 ${g.prot} ${g.breaker}A ${g.ch} ${g.ph}`);
       rcds.forEach((r) => {
         const ampPart = r.amp ? `${r.amp}A/` : "";
-        lines.push(`1\xD7 FI ${ampPart}${r.mA}mA${r.poles ? ` ${r.poles}P` : ""}`);
+        lines.push(`1\xD7 RCD ${ampPart}${r.mA}mA${r.poles ? ` ${r.poles}P` : ""}`);
       });
       return lines.slice(0, 5);
     };
@@ -45729,7 +45729,7 @@ Fortfahren?`);
       const mx = (e.x1 + e.x2) / 2, my = (e.y1 + e.y2) / 2;
       const lbl = e.outlet ? connShort(e.outlet.connector) : "";
       const edgeCol = e.staleCon ? "#d97706" : e.adapted ? "#a78bfa" : "#4a5568";
-      const txtCol = e.staleCon ? "#f5a623" : e.adapted ? "#c4a8fa" : "#5a6a7a";
+      const txtCol = e.staleCon ? "#f5a623" : e.adapted ? "#c4a8fa" : "#8ab8d8";
       const dashArr = e.staleCon ? "4,2" : e.adapted ? "6,3" : void 0;
       return /* @__PURE__ */ import_react.default.createElement("g", { key: i }, /* @__PURE__ */ import_react.default.createElement(
         "path",
@@ -45998,7 +45998,7 @@ Fortfahren?`);
               x: LEAF_W - 17,
               y: 14,
               textAnchor: "middle",
-              fill: "#7acce8",
+              fill: "#b8ecff",
               fontSize: 8,
               fontWeight: "700"
             },

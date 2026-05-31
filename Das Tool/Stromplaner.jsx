@@ -821,8 +821,7 @@ export default function App() {
         <label style={S.ghostBtn}>↥ Laden<input type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/></label>
         <button style={S.ghostBtn} onClick={saveJSON}>💾 Speichern</button>
         <button style={S.ghostBtn} onClick={resetAll}>↺ Neu</button>
-        <button style={S.ghostBtn} onClick={exportPDF}>🖨 PDF</button>
-        <button style={S.exportBtn} onClick={exportExcel}>⬇ Excel</button>
+        <button style={S.exportBtn} onClick={exportPDF}>🖨 PDF</button>
       </header>
       <nav style={S.nav}>
         {TABS.map(([k,label])=>(
@@ -1729,7 +1728,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     outlets.forEach(out=>{
       if(!out.breaker) return;
       const ph = is3ph(out.connector)?'3P':isMulticore(out.connector)?'MC':'1P';
-      const prot = out.protection==='RCBO'?'RCBO':out.protection==='RCD'?'FI':'MCB';
+      const prot = out.protection==='RCBO'?'RCBO':out.protection==='RCD'?'RCD':'MCB';
       const key  = `${prot}_${out.breaker}_${out.char||'B'}_${ph}`;
       if(!mcbMap[key]) mcbMap[key]={prot,breaker:out.breaker,ch:out.char||'B',ph,cnt:0};
       mcbMap[key].cnt++;
@@ -1737,7 +1736,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     const lines = Object.values(mcbMap).map(g=>`${g.cnt}× ${g.prot} ${g.breaker}A ${g.ch} ${g.ph}`);
     rcds.forEach(r=>{
       const ampPart = r.amp?`${r.amp}A/`:'';
-      lines.push(`1× FI ${ampPart}${r.mA}mA${r.poles?` ${r.poles}P`:''}`);
+      lines.push(`1× RCD ${ampPart}${r.mA}mA${r.poles?` ${r.poles}P`:''}`);
     });
     return lines.slice(0,5);
   };
@@ -2015,7 +2014,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
             const lbl=e.outlet?connShort(e.outlet.connector):"";
             // staleCon (kein gespeicherter Ausgang) → orange gestrichelt
             const edgeCol=e.staleCon?"#d97706":e.adapted?"#a78bfa":"#4a5568";
-            const txtCol =e.staleCon?"#f5a623":e.adapted?"#c4a8fa":"#5a6a7a";
+            const txtCol =e.staleCon?"#f5a623":e.adapted?"#c4a8fa":"#8ab8d8";
             const dashArr=e.staleCon?"4,2":e.adapted?"6,3":undefined;
             return (
               <g key={i}>
@@ -2219,7 +2218,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
                           <rect x={LEAF_W-30} y={4} width={26} height={13} rx={3}
                                 fill="#1e3a4a" stroke="#3a7a9a" strokeWidth={0.8}/>
                           <text x={LEAF_W-17} y={14} textAnchor="middle"
-                                fill="#7acce8" fontSize={8} fontWeight="700">
+                                fill="#b8ecff" fontSize={8} fontWeight="700">
                             Ch.{plac.mcSlot}
                           </text>
                         </g>
