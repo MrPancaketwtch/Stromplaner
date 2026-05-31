@@ -329,6 +329,7 @@ export default function App() {
 
   // Save on every change (debounced 600ms)
   const saveTimer = useRef(null);
+  const schematicSvgRef = useRef(null);
   useEffect(()=>{
     if(!loaded) return;
     clearTimeout(saveTimer.current);
@@ -623,6 +624,105 @@ export default function App() {
       } else body+=`<p style="font-size:11px;color:#999;font-style:italic">Keine Verbraucher gesteckt.</p>`;
       body+=`</div>`;
     });
+
+    /* ── Leitungsdimensionierung ──────────────────────────────────── */
+    if(cableCalcs.length>0){
+      body+=`<div style="page-break-inside:avoid;margin-top:28px">
+        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Leitungsdimensionierung (H07RN-F)</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:10px">
+          <thead><tr style="background:#eee">
+            <th style="padding:3px 6px;border:1px solid #ddd;text-align:left">Bezeichnung</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2B;(A)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2099;(A)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">Querschnitt</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">Faktor</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x1D467;(A)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2B;&le;I&#x2099;</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2099;&le;I&#x1D467;</th>
+          </tr></thead><tbody>`;
+      cableCalcs.forEach(c=>{
+        const dim=calcDim(c.cableA,c.fTemp,c.fAdern,c.fLagen,c.fArt,c.fN);
+        const ready=c.I_B!==''&&c.I_n!==''&&c.cableA!=='';
+        const chk1=ready&&+c.I_B<=+c.I_n; const chk2=ready&&dim!=null&&+c.I_n<=dim.izul;
+        const ok1=ready?(chk1?'&#10003;':'&#10007;'):'–'; const ok2=ready&&dim?(chk2?'&#10003;':'&#10007;'):'–';
+        const col1=!ready?'#666':chk1?'#1a7a3a':'#c0392b'; const col2=!ready||!dim?'#666':chk2?'#1a7a3a':'#c0392b';
+        body+=`<tr>
+          <td style="padding:2px 6px;border:1px solid #ddd">${c.label||'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I_B||'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I_n||'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cableA?c.cableA+' mm²':'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${dim?dim.fTotal:'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${dim?dim.izul:'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col1};font-weight:700">${ok1}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col2};font-weight:700">${ok2}</td>
+        </tr>`;
+      });
+      body+=`</tbody></table></div>`;
+    }
+
+    /* ── Spannungsfall ────────────────────────────────────────────── */
+    if(voltCalcs.length>0){
+      body+=`<div style="page-break-inside:avoid;margin-top:18px">
+        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Spannungsfall (DIN VDE 0100-520)</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:10px">
+          <thead><tr style="background:#eee">
+            <th style="padding:3px 6px;border:1px solid #ddd;text-align:left">Bezeichnung</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I(A)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">l(m)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">cos&phi;</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">A(mm²)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">Phasigkeit</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">&Delta;U(V)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">&Delta;U(%)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">A&le;3%</th>
+          </tr></thead><tbody>`;
+      voltCalcs.forEach(c=>{
+        const is3=c.threePhase==='3ph';
+        const ready=c.I!==''&&c.l!==''&&c.cosPhi!==''&&c.cableA!==''&&c.threePhase!=='';
+        const du=ready?calcVoltDrop(+c.I,+c.l,+c.cableA,+c.cosPhi,is3):null;
+        const minA=ready?minCsVoltDrop(+c.I,+c.l,+c.cosPhi,is3,3):null;
+        const pct=du?du.pct:null;
+        const col=pct===null?'#666':pct<=3?'#1a7a3a':pct<=5?'#b05a00':'#c0392b';
+        body+=`<tr>
+          <td style="padding:2px 6px;border:1px solid #ddd">${c.label||'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I||'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.l||'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cosPhi||'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cableA||'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.threePhase==='3ph'?'3-phasig':'1-phasig'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col}">${du?du.V+' V':'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col};font-weight:700">${du?du.pct+' %':'–'}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${minA!==null?minA+' mm²':'–'}</td>
+        </tr>`;
+      });
+      body+=`</tbody></table></div>`;
+    }
+
+    /* ── Blockschaltbild ──────────────────────────────────────────── */
+    const svgEl=schematicSvgRef.current;
+    if(svgEl&&instances.length>0){
+      const svgClone=svgEl.cloneNode(true);
+      svgClone.style.background='#fff';
+      svgClone.querySelectorAll('text').forEach(t=>{
+        const f=t.getAttribute('fill'); if(!f||f==='#fff'||f==='white') return;
+        if(f==='#e8eaed') t.setAttribute('fill','#222');
+        else if(['#9aa4af','#6b7a8d','#4a5568','#8aaccc','#7aaabf'].includes(f)) t.setAttribute('fill','#444');
+        else if(f==='#f5a623') t.setAttribute('fill','#b05a00');
+        else if(['#666','#3a7a5a','#4a6a7a','#3a6a4a'].includes(f)) t.setAttribute('fill','#555');
+      });
+      svgClone.querySelectorAll('rect,circle,path,line').forEach(el=>{
+        const f=el.getAttribute('fill');
+        if(f==='#252b33') el.setAttribute('fill','#f4f4f4');
+        else if(f==='#1c2127'||f==='#1b2026'||f==='#1e2a32') el.setAttribute('fill','#e4e4e4');
+        const s=el.getAttribute('stroke');
+        if(s==='#3a424c') el.setAttribute('stroke','#aaa');
+        else if(s==='#4a5568'||s==='#3a5468') el.setAttribute('stroke','#888');
+      });
+      body+=`<div style="page-break-before:always;margin-top:28px">
+        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 12px;border-radius:4px">Blockschaltbild</h2>
+        <div style="overflow:auto;border:1px solid #ddd;border-radius:4px;padding:12px">${svgClone.outerHTML}</div></div>`;
+    }
+
     pw.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Stromplan – ${meta.production}</title>
       <style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}</style>
       </head><body>${body}</body></html>`);
@@ -674,7 +774,7 @@ export default function App() {
           <OverviewTab {...sharedProps} meta={meta} placements={placements} loads={loads} loadById={loadById} />
         </div>
         <div style={{display:tab==="schematic"?"block":"none"}}>
-          <SchematicTab {...sharedProps} meta={meta} />
+          <SchematicTab {...sharedProps} meta={meta} svgRef={schematicSvgRef} placements={placements} loadById={loadById}/>
         </div>
         <div style={{display:tab==="boxtypes"?"block":"none"}}>
           <BoxTypesTab boxTypes={boxTypes} setBoxTypes={setBoxTypes} instances={instances} />
@@ -1425,114 +1525,449 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   TAB: Schaltbild
+   TAB: Schaltbild – Blockschaltbild mit IEC-Symbolen
 ══════════════════════════════════════════════════════════════════════════ */
-function SchematicTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded,isUnderdimensioned,isAdapted }) {
-  if(instances.length===0) return <Section title="Schaltbild"><p style={S.empty}>Aktiviere zuerst Kästen.</p></Section>;
+function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,mainConnById,isAdapted,svgRef,placements,loadById }) {
+  if(instances.length===0) return <Section title="Blockschaltbild"><p style={S.empty}>Aktiviere zuerst Kästen im Konfiguration-Tab.</p></Section>;
 
-  const getChildren=(parentId)=>instances.filter(i=>i.parentId===parentId);
-  const countLeaves=(id)=>{ const ch=getChildren(id); return ch.length===0?1:ch.reduce((s,c)=>s+countLeaves(c.id),0); };
+  /* ── Connector-Labels (sketchartig: Spannung + Phasigkeit) ───────────── */
+  const connMid = (type) => ({
+    CEE16:"CEE 16A 3L+N+PE",  CEE32:"CEE 32A 3L+N+PE",
+    CEE63:"CEE 63A 3L+N+PE",  CEE125:"CEE 125A 3L+N+PE",
+    CEE16_1:"CEE 16A L+N+PE", CEE32_1:"CEE 32A L+N+PE",
+    PL125:"Powerlock 125A",   PL200:"Powerlock 200A", PL400:"Powerlock 400A",
+    MC:"Multicore",           SCHUKO:"Schuko 16A",
+  }[type] || type || "–");
+  const connShort = (type) => ({
+    CEE16:"CEE16",CEE32:"CEE32",CEE63:"CEE63",CEE125:"CEE125",
+    CEE16_1:"CEE16 1ph",CEE32_1:"CEE32 1ph",
+    PL125:"PL125",PL200:"PL200",PL400:"PL400",
+    MC:"MC",SCHUKO:"Schuko",
+  }[type] || type || "–");
 
-  const ROW_H=120, COL_W=240, NODE_W=190, NODE_H=72, PAD=24;
-  const positions={};
-  const assignPos=(id,depth,yStart)=>{
-    const ch=getChildren(id); const leaves=countLeaves(id);
-    positions[id]={x:depth*COL_W+PAD,y:yStart+(leaves*ROW_H)/2-NODE_H/2};
-    let curY=yStart; ch.forEach(c=>{ const cl=countLeaves(c.id); assignPos(c.id,depth+1,curY); curY+=cl*ROW_H; });
+  /* ── IEC 60309 Symbole (für Hauptanschluss-Visualisierung) ──────────── */
+  const SymCEE3ph = ({x,y,s=1,col="#9aa4af"}) => (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <circle cx="10" cy="10" r="8.5" stroke={col} strokeWidth="1.4" fill="none"/>
+      <rect x="8.7" y="17.6" width="2.6" height="1.8" rx="0.5" fill={col} opacity="0.7"/>
+      <circle cx="10"   cy="14.5" r="2.0" fill={col}/>
+      <circle cx="7.75" cy="6.1"  r="1.5" fill={col}/>
+      <circle cx="14.5" cy="10"   r="1.5" fill={col}/>
+      <circle cx="7.75" cy="13.9" r="1.5" fill={col}/>
+      <circle cx="5.5"  cy="10"   r="1.3" fill={col} opacity="0.6"/>
+    </g>
+  );
+  const SymCEE1ph = ({x,y,s=1,col="#9aa4af"}) => (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <circle cx="10" cy="10" r="8.5" stroke={col} strokeWidth="1.4" fill="none"/>
+      <rect x="8.7" y="17.6" width="2.6" height="1.8" rx="0.5" fill={col} opacity="0.7"/>
+      <circle cx="10"   cy="14.5" r="2.0" fill={col}/>
+      <circle cx="6.1"  cy="7.75" r="1.6" fill={col}/>
+      <circle cx="13.9" cy="7.75" r="1.6" fill={col}/>
+    </g>
+  );
+  const SymSchuko = ({x,y,s=1,col="#9aa4af"}) => (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <circle cx="10" cy="10" r="8.5" stroke={col} strokeWidth="1.4" fill="none"/>
+      <circle cx="10" cy="10" r="6.0" stroke={col} strokeWidth="0.6" fill="none" opacity="0.35"/>
+      <circle cx="7.2"  cy="10.5" r="2.0" stroke={col} strokeWidth="1.1" fill="none"/>
+      <circle cx="12.8" cy="10.5" r="2.0" stroke={col} strokeWidth="1.1" fill="none"/>
+      <line x1="1.5"  y1="9.7"  x2="4.0"  y2="9.7"  stroke={col} strokeWidth="1.3" strokeLinecap="round"/>
+      <line x1="1.5"  y1="11.3" x2="4.0"  y2="11.3" stroke={col} strokeWidth="1.3" strokeLinecap="round"/>
+      <line x1="16.0" y1="9.7"  x2="18.5" y2="9.7"  stroke={col} strokeWidth="1.3" strokeLinecap="round"/>
+      <line x1="16.0" y1="11.3" x2="18.5" y2="11.3" stroke={col} strokeWidth="1.3" strokeLinecap="round"/>
+    </g>
+  );
+  const SymPowerlock = ({x,y,s=1,col="#9aa4af"}) => (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      <rect x="1.5" y="4.0" width="17" height="12" rx="2.5" stroke={col} strokeWidth="1.4" fill="none"/>
+      <line x1="5.5"  y1="4.0" x2="5.5"  y2="1.5" stroke={col} strokeWidth="1.4" strokeLinecap="round"/>
+      <line x1="14.5" y1="4.0" x2="14.5" y2="1.5" stroke={col} strokeWidth="1.4" strokeLinecap="round"/>
+      <circle cx="10" cy="10" r="3.8" stroke={col} strokeWidth="1.3" fill="none"/>
+      <circle cx="10" cy="10" r="1.4" fill={col}/>
+    </g>
+  );
+  const SymMulticore = ({x,y,s=1,col="#9aa4af"}) => (
+    <g transform={`translate(${x},${y}) scale(${s})`}>
+      {[3,6.5,10,13.5,17].map(cx=>(
+        <line key={cx} x1={cx} y1="5" x2={cx} y2="14" stroke={col} strokeWidth="1.1"/>
+      ))}
+      <line x1="2" y1="5"  x2="18" y2="5"  stroke={col} strokeWidth="1.5"/>
+      <rect x="4" y="14" width="12" height="3.5" rx="1.2" stroke={col} strokeWidth="1.1" fill="none"/>
+    </g>
+  );
+  const connSym = (type) => {
+    if(["CEE16","CEE32","CEE63","CEE125"].includes(type)) return SymCEE3ph;
+    if(["CEE16_1","CEE32_1"].includes(type)) return SymCEE1ph;
+    if(type==="SCHUKO") return SymSchuko;
+    if(["PL125","PL200","PL400"].includes(type)) return SymPowerlock;
+    if(type==="MC") return SymMulticore;
+    return null;
   };
-  rootInstances.forEach((r,i)=>{ const prev=rootInstances.slice(0,i).reduce((s,ri)=>s+countLeaves(ri.id),0); assignPos(r.id,0,prev*ROW_H+PAD); });
 
+  /* ── Stecker-Symbol an Outlet-Ausgang (IEC 60617-13-artig) ──────────── */
+  // Rechteck-Gehäuse + zwei Kontakt-Stifte (nach oben zeigend)
+  const PlugIcon = ({cx, cy, col}) => (
+    <g>
+      <line x1={cx-12} y1={cy} x2={cx-8} y2={cy} stroke={col} strokeWidth={1}/>
+      <rect x={cx-8} y={cy-5} width={8} height={9} rx={1.5}
+            stroke={col} strokeWidth={1.1} fill="none"/>
+      <line x1={cx-6} y1={cy-5} x2={cx-6} y2={cy-8}
+            stroke={col} strokeWidth={1.2} strokeLinecap="round"/>
+      <line x1={cx-3} y1={cy-5} x2={cx-3} y2={cy-8}
+            stroke={col} strokeWidth={1.2} strokeLinecap="round"/>
+      <line x1={cx} y1={cy} x2={cx+2} y2={cy} stroke={col} strokeWidth={1}/>
+    </g>
+  );
+
+  /* ── Orthogonales Routing ────────────────────────────────────────────── */
+  const orthoPath = (x1, y1, x2, y2) => {
+    const mx=(x1+x2)/2, dy=y2-y1;
+    if(Math.abs(dy)<2) return `M${x1} ${y1} H${x2}`;
+    const r=Math.min(10,Math.abs(dy)/2), d=dy>0?1:-1;
+    return [`M${x1} ${y1}`,`H${mx-r}`,
+      `A${r} ${r} 0 0 ${d>0?1:0} ${mx} ${y1+d*r}`,
+      `V${y2-d*r}`,
+      `A${r} ${r} 0 0 ${d>0?0:1} ${mx+r} ${y2}`,
+      `H${x2}`].join(" ");
+  };
+
+  /* ── MCB/RCD-Footer für einen Kasten berechnen ───────────────────────── */
+  const footerLines = (inst) => {
+    const type = boxTypeById[inst?.typeId];
+    if(!type) return [];
+    const outlets = type.outlets||[];
+    const rcds    = type.rcds||[];
+    // MCB-Gruppen: gruppiere nach Absicherung + Charakteristik + Phasigkeit
+    const mcbMap = {};
+    outlets.forEach(out=>{
+      if(!out.breaker) return;
+      const ph = is3ph(out.connector)?'3P':isMulticore(out.connector)?'MC':'1P';
+      const prot = out.protection==='RCBO'?'RCBO':out.protection==='RCD'?'FI':'MCB';
+      const key  = `${prot}_${out.breaker}_${out.char||'B'}_${ph}`;
+      if(!mcbMap[key]) mcbMap[key]={prot,breaker:out.breaker,ch:out.char||'B',ph,cnt:0};
+      mcbMap[key].cnt++;
+    });
+    const lines = Object.values(mcbMap).map(g=>`${g.cnt}× ${g.prot} ${g.breaker}A ${g.ch} ${g.ph}`);
+    rcds.forEach(r=>{
+      const ampPart = r.amp?`${r.amp}A/`:'';
+      lines.push(`1× FI ${ampPart}${r.mA}mA${r.poles?` ${r.poles}P`:''}`);
+    });
+    return lines.slice(0,5);
+  };
+
+  /* ── Layout-Konstanten ───────────────────────────────────────────────── */
+  const HDR_H  = 28;  // Typ-Name Header
+  const FEED_H = 17;  // Einspeisungs-Zeile (Pfeil + Label)
+  const SEP_H  =  1;  // Trennlinie
+  const SECT_H = 14;  // „Out:"-Abschnittstitel
+  const OUT_H  = 20;  // Höhe je Outlet-Zeile
+  const FOOT_PER= 11; // Höhe je Footer-Zeile (MCB/RCD)
+  const INST_H = 14;  // Instanz-Name unten
+  const NODE_W = 264; // Kasten-Breite
+  const COL_W  = 326; // Spalten-Abstand
+  const LEAF_W = 162;
+  const LEAF_H = 38;
+  const LEAF_GAP= 6;
+  const PAD    = 46;
+  const ROW_GAP = 20;
+
+  const nodeH = (inst) => {
+    const type = boxTypeById[inst?.typeId];
+    const nOut  = (type?.outlets||[]).length;
+    const fLines= footerLines(inst).length;
+    return HDR_H + FEED_H + SEP_H + SECT_H + Math.max(nOut,0)*OUT_H
+         + (fLines>0 ? 6+fLines*FOOT_PER : 4) + INST_H + 6;
+  };
+
+  /* ── Outlet-Mappings ─────────────────────────────────────────────────── */
+  const outletToChild = {};
+  instances.forEach(inst=>{
+    if(inst.parentId && inst.parentOutletId)
+      outletToChild[`${inst.parentId}__${inst.parentOutletId}`]=inst.id;
+  });
+  const outletToPlacs = {};
+  (placements||[]).forEach(p=>{
+    const k=`${p.instanceId}__${p.outletId}`;
+    (outletToPlacs[k]=outletToPlacs[k]||[]).push(p);
+  });
+
+  /* ── Tree-Layout ─────────────────────────────────────────────────────── */
+  const getChildren = (pid) => instances.filter(i=>i.parentId===pid);
+  const countLeaves = (id) => { const ch=getChildren(id); return ch.length===0?1:ch.reduce((s,c)=>s+countLeaves(c.id),0); };
+  const maxNH  = instances.reduce((mx,i)=>Math.max(mx,nodeH(i)),0);
+  const ROW_H  = maxNH + ROW_GAP;
+
+  const positions = {};
+  const assignPos = (id, depth, yStart) => {
+    const inst=instById[id]; if(!inst) return;
+    const ch=getChildren(id), leaves=countLeaves(id), h=nodeH(inst);
+    positions[id]={ x:depth*COL_W+PAD, y:yStart+(leaves*ROW_H)/2-h/2 };
+    let curY=yStart;
+    ch.forEach(c=>{ const cl=countLeaves(c.id); assignPos(c.id,depth+1,curY); curY+=cl*ROW_H; });
+  };
+  rootInstances.forEach((r,i)=>{
+    const prev=rootInstances.slice(0,i).reduce((s,ri)=>s+countLeaves(ri.id),0);
+    assignPos(r.id,0,prev*ROW_H+PAD);
+  });
+
+  const outletAbsY = (instId, outletId) => {
+    const pos=positions[instId]; if(!pos) return 0;
+    const type=boxTypeById[instById[instId]?.typeId];
+    const outlets=type?.outlets||[];
+    const idx=outlets.findIndex(o=>o.id===outletId);
+    if(idx<0) return pos.y+nodeH(instById[instId])/2;
+    return pos.y + HDR_H+FEED_H+SEP_H+SECT_H + idx*OUT_H + OUT_H/2;
+  };
+
+  /* ── SVG-Dimensionen ─────────────────────────────────────────────────── */
   const totalLeaves=rootInstances.reduce((s,r)=>s+countLeaves(r.id),0);
-  const maxDepth=instances.reduce((mx,i)=>{ let d=0,cur=i; while(cur.parentId){d++;cur=instById[cur.parentId]||{};if(d>20)break;} return Math.max(mx,d); },0);
-  const svgW=(maxDepth+1)*COL_W+PAD*2+NODE_W;
-  const svgH=Math.max(totalLeaves*ROW_H+PAD*2,200);
+  const maxDepth=instances.reduce((mx,inst)=>{ let d=0,cur=inst; while(cur.parentId){d++;cur=instById[cur.parentId]||{};if(d>20)break;} return Math.max(mx,d); },0);
+  const leafInsts=instances.filter(i=>getChildren(i.id).length===0);
+  const hasLeafConsumers=(placements||[]).length>0&&leafInsts.some(i=>{
+    const t=boxTypeById[i.typeId];
+    return (t?.outlets||[]).some(o=>(outletToPlacs[`${i.id}__${o.id}`]||[]).length>0);
+  });
+  const svgW=(maxDepth+1)*COL_W+PAD*2+NODE_W+(hasLeafConsumers?COL_W/2+LEAF_W+PAD:0);
+  const svgH=Math.max(totalLeaves*ROW_H+PAD*2, 260);
 
-  const nodeColor=(inst)=>{ const t=totalLoad(inst.id); const type=boxTypeById[inst.typeId]; const maxA=type?.feedAmp||0; const peak=Math.max(t.L1,t.L2,t.L3); const pct=maxA?(peak/maxA)*100:0; return pct>100?"#c0392b":pct>80?"#e67e22":peak>0?"#27ae60":"#2e75b6"; };
-  const edges=instances.filter(i=>i.parentId&&positions[i.id]&&positions[i.parentId]).map(inst=>{ const from=positions[inst.parentId],to=positions[inst.id]; return {x1:from.x+NODE_W,y1:from.y+NODE_H/2,x2:to.x,y2:to.y+NODE_H/2,inst}; });
+  /* ── Kanten ──────────────────────────────────────────────────────────── */
+  const edges=instances
+    .filter(i=>i.parentId&&positions[i.id]&&positions[i.parentId])
+    .map(inst=>{
+      const parentType=boxTypeById[instById[inst.parentId]?.typeId];
+      const outlet=parentType?.outlets.find(o=>o.id===inst.parentOutletId);
+      const y1=outletAbsY(inst.parentId, inst.parentOutletId);
+      const toPos=positions[inst.id];
+      return { x1:positions[inst.parentId].x+NODE_W, y1,
+               x2:toPos.x, y2:toPos.y+nodeH(inst)/2,
+               inst, outlet, adapted:isAdapted(inst.id) };
+    });
+
+  const mcCenterY=(mc)=>{
+    const ri=rootInstances.filter(i=>i.mainConnectionId===mc.id);
+    if(!ri.length) return null;
+    const ys=ri.map(i=>positions[i.id]).filter(Boolean).map(p=>p.y);
+    if(!ys.length) return null;
+    return (Math.min(...ys)+Math.max(...ys)+nodeH(instById[ri[ri.length-1].id]))/2;
+  };
 
   return (
-    <Section title="Schaltbild" subtitle="Grün = OK · Orange = >80% · Rot = Überlast · Unterdim. = Unterdimensioniert. Zahlen = Gesamtlast inkl. aufgesteckter Kästen.">
-      <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"75vh",background:"#1b2026",borderRadius:8,padding:12}}>
-        <svg width={svgW} height={svgH} style={{display:"block",minWidth:svgW}}>
-          {/* Hauptanschluss boxes */}
-          {mainConns.map((mc,mci)=>{
+    <Section title="Blockschaltbild" subtitle="Topologie · IEC 60309 · ausführliche Anschlussbezeichnungen">
+      <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"78vh",background:"#1b2026",borderRadius:8,padding:12}}>
+        <svg ref={svgRef} width={svgW} height={svgH} style={{display:"block",minWidth:svgW}}>
+
+          {/* ── Hauptanschlüsse ─────────────────────────────────────────── */}
+          {mainConns.map(mc=>{
+            const cy=mcCenterY(mc); if(cy===null) return null;
             const connInsts=rootInstances.filter(i=>i.mainConnectionId===mc.id);
-            if(!connInsts.length) return null;
-            const ys=connInsts.map(i=>positions[i.id]?.y).filter(Boolean);
-            if(!ys.length) return null;
-            const cy=(Math.min(...ys)+Math.max(...ys)+NODE_H)/2;
+            const bx=PAD+14;
             return (
               <g key={mc.id}>
-                <rect x={PAD} y={cy-32} width={140} height={64} rx={6} fill="#f5a623" opacity={0.12} stroke="#f5a623" strokeWidth={2}/>
-                <text x={PAD+70} y={cy-14} textAnchor="middle" fill="#f5a623" fontSize={10} fontWeight="bold">Hauptanschluss</text>
-                <text x={PAD+70} y={cy+4}  textAnchor="middle" fill="#f5a623" fontSize={12} fontWeight="bold">{mc.name}</text>
-                {mc.amp&&<text x={PAD+70} y={cy+20} textAnchor="middle" fill="#f5a623" fontSize={10}>max {mc.amp}A</text>}
-                {connInsts.map(ri=>{ const pos=positions[ri.id]; if(!pos) return null; return <line key={ri.id} x1={PAD+140} y1={cy} x2={pos.x} y2={pos.y+NODE_H/2} stroke="#f5a623" strokeWidth={1.5} strokeDasharray="5,3" opacity={0.6}/>; })}
+                <line x1={bx} y1={cy-28} x2={bx} y2={cy+28} stroke="#f5a623" strokeWidth={4} strokeLinecap="round"/>
+                <line x1={bx-20} y1={cy} x2={bx-1} y2={cy} stroke="#f5a623" strokeWidth={1.5}/>
+                <polygon points={`${bx-5},${cy-4} ${bx+3},${cy} ${bx-5},${cy+4}`} fill="#f5a623"/>
+                <text x={bx-22} y={cy-12} textAnchor="end" fill="#f5a623" fontSize={10} fontWeight="700">{mc.name}</text>
+                {mc.amp&&<text x={bx-22} y={cy+22} textAnchor="end" fill="#f5a623" fontSize={9} opacity="0.75">{mc.amp} A</text>}
+                {connInsts.map(ri=>{
+                  const pos=positions[ri.id]; if(!pos) return null;
+                  return <line key={ri.id} x1={bx} y1={cy} x2={pos.x} y2={pos.y+nodeH(instById[ri.id])/2}
+                               stroke="#f5a623" strokeWidth={1.2} strokeDasharray="5,4" opacity={0.4}/>;
+                })}
               </g>
             );
           })}
-          {/* Edges */}
-          {edges.map((e,i)=>{ const t=totalLoad(e.inst.id); const mx=(e.x1+e.x2)/2;
-            const my=(e.y1+e.y2)/2;
-            const lines=[`L1: ${round2(t.L1)} A`,`L2: ${round2(t.L2)} A`,`L3: ${round2(t.L3)} A`];
-            const LH=11; const BH=lines.length*LH+6; const BW=72;
+
+          {/* ── Verbindungslinien ────────────────────────────────────────── */}
+          {edges.map((e,i)=>{
+            const mx=(e.x1+e.x2)/2, my=(e.y1+e.y2)/2;
+            const lbl=e.outlet?connShort(e.outlet.connector):"";
+            const edgeCol=e.adapted?"#a78bfa":"#4a5568";
+            const txtCol =e.adapted?"#c4a8fa":"#5a6a7a";
             return (
               <g key={i}>
-                <path d={`M${e.x1} ${e.y1} C${mx} ${e.y1},${mx} ${e.y2},${e.x2} ${e.y2}`} fill="none" stroke="#3a424c" strokeWidth={2}/>
-                <rect x={mx-BW/2} y={my-BH/2} width={BW} height={BH} rx={3} fill="#1b2026" opacity={0.88} stroke="#3a424c" strokeWidth={0.5}/>
-                {lines.map((line,li)=><text key={li} x={mx} y={my-BH/2+LH*(li+1)} textAnchor="middle" fill="#9aa4af" fontSize={9}>{line}</text>)}
-              </g>
-            ); })}
-          {/* Nodes */}
-          {instances.map(inst=>{ const pos=positions[inst.id]; if(!pos) return null;
-            const type=boxTypeById[inst.typeId]; const t=totalLoad(inst.id); const maxA=type?.feedAmp||0;
-            // Effektiver Max-Strom: Anschluss-Ampere des übergeordneten Abgangs (wenn vorhanden)
-            const parentInstN=inst.parentId?instById[inst.parentId]:null;
-            const parentTypeN=parentInstN?boxTypeById[parentInstN.typeId]:null;
-            const parentOutletN=parentTypeN?.outlets.find(o=>o.id===inst.parentOutletId);
-            const effectiveMaxA=parentOutletN?parentOutletN.amp:maxA;
-            const peak=Math.max(t.L1,t.L2,t.L3); const pct=effectiveMaxA?Math.round((peak/effectiveMaxA)*100):0;
-            const col=nodeColor(inst); const conn=type?(CONN[type.feedConnector]?.label||""):"";
-            const isUnderdim=isUnderdimensioned(inst.id);
-            return (
-              <g key={inst.id} transform={`translate(${pos.x},${pos.y})`}>
-                <rect width={NODE_W} height={NODE_H} rx={8} fill="#252b33" stroke={col} strokeWidth={2}/>
-                <rect width={NODE_W} height={22} rx={8} fill={col} opacity={0.9}/>
-                <rect y={14} width={NODE_W} height={8} fill={col} opacity={0.9}/>
-                <text x={isUnderdim||isAdapted(inst.id)?NODE_W/2-18:NODE_W/2} y={15} textAnchor="middle" fill="#fff" fontSize={11} fontWeight="bold">{inst.name.length>20?inst.name.slice(0,18)+"…":inst.name}</text>
-                {isUnderdim&&(
-                  <g><title>{`Unterdimensioniert: Kasten-Eingang (${type?.feedAmp}A) > Anschluss-Ampere (${parentOutletN?.amp||"?"}A)`}</title>
-                    <text x={NODE_W-5} y={15} textAnchor="end" fill="#f5a623" fontSize={8} fontWeight="bold">Unterdim.</text>
-                  </g>
+                <path d={orthoPath(e.x1,e.y1,e.x2,e.y2)}
+                      fill="none" stroke={edgeCol} strokeWidth={1.6}
+                      strokeDasharray={e.adapted?"6,3":undefined}/>
+                {lbl&&(
+                  <text x={mx} y={my-4} textAnchor="middle"
+                        fill={txtCol} fontSize={8}
+                        style={{paintOrder:"stroke",stroke:"#1b2026",strokeWidth:3}}>
+                    {lbl}
+                  </text>
                 )}
-                {!isUnderdim&&isAdapted(inst.id)&&(
-                  <g><title>Adapter: Steckertyp des Kastens stimmt nicht mit Anschluss überein</title>
-                    <text x={NODE_W-5} y={15} textAnchor="end" fill="#a78bfa" fontSize={12} fontWeight="bold">🔌</text>
-                  </g>
-                )}
-                <text x={6}       y={34} fill="#9aa4af" fontSize={9}>{conn}</text>
-                <text x={NODE_W-6} y={34} textAnchor="end" fill={isUnderdim?"#f5a623":"#9aa4af"} fontSize={9}>max {effectiveMaxA}A</text>
-                {PHASES.map((ph,pi)=>(
-                  <g key={ph} transform={`translate(${pi*(NODE_W/3)},36)`}>
-                    <text x={NODE_W/6} y={13} textAnchor="middle" fill="#666" fontSize={9}>{ph}</text>
-                    <text x={NODE_W/6} y={25} textAnchor="middle" fill="#e8eaed" fontSize={11} fontWeight="700">{round2(t[ph])}</text>
-                  </g>
-                ))}
-                {effectiveMaxA>0&&(<>
-                  <rect x={6} y={NODE_H-10} width={NODE_W-12} height={5} rx={2} fill="#1b2026"/>
-                  <rect x={6} y={NODE_H-10} width={Math.min((NODE_W-12)*(peak/effectiveMaxA),NODE_W-12)} height={5} rx={2} fill={col}/>
-                  <text x={NODE_W-6} y={NODE_H-3} textAnchor="end" fill={col} fontSize={8}>{pct}%</text>
-                </>)}
               </g>
             );
           })}
+
+          {/* ── Kasten-Knoten ────────────────────────────────────────────── */}
+          {instances.map(inst=>{
+            const pos=positions[inst.id]; if(!pos) return null;
+            const type=boxTypeById[inst.typeId];
+            const outlets=type?.outlets||[];
+            const feedConn=type?.feedConnector||"";
+            const FeedSym=connSym(feedConn);
+            const adapted=isAdapted(inst.id);
+            const h=nodeH(inst);
+            const fLines=footerLines(inst);
+
+            // Typ-Name für Header (Kurzform wenn nötig)
+            const typeName=type?.name||"–";
+            const dispTypeName=typeName.length>24?typeName.slice(0,23)+"…":typeName;
+
+            // Trennlinie Y (unterhalb FEED_H)
+            const sepY=HDR_H+FEED_H;
+            // Outlet-Bereich Beginn
+            const outY=HDR_H+FEED_H+SEP_H+SECT_H;
+            // Footer-Bereich Beginn
+            const footY=outY+outlets.length*OUT_H;
+
+            return (
+              <g key={inst.id} transform={`translate(${pos.x},${pos.y})`}>
+
+                {/* ── Rahmen ─────────────────────────────────────────────── */}
+                <rect width={NODE_W} height={h} rx={5}
+                      fill="#21282f" stroke="#3a424c" strokeWidth={1.5}/>
+
+                {/* ── Header: Typ-Name ────────────────────────────────────── */}
+                <rect width={NODE_W} height={HDR_H} rx={5} fill="#171c22"/>
+                <rect y={HDR_H-5} width={NODE_W} height={5} fill="#171c22"/>
+                <text x={9} y={19} fill="#cdd6df" fontSize={11} fontWeight="700">
+                  {dispTypeName}
+                </text>
+                {adapted&&(
+                  <circle cx={NODE_W-9} cy={HDR_H/2} r={4} fill="#a78bfa" opacity="0.9">
+                    <title>Adapter: Stecker passt nicht zum Eltern-Anschluss</title>
+                  </circle>
+                )}
+
+                {/* ── Einspeisungs-Zeile ───────────────────────────────────── */}
+                {FeedSym&&<FeedSym x={6} y={HDR_H+1} s={0.78} col="#3a5a74"/>}
+                <text x={FeedSym?24:9} y={HDR_H+12} fill="#4a7494" fontSize={8.5}>
+                  {"←"} {connMid(feedConn)}{type?.feedAmp?` · ${type.feedAmp} A`:""}
+                </text>
+
+                {/* ── Trennlinie ─────────────────────────────────────────── */}
+                <line x1={8} y1={sepY} x2={NODE_W-8} y2={sepY}
+                      stroke="#2e3848" strokeWidth={0.8}/>
+
+                {/* ── „Out:" Abschnitt-Label ────────────────────────────── */}
+                {outlets.length>0&&(
+                  <text x={9} y={sepY+SECT_H-2} fill="#4a5a6a"
+                        fontSize={7.5} fontWeight="700" fontStyle="italic">
+                    Out:
+                  </text>
+                )}
+
+                {/* ── Outlet-Zeilen ─────────────────────────────────────── */}
+                {outlets.map((out,idx)=>{
+                  const ry=outY+idx*OUT_H;
+                  const hasChild=!!outletToChild[`${inst.id}__${out.id}`];
+                  const hasPlac=(outletToPlacs[`${inst.id}__${out.id}`]||[]).length>0;
+                  const active=hasChild||hasPlac;
+                  const txtCol=active?"#7aaec8":"#344454";
+                  const plugCol=active?"#4a7494":"transparent";
+
+                  // Kombiniertes Label: Outlet-Name + Steckertyp
+                  const outName=out.label||`Out ${idx+1}`;
+                  const connDesc=connMid(out.connector);
+                  // Kürze wenn nötig (Stecker-Symbol nimmt ~20px am rechten Rand)
+                  const avail=Math.floor((NODE_W-24)/5.6); // ~5.6px/char bei font-size 9
+                  const combined=`${outName}  ${connDesc}`;
+                  const dispLabel=combined.length>avail ? combined.slice(0,avail-1)+"…" : combined;
+
+                  return (
+                    <g key={out.id} transform={`translate(0,${ry})`}>
+                      {idx>0&&<line x1={8} y1={0} x2={NODE_W-8} y2={0}
+                                    stroke="#252e3a" strokeWidth={0.5}/>}
+                      <text x={9} y={14} fill={txtCol} fontSize={9}>{dispLabel}</text>
+                      {/* Stecker-Ausgangs-Symbol wenn aktiv */}
+                      {active&&(
+                        <g>
+                          {/* Linie → Steckergehäuse */}
+                          <line x1={NODE_W-24} y1={OUT_H/2} x2={NODE_W-16} y2={OUT_H/2}
+                                stroke={plugCol} strokeWidth={1}/>
+                          {/* Gehäuse */}
+                          <rect x={NODE_W-16} y={OUT_H/2-5} width={10} height={10} rx={1.5}
+                                stroke={plugCol} strokeWidth={1.1} fill="none"/>
+                          {/* Stifte */}
+                          <line x1={NODE_W-13} y1={OUT_H/2-5} x2={NODE_W-13} y2={OUT_H/2-8}
+                                stroke={plugCol} strokeWidth={1.2} strokeLinecap="round"/>
+                          <line x1={NODE_W-9} y1={OUT_H/2-5} x2={NODE_W-9} y2={OUT_H/2-8}
+                                stroke={plugCol} strokeWidth={1.2} strokeLinecap="round"/>
+                          {/* Ausgangs-Linie zur Kante */}
+                          <line x1={NODE_W-6} y1={OUT_H/2} x2={NODE_W} y2={OUT_H/2}
+                                stroke={plugCol} strokeWidth={1}/>
+                          <circle cx={NODE_W} cy={OUT_H/2} r={2.5} fill={plugCol}/>
+                        </g>
+                      )}
+                    </g>
+                  );
+                })}
+
+                {/* ── Footer: MCB / FI ──────────────────────────────────── */}
+                {fLines.length>0&&(
+                  <g transform={`translate(0,${footY})`}>
+                    <line x1={8} y1={5} x2={NODE_W-8} y2={5}
+                          stroke="#2a3a2a" strokeWidth={0.7}/>
+                    {fLines.map((ln,li)=>(
+                      <text key={li} x={9} y={15+li*FOOT_PER}
+                            fill="#3a6a4a" fontSize={8}>{ln}</text>
+                    ))}
+                  </g>
+                )}
+
+                {/* ── Instanz-Name unten rechts ─────────────────────────── */}
+                <text x={NODE_W-6} y={h-5} textAnchor="end"
+                      fill="#3a4a5a" fontSize={8} fontStyle="italic">
+                  {inst.name}
+                </text>
+
+              </g>
+            );
+          })}
+
+          {/* ── Verbraucher-Blätter (nur Blatt-Knoten) ───────────────────── */}
+          {leafInsts.flatMap(inst=>{
+            const type=boxTypeById[inst.typeId];
+            const outlets=type?.outlets||[];
+            const pos=positions[inst.id]; if(!pos) return [];
+            const leafX=pos.x+NODE_W+Math.round((COL_W-NODE_W)/2);
+            return outlets.flatMap(out=>{
+              const placs=outletToPlacs[`${inst.id}__${out.id}`]||[];
+              if(!placs.length) return [];
+              const oY=outletAbsY(inst.id, out.id);
+              const totalH=placs.length*(LEAF_H+LEAF_GAP)-LEAF_GAP;
+              const stackTop=oY-totalH/2;
+              return placs.map((plac,pi)=>{
+                const load=loadById?.[plac.loadId]; if(!load) return null;
+                const leafY=stackTop+pi*(LEAF_H+LEAF_GAP);
+                const midY=leafY+LEAF_H/2;
+                const wattStr=load.watt?`${load.watt} W`:"";
+                const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
+                const nameDisp=load.name&&load.name.length>18?load.name.slice(0,17)+"…":(load.name||"?");
+                return (
+                  <g key={plac.id}>
+                    <path d={orthoPath(pos.x+NODE_W,oY,leafX,midY)}
+                          fill="none" stroke="#3a5060" strokeWidth={1.2}/>
+                    <g transform={`translate(${leafX},${leafY})`}>
+                      <rect width={LEAF_W} height={LEAF_H} rx={4}
+                            fill="#1a2530" stroke="#3a5060" strokeWidth={1}/>
+                      <text x={8} y={14} fill="#6aaabf" fontSize={9} fontWeight="600">{nameDisp}</text>
+                      <text x={8} y={27} fill="#3a6070" fontSize={8}>{wattStr}{ampStr}</text>
+                    </g>
+                  </g>
+                );
+              }).filter(Boolean);
+            });
+          })}
+
         </svg>
       </div>
     </Section>
   );
 }
 
-/* ── Helpers ────────────────────────────────────────────────────────────── */
 function Section({title,subtitle,children}){ return <section style={S.section}><h2 style={S.h2}>{title}</h2>{subtitle&&<p style={S.subtitle}>{subtitle}</p>}{children}</section>; }
 function Field({label,children}){ return <label style={S.field}><span style={S.fieldLabel}>{label}</span>{children}</label>; }
 
