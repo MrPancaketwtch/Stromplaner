@@ -732,25 +732,69 @@ export default function App() {
     const svgEl=schematicSvgRef.current;
     if(svgEl&&instances.length>0){
       const svgClone=svgEl.cloneNode(true);
-      svgClone.style.background='#fff';
-      svgClone.querySelectorAll('text').forEach(t=>{
-        const f=t.getAttribute('fill'); if(!f||f==='#fff'||f==='white') return;
-        if(f==='#e8eaed') t.setAttribute('fill','#222');
-        else if(['#9aa4af','#6b7a8d','#4a5568','#8aaccc','#7aaabf'].includes(f)) t.setAttribute('fill','#444');
-        else if(f==='#f5a623') t.setAttribute('fill','#b05a00');
-        else if(['#666','#3a7a5a','#4a6a7a','#3a6a4a'].includes(f)) t.setAttribute('fill','#555');
-      });
-      svgClone.querySelectorAll('rect,circle,path,line').forEach(el=>{
+
+      // Skalierung: viewBox setzen, Breite 100%, Höhe proportional (kein Clip im PDF)
+      const svgW_orig=+svgEl.getAttribute('width')||800;
+      const svgH_orig=+svgEl.getAttribute('height')||600;
+      svgClone.setAttribute('viewBox',`0 0 ${svgW_orig} ${svgH_orig}`);
+      svgClone.setAttribute('width','100%');
+      svgClone.removeAttribute('height');
+      svgClone.style.cssText='display:block;background:#fff;max-width:100%;height:auto';
+
+      // Vollständige Farbumwandlung Dark → Light
+      // fill-Map
+      const fillMap={
+        '#1b2026':'#e8edf2','#21282f':'#f0f4f8','#1f252c':'#e4e9ee','#1f242b':'#e4e9ee',
+        '#252b33':'#f4f4f4','#252e3a':'#dde3ea','#2a3a2a':'#e8f0e8','#1a2530':'#e6edf4',
+        '#1c2127':'#e4eaf0','#1e2a32':'#e4edf4','#2d3748':'#2d3748',
+        'none':'none',
+      };
+      // stroke-Map
+      const strokeMap={
+        '#3a424c':'#bbb','#4a5568':'#999','#3a5468':'#999','#3a5060':'#8aacbe',
+        '#2a3a2a':'#8aac8a','#f5a623':'#b05a00','#4a5060':'#8aacbe',
+        '#2ecc71':'#1a8040','#e74c3c':'#c0392b',
+      };
+      // text fill-Map
+      const textMap={
+        '#e8eaed':'#1a1a1a','#9aa4af':'#555','#6b7a8d':'#555','#4a5568':'#555',
+        '#8aaccc':'#2a6a9a','#7aaabf':'#2a6a9a','#6aaabf':'#1a6a8f','#3a6070':'#3a6a7a',
+        '#3a6a4a':'#1a5a3a','#3a4a5a':'#4a5a6a','#f5a623':'#b05a00','#d97706':'#8a4a00',
+        '#666':'#555','#3a7a5a':'#1a5a3a','#4a6a7a':'#2a5a6a','#5a6a7a':'#4a5a6a',
+        '#a78bfa':'#6a4fca','#c4a8fa':'#8a6aca','#2ecc71':'#1a8040','#e74c3c':'#c0392b',
+      };
+
+      svgClone.querySelectorAll('rect,circle,path,polygon').forEach(el=>{
         const f=el.getAttribute('fill');
-        if(f==='#252b33') el.setAttribute('fill','#f4f4f4');
-        else if(f==='#1c2127'||f==='#1b2026'||f==='#1e2a32') el.setAttribute('fill','#e4e4e4');
+        if(f && fillMap[f]) el.setAttribute('fill',fillMap[f]);
         const s=el.getAttribute('stroke');
-        if(s==='#3a424c') el.setAttribute('stroke','#aaa');
-        else if(s==='#4a5568'||s==='#3a5468') el.setAttribute('stroke','#888');
+        if(s && strokeMap[s]) el.setAttribute('stroke',strokeMap[s]);
       });
-      body+=`<div style="page-break-before:always;margin-top:28px">
+      svgClone.querySelectorAll('line').forEach(el=>{
+        const s=el.getAttribute('stroke');
+        if(s && strokeMap[s]) el.setAttribute('stroke',strokeMap[s]);
+        else if(s && fillMap[s]) el.setAttribute('stroke',fillMap[s]);
+      });
+      svgClone.querySelectorAll('text').forEach(t=>{
+        const f=t.getAttribute('fill');
+        if(f && textMap[f]) t.setAttribute('fill',textMap[f]);
+        // Text-Halo-Stroke (paintOrder:stroke auf dunklem Hintergrund) → weiss werden lassen
+        const st=t.getAttribute('style')||'';
+        if(st.includes('stroke:#1b2026')||st.includes('stroke:#21282f')||st.includes('stroke:#1a2530')){
+          t.setAttribute('style',st.replace(/stroke:#[0-9a-f]+/gi,'stroke:#fff'));
+        }
+      });
+      // path-Strokes (Verbindungslinien)
+      svgClone.querySelectorAll('path').forEach(el=>{
+        const s=el.getAttribute('stroke');
+        if(s && strokeMap[s]) el.setAttribute('stroke',strokeMap[s]);
+        else if(s==='#3a6070'||s==='#3a5060') el.setAttribute('stroke','#7aaabe');
+        else if(s==='#4a5568') el.setAttribute('stroke','#888');
+      });
+
+      body+=`<div style="page-break-before:always">
         <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 12px;border-radius:4px">Blockschaltbild</h2>
-        <div style="overflow:auto;border:1px solid #ddd;border-radius:4px;padding:12px">${svgClone.outerHTML}</div></div>`;
+        ${svgClone.outerHTML}</div>`;
     }
 
     pw.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Stromplan – ${meta.production}</title>
@@ -2150,13 +2194,16 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
               const oY=outletAbsY(inst.id, out.id);
               // Kollisions-freie Position (ggf. nach unten verschoben)
               const stackTop=consumerStackPositions[`${inst.id}__${out.id}`]??oY-LEAF_H/2;
+              const isMC = isMulticore(out.connector);
               return placs.map((plac,pi)=>{
                 const load=loadById?.[plac.loadId]; if(!load) return null;
                 const leafY=stackTop+pi*(LEAF_H+LEAF_GAP);
                 const midY=leafY+LEAF_H/2;
                 const wattStr=load.watt?`${load.watt} W`:"";
                 const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
-                const nameDisp=load.name&&load.name.length>18?load.name.slice(0,17)+"…":(load.name||"?");
+                // Bei MC: Name etwas kürzer lassen, damit das Slot-Badge Platz hat
+                const maxName = isMC&&plac.mcSlot!=null ? 14 : 18;
+                const nameDisp=load.name&&load.name.length>maxName?load.name.slice(0,maxName-1)+"…":(load.name||"?");
                 return (
                   <g key={plac.id}>
                     <path d={orthoPath(pos.x+NODE_W,oY,leafX,midY)}
@@ -2166,6 +2213,17 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
                             fill="#1a2530" stroke="#3a5060" strokeWidth={1}/>
                       <text x={8} y={14} fill="#6aaabf" fontSize={9} fontWeight="600">{nameDisp}</text>
                       <text x={8} y={27} fill="#3a6070" fontSize={8}>{wattStr}{ampStr}</text>
+                      {/* Multicore-Slot-Badge oben rechts */}
+                      {isMC&&plac.mcSlot!=null&&(
+                        <g>
+                          <rect x={LEAF_W-30} y={4} width={26} height={13} rx={3}
+                                fill="#1e3a4a" stroke="#3a7a9a" strokeWidth={0.8}/>
+                          <text x={LEAF_W-17} y={14} textAnchor="middle"
+                                fill="#7acce8" fontSize={8} fontWeight="700">
+                            Ch.{plac.mcSlot}
+                          </text>
+                        </g>
+                      )}
                     </g>
                   </g>
                 );
