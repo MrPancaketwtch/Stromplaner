@@ -5,6 +5,9 @@ CLAUDE_CODE_ÜBERGABE.md
 node_modules/
 Das Tool/_entry.js
 
+# Electron-Builder Output
+dist/
+
 # Build-Zwischendateien (altes Build-System)
 app_standalone.jsx
 app_bundle.js

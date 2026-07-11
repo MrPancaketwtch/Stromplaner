@@ -1,0 +1,3 @@
+@echo off
+echo Stromplaner wird gestartet...
+npm start

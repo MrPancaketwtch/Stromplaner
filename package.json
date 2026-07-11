@@ -1,10 +1,43 @@
 {
   "name": "stromplaner",
+  "version": "1.0.0",
   "private": true,
+  "main": "main.js",
   "scripts": {
-    "build": "node build.js"
+    "build": "node build.js",
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "npm run build && electron-builder"
+  },
+  "build": {
+    "appId": "dev.stromplaner",
+    "productName": "Stromplaner",
+    "files": [
+      "main.js",
+      "Das Tool/Stromplaner.html"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true
+    },
+    "directories": {
+      "output": "dist"
+    }
   },
   "devDependencies": {
+    "electron": "^33.3.1",
+    "electron-builder": "^25.1.8",
     "esbuild": "^0.25.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

@@ -10,13 +10,14 @@ Das Tool bildet die vollständige Stromverteilung einer Produktion ab: Kästen w
 
 ## Schnellstart
 
-1. `Das Tool/Stromplaner.html` per Doppelklick im Browser öffnen *(Chrome, Firefox, Edge – kein Internet erforderlich)*
+**Als Desktop-App (empfohlen):**
+1. Installer aus `dist/` ausführen (einmalig) oder `start.bat` für den Dev-Start
 2. **Erster Start:** **↥ Laden** → `Das Tool/Standard.json` auswählen, um Kasten-Typen und Verbraucher vorzuladen
 3. Planen, stecken, prüfen
 4. Mit **💾 Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
 5. **🖨 PDF** für den fertigen Stromplan oder das Prüfprotokoll
 
-Das Tool speichert den Zustand automatisch im Browser (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen oder zu archivieren.
+Das Tool speichert den Zustand automatisch (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen oder zu archivieren.
 
 ---
 
@@ -25,12 +26,15 @@ Das Tool speichert den Zustand automatisch im Browser (localStorage). Ein expliz
 ```
 Stromplaner/
 ├── Das Tool/
-│   ├── Stromplaner.html      ← Das Programm (Doppelklick zum Starten)
+│   ├── Stromplaner.html      ← Gebundelte App (Output von build.js)
 │   ├── Stromplaner.jsx       ← Quellcode (React 18)
 │   └── Standard.json         ← Vorgeladene Kasten-Typen & Verbraucher
 ├── Speicherstände/           ← Eigene Planungen (.json) ablegen
+├── main.js                   ← Electron-Hauptprozess
 ├── build.js                  ← Build-Skript (esbuild → standalone HTML)
-├── build.bat                 ← Build-Shortcut für Windows
+├── build.bat                 ← JSX neu bauen (→ Stromplaner.html)
+├── start.bat                 ← App direkt starten (Dev-Modus)
+├── dist.bat                  ← Installer bauen (→ dist/)
 └── package.json
 ```
 
@@ -195,9 +199,9 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | UI | React 18 (JSX) |
 | Build | esbuild → standalone IIFE |
 | Output | Einzelne HTML-Datei (keine externen Abhängigkeiten) |
+| Desktop-Wrapper | Electron 33 (NSIS-Installer für Windows) |
 | Persistenz | localStorage (Autosave, 600 ms debounce) |
 | Diagramm | SVG (manuelles Layout, kein D3 o. ä.) |
-| Excel-Export | SheetJS (xlsx) |
 
 ### Build
 
@@ -213,7 +217,20 @@ node build.js
 npm run build
 # oder unter Windows: build.bat doppelklicken
 ```
-Das Skript bündelt JSX + React + XLSX mit esbuild zu `Das Tool/Stromplaner.html`.
+Das Skript bündelt JSX + React mit esbuild zu `Das Tool/Stromplaner.html`.
+
+**App starten (Dev-Modus, kein Installer nötig):**
+```bash
+npm start
+# oder: start.bat doppelklicken
+```
+
+**Installer bauen (Windows x64, NSIS):**
+```bash
+npm run dist
+# oder: dist.bat doppelklicken
+# → Installer landet in dist/
+```
 
 ### Dateiformat (Autosave / JSON-Export)
 ```json
