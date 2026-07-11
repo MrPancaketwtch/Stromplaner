@@ -3,7 +3,7 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 
-exports.default = async function(context) {
+module.exports = async function(context) {
   if (context.electronPlatformName !== 'win32') return;
 
   const rcedit = path.join(
