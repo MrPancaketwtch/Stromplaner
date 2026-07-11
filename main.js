@@ -10,9 +10,17 @@ function createWindow() {
     center: true,
     alwaysOnTop: true,
     skipTaskbar: true,
+    show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
-  splash.loadFile(path.join(__dirname, 'splash.html'));
+
+  // Cache-Buster: neue Query-Param erzwingt frisches Render jedes Mal
+  splash.loadFile(path.join(__dirname, 'splash.html'), {
+    query: { t: String(Date.now()) },
+  });
+
+  // Erst anzeigen wenn Seite vollständig gerendert – Animation startet sauber
+  splash.webContents.once('did-finish-load', () => splash.show());
 
   const win = new BrowserWindow({
     width: 1440,
@@ -30,12 +38,10 @@ function createWindow() {
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname, 'Das Tool', 'Stromplaner.html'));
 
-  // Show main window only after BOTH ready-to-show AND minimum splash time
-  let appReady = false;
-  let minTimeUp = false;
-
+  let shown = false;
   const tryShow = () => {
-    if (!appReady || !minTimeUp) return;
+    if (shown || !appReady || !minTimeUp) return;
+    shown = true;
     splash.webContents.executeJavaScript(
       'document.body.style.opacity="0"'
     ).catch(() => {});
@@ -44,6 +50,9 @@ function createWindow() {
       win.show();
     }, 300);
   };
+
+  let appReady = false;
+  let minTimeUp = false;
 
   win.once('ready-to-show', () => { appReady = true; tryShow(); });
   setTimeout(() => { minTimeUp = true; tryShow(); }, 900);
