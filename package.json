@@ -13,10 +13,12 @@
   "build": {
     "appId": "dev.stromplaner",
     "productName": "Stromplaner",
+    "icon": "build/icon.png",
     "files": [
       "main.js",
       "splash.html",
-      "Das Tool/Stromplaner.html"
+      "Das Tool/Stromplaner.html",
+      "build/icon.png"
     ],
     "win": {
       "target": [

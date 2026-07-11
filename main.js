@@ -11,17 +11,16 @@ function createWindow() {
     center: true,
     alwaysOnTop: true,
     skipTaskbar: true,
-    show: false,
+    backgroundColor: '#1b2026',
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
 
-  // Cache-Buster: neue Query-Param erzwingt frisches Render jedes Mal
+  // Cache-Buster verhindert wiederverwendeten Renderer-Zustand
   splash.loadFile(path.join(__dirname, 'splash.html'), {
     query: { t: String(Date.now()) },
   });
 
-  // Erst anzeigen wenn Seite vollständig gerendert – Animation startet sauber
-  splash.webContents.once('did-finish-load', () => splash.show());
+  const iconPath = path.join(__dirname, 'build', 'icon.png');
 
   const win = new BrowserWindow({
     width: 1440,
@@ -30,6 +29,7 @@ function createWindow() {
     minHeight: 640,
     title: 'Stromplaner',
     show: false,
+    icon: iconPath,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
