@@ -1,4 +1,5 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
 function createWindow() {
@@ -48,6 +49,7 @@ function createWindow() {
     setTimeout(() => {
       if (!splash.isDestroyed()) splash.close();
       win.show();
+      if (app.isPackaged) checkForUpdates(win);
     }, 300);
   };
 
@@ -71,6 +73,23 @@ function createWindow() {
     }
     shell.openExternal(url);
     return { action: 'deny' };
+  });
+}
+
+function checkForUpdates(win) {
+  autoUpdater.checkForUpdates().catch(() => {});
+
+  autoUpdater.once('update-downloaded', (info) => {
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Update verfügbar',
+      message: `Stromplaner ${info.version} wurde heruntergeladen.`,
+      detail: 'Die neue Version wird nach dem Neustart installiert.',
+      buttons: ['Jetzt neu starten', 'Später'],
+      defaultId: 0,
+    }).then(({ response }) => {
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
   });
 }
 

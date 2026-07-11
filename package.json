@@ -7,7 +7,8 @@
     "build": "node build.js",
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "release": "npm run build && electron-builder --publish always"
   },
   "build": {
     "appId": "dev.stromplaner",
@@ -33,6 +34,11 @@
       "perMachine": false,
       "createDesktopShortcut": true
     },
+    "publish": {
+      "provider": "github",
+      "owner": "MrPancaketwtch",
+      "repo": "Stromplaner"
+    },
     "directories": {
       "output": "dist"
     }
@@ -44,5 +50,8 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "xlsx": "^0.18.5"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }
