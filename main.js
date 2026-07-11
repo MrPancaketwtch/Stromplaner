@@ -48,6 +48,7 @@ function createWindow() {
     setTimeout(() => {
       if (!splash.isDestroyed()) splash.close();
       win.show();
+      win.focus();
       if (app.isPackaged) checkForUpdates(win);
     }, 300);
   };

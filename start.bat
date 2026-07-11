@@ -1,3 +1,3 @@
 @echo off
-echo Stromplaner wird gestartet...
-npm start
+cd /d "%~dp0"
+start "Stromplaner" /min cmd /c "npm start & pause"
