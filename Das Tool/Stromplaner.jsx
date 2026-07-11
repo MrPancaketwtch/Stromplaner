@@ -1905,13 +1905,14 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     const pos = positions[inst.id]; if(!pos) return;
     const leafX = pos.x + NODE_W + Math.round((COL_W-NODE_W)/2);
 
-    // Y-Bereiche der direkten Kind-Kästen ermitteln, die sich mit der Consumer-Spalte überschneiden
-    const blockedRanges = getChildren(inst.id)
-      .flatMap(ch => {
-        const chPos = positions[ch.id]; if(!chPos) return [];
-        // X-Überschneidung: [leafX, leafX+LEAF_W] ∩ [chPos.x, chPos.x+NODE_W]
-        if(leafX + LEAF_W <= chPos.x || leafX >= chPos.x + NODE_W) return [];
-        return [{ top: chPos.y, bottom: chPos.y + nodeH(instById[ch.id]) }];
+    // Y-Bereiche ALLER Kästen ermitteln die sich mit der Consumer-Spalte überschneiden
+    const blockedRanges = instances
+      .filter(other => other.id !== inst.id)
+      .flatMap(other => {
+        const otherPos = positions[other.id]; if(!otherPos) return [];
+        // X-Überschneidung: [leafX, leafX+LEAF_W] ∩ [otherPos.x, otherPos.x+NODE_W]
+        if(leafX + LEAF_W <= otherPos.x || leafX >= otherPos.x + NODE_W) return [];
+        return [{ top: otherPos.y, bottom: otherPos.y + nodeH(other) }];
       })
       .sort((a,b) => a.top - b.top);
 
