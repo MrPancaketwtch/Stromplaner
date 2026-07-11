@@ -1,6 +1,7 @@
 const { app, BrowserWindow, shell, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const fs = require('fs');
 
 function createWindow() {
   const splash = new BrowserWindow({
@@ -15,12 +16,10 @@ function createWindow() {
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
 
-  // Cache-Buster verhindert wiederverwendeten Renderer-Zustand
-  splash.loadFile(path.join(__dirname, 'splash.html'), {
-    query: { t: String(Date.now()) },
-  });
+  splash.loadFile(path.join(__dirname, 'splash.html'));
 
   const iconPath = path.join(__dirname, 'build', 'icon.png');
+  const icon = fs.existsSync(iconPath) ? iconPath : undefined;
 
   const win = new BrowserWindow({
     width: 1440,
@@ -29,7 +28,7 @@ function createWindow() {
     minHeight: 640,
     title: 'Stromplaner',
     show: false,
-    icon: iconPath,
+    icon,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
