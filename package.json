@@ -11,6 +11,7 @@
     "release": "npm run build && electron-builder --publish always"
   },
   "build": {
+    "afterPack": "./afterPack.js",
     "appId": "dev.stromplaner",
     "productName": "Stromplaner",
     "icon": "build/icon.png",
@@ -18,7 +19,8 @@
       "main.js",
       "splash.html",
       "Das Tool/Stromplaner.html",
-      "build/icon.png"
+      "build/icon.png",
+      "build/icon.ico"
     ],
     "win": {
       "target": [
