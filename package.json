@@ -14,6 +14,7 @@
     "productName": "Stromplaner",
     "files": [
       "main.js",
+      "splash.html",
       "Das Tool/Stromplaner.html"
     ],
     "win": {
