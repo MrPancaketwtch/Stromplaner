@@ -2,10 +2,11 @@ const esbuild = require("esbuild");
 const fs = require("fs");
 const path = require("path");
 
-const ENTRY  = path.join(__dirname, "Das Tool", "_entry.js");
-const OUT    = path.join(__dirname, "Das Tool", "Stromplaner.html");
-const SRC    = path.join(__dirname, "Das Tool", "Stromplaner.jsx");
-const CSS_IN = path.join(__dirname, "Das Tool", "Stromplaner.css");
+const ROOT   = path.join(__dirname, "..");
+const ENTRY  = path.join(ROOT, "app", "_entry.js");
+const OUT    = path.join(ROOT, "app", "Stromplaner.html");
+const SRC    = path.join(ROOT, "app", "Stromplaner.jsx");
+const CSS_IN = path.join(ROOT, "app", "Stromplaner.css");
 
 // Temporärer Einstiegspunkt, der die App im Browser mountet
 const entryCode = `
@@ -40,7 +41,7 @@ async function build() {
       `</script></body></html>`;
 
     fs.writeFileSync(OUT, html);
-    console.log("Build erfolgreich: Das Tool/Stromplaner.html");
+    console.log("Build erfolgreich: app/Stromplaner.html");
   } finally {
     if (fs.existsSync(ENTRY)) fs.unlinkSync(ENTRY);
   }

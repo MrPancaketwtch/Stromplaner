@@ -39,9 +39,6 @@ const PROTECTION_TYPES = ["LS","RCBO","Keine"];
 
 /* ── Leitungsdimensionierung / Spannungsfall ────────────────────────────── */
 const KAPPA_CU     = 56;   // m/(Ω·mm²), Kupfer 20 °C
-const CABLE_CS_MM2 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150];
-// Strombelastbarkeit (A), Verlegemethode B2, Cu, PVC (DIN VDE 0298-4)
-const I_CAP_B2 = {1.5:15.5,2.5:19.5,4:26,6:34,10:46,16:61,25:80,35:99,50:119,70:151,95:182,120:210,150:240};
 
 // H07RN-F Nennstrom frei in Luft (Basis, DIN VDE 0298-4 Tafel 11)
 const CABLE_CS_H07 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95];
@@ -79,9 +76,14 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
   const fac = threePhase ? Math.sqrt(3) : 2;
   return round2(fac * (+I) * (+l) * (+cosPhi) / (KAPPA_CU * (maxPct/100) * 230));
 };
-const minCsCurrent = (I_N) => {
-  for(const cs of CABLE_CS_MM2){ if((I_CAP_B2[cs]||0) >= +I_N) return cs; }
-  return null;
+
+const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
+
+const downloadJSON = (data, filename) => {
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a"); a.href=url; a.download=filename; a.click();
+  URL.revokeObjectURL(url);
 };
 
 const is3ph        = (c) => (CONN[c]?.phases||1)===3;
@@ -315,6 +317,8 @@ function FilterSelect({ options, value, onChange, placeholder, style }) {
 export default function App() {
   const [tab,  setTab]  = useState("config");
   const [meta, setMeta] = useState(DEFAULT_META);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState({ type: 'idle' });
 
   // Hauptanschlüsse: [{id, name, amp}]
   const [mainConns, setMainConns] = useState([]);
@@ -355,6 +359,12 @@ export default function App() {
       }
     } catch(e){ console.warn("Autosave load error",e); }
     setLoaded(true);
+  },[]);
+
+  useEffect(()=>{
+    window.electronAPI?.onUpdateStatus(msg => {
+      setUpdateStatus(msg);
+    });
   },[]);
 
   // Save on every change (debounced 600ms)
@@ -422,7 +432,7 @@ export default function App() {
   },[ownLoad,instances]);
 
   // Root instances = no parent kasten (may or may not have a mainConnectionId)
-  const rootInstances = instances.filter(i=>!i.parentId);
+  const rootInstances = useMemo(()=>instances.filter(i=>!i.parentId),[instances]);
 
   const isOverloaded = useCallback((instanceId)=>{
     const t=totalLoad(instanceId);
@@ -511,15 +521,17 @@ export default function App() {
     setPlacements([]);
     setActivePlan(null);
   };
+  const clearAllInstances=()=>{
+    if(!confirm("Alle Kästen und Steckungen löschen? Kasten-Typen, Verbraucher und Produktionsdaten bleiben erhalten.")) return;
+    setInstances([]);
+    setPlacements([]);
+    setActivePlan(null);
+  };
 
   /* ── JSON Save/Load ────────────────────────────────────────────────────── */
   const saveJSON=()=>{
-    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances:alphaSort(instances,"name"),placements};
-    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement("a"); a.href=url;
-    a.download=`Stromplan_${meta.production.replace(/\s+/g,"_")}.json`;
-    a.click(); URL.revokeObjectURL(url);
+    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs};
+    downloadJSON(data,`Stromplan_${meta.production.replace(/\s+/g,"_")}.json`);
   };
   const loadJSON=(e)=>{
     const file=e.target.files?.[0]; if(!file) return;
@@ -536,6 +548,8 @@ export default function App() {
         if(d.placements)  setPlacements(d.placements);
         if(d.inspMeta)    setInspMeta(d.inspMeta);
         if(d.inspResults) setInspResults(d.inspResults);
+        if(d.cableCalcs)  setCableCalcs(d.cableCalcs);
+        if(d.voltCalcs)   setVoltCalcs(d.voltCalcs);
         setActivePlan(null);
         alert("Planung geladen ✓");
       } catch(err){ alert("Fehler: "+err.message); }
@@ -821,6 +835,9 @@ export default function App() {
         <label style={S.ghostBtn}>↥ Laden<input type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/></label>
         <button style={S.ghostBtn} onClick={saveJSON}>💾 Speichern</button>
         <button style={S.ghostBtn} onClick={resetAll}>↺ Neu</button>
+        {window.electronAPI&&<button style={S.ghostBtn} onClick={()=>setShowUpdateModal(true)}>
+          {updateStatus.type==='downloaded'?'↓ Update bereit':updateStatus.type==='available'?'↑ Update verfügbar':'↑ Updates'}
+        </button>}
         <button style={S.exportBtn} onClick={exportPDF}>🖨 PDF</button>
       </header>
       <nav style={S.nav}>
@@ -845,7 +862,7 @@ export default function App() {
         <div style={{display:tab==="config"?"block":"none"}}>
           <ConfigTab {...sharedProps} meta={meta} setMeta={setMeta} boxTypes={boxTypes}
             addInstance={addInstance} removeInstance={removeInstance} updateInstance={updateInstance}
-            setParentWithValidation={setParentWithValidation}
+            setParentWithValidation={setParentWithValidation} clearAllInstances={clearAllInstances}
             mainConns={mainConns} addMainConn={addMainConn} updateMainConn={updateMainConn} removeMainConn={removeMainConn} />
         </div>
         <div style={{display:tab==="plan"?"block":"none"}}>
@@ -874,6 +891,38 @@ export default function App() {
             subTab={erweiterSubTab}/>
         </div>
       </main>
+      {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus}/>}
+    </div>
+  );
+}
+
+function UpdateModal({status,onClose,onCheck,onInstall,setStatus}){
+  const busy=status.type==='checking'||status.type==='downloading';
+  const overlay={position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'};
+  const box={background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:10,padding:'28px 32px',minWidth:340,maxWidth:420,color:'#e8eaf0',fontFamily:'inherit'};
+  const title={fontSize:16,fontWeight:700,marginBottom:16,color:'#fff'};
+  const row={display:'flex',gap:10,marginTop:18,justifyContent:'flex-end'};
+  const btn=(c)=>({padding:'7px 18px',borderRadius:5,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,...c});
+
+  return(
+    <div style={overlay} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={box}>
+        <div style={title}>Software-Update</div>
+        {status.type==='idle'&&<p style={{color:'#aab',margin:0}}>Auf neue Version prüfen?</p>}
+        {status.type==='checking'&&<p style={{color:'#aab',margin:0}}>Suche nach Updates…</p>}
+        {status.type==='up-to-date'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Du hast bereits die neueste Version.</p>}
+        {status.type==='available'&&<p style={{color:'#f5a623',margin:0}}>Version {status.version} verfügbar – wird heruntergeladen…</p>}
+        {status.type==='downloading'&&<p style={{color:'#5bb8f5',margin:0}}>Wird heruntergeladen… {status.percent!=null?status.percent+'%':''}</p>}
+        {status.type==='downloaded'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Version {status.version||''} bereit. Nach dem Neustart wird die neue Version installiert.</p>}
+        {status.type==='error'&&<p style={{color:'#e06c75',margin:0}}>Fehler: {status.message||'Update konnte nicht geprüft werden.'}</p>}
+        <div style={row}>
+          {status.type==='downloaded'
+            ?<button style={btn({background:'#3a7bd5',color:'#fff'})} onClick={onInstall}>Jetzt neu starten</button>
+            :<button style={btn({background:'#3a7bd5',color:'#fff',opacity:busy?0.6:1})} disabled={busy} onClick={()=>{setStatus({type:'checking'});onCheck();}}>Nach Updates suchen</button>
+          }
+          <button style={btn({background:'#2a3547',color:'#aab'})} onClick={onClose}>Schließen</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -881,9 +930,8 @@ export default function App() {
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Konfiguration
 ══════════════════════════════════════════════════════════════════════════ */
-function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addInstance,removeInstance,updateInstance,setParentWithValidation,isOverloaded,isUnderdimensioned,isAdapted,mainConns,addMainConn,updateMainConn,removeMainConn }) {
+function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addInstance,removeInstance,updateInstance,setParentWithValidation,clearAllInstances,isOverloaded,isUnderdimensioned,isAdapted,mainConns,addMainConn,updateMainConn,removeMainConn }) {
   const [pick,setPick]=useState(boxTypes[0]?.id||"");
-  const sortedTypes=alphaSort(boxTypes,"name");
   return (
     <div>
       <Section title="Produktionsdaten">
@@ -911,7 +959,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
       <Section title="Kästen aktivieren" subtitle="Jeder aktivierte Kasten bekommt im Steckplan ein eigenes Datenblatt.">
         <div style={S.row}>
           <select style={S.select} value={pick} onChange={e=>setPick(e.target.value)}>
-            {sortedTypes.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+            {boxTypes.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
           <button style={S.primaryBtn} onClick={()=>addInstance(pick)}>+ Kasten hinzufügen</button>
         </div>
@@ -987,6 +1035,9 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
           </table>
           </div>
         )}
+        {instances.length>0&&<div style={{marginTop:8,display:"flex",justifyContent:"flex-end"}}>
+          <button style={S.dangerBtn} onClick={clearAllInstances}>Alle Kästen löschen</button>
+        </div>}
         <p style={S.hint}>💡 Phasen bleiben beim Aufstecken erhalten (L1→L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.</p>
       </Section>
     </div>
@@ -1234,6 +1285,12 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
 ══════════════════════════════════════════════════════════════════════════ */
 function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   const [openId,setOpenId]=useState(null);
+  const [bulk,setBulk]=useState({count:1,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdId:null,rotatePhase:false});
+  const updBulk=(patch)=>setBulk(s=>{
+    const n={...s,...patch};
+    if(patch.connector){ n.amp=CONN[patch.connector]?.amp||n.amp; n.phase=is3ph(patch.connector)?"L1L2L3":isMulticore(patch.connector)?"L1":(n.phase==="L1L2L3"?"L1":n.phase); }
+    return n;
+  });
   const update=(id,patch)=>setBoxTypes(s=>s.map(b=>b.id===id?{...b,...patch}:b));
   const updateOutlet=(boxId,outletId,patch)=>{
     setBoxTypes(s=>s.map(b=>{
@@ -1257,6 +1314,17 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
   const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,rcds:[],outlets:[]},...s]); setOpenId(id); };
   const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Kasten-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Kasten-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
+  const removeAllTypes=()=>{
+    const inUse=boxTypes.filter(b=>instances.some(i=>i.typeId===b.id));
+    const free=boxTypes.filter(b=>!instances.some(i=>i.typeId===b.id));
+    if(free.length===0){alert("Alle Typen sind in Benutzung und können nicht gelöscht werden.");return;}
+    const msg=inUse.length>0
+      ?`${free.length} Typen löschen? (${inUse.length} in Benutzung werden übersprungen)`
+      :`Alle ${free.length} Kasten-Typen löschen?`;
+    if(!confirm(msg))return;
+    setBoxTypes(s=>s.filter(b=>instances.some(i=>i.typeId===b.id)));
+    setOpenId(null);
+  };
   const addRcd=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:[...(b.rcds||[]),{id:uid(),label:"RCD",mA:30}]}));
   const updateRcd=(boxId,rcdId,patch)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:(b.rcds||[]).map(r=>r.id===rcdId?{...r,...patch}:r)}));
   const removeRcd=(boxId,rcdId)=>{
@@ -1267,10 +1335,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
     }));
   };
 
-  const exportBoxTypes=()=>{
-    const blob=new Blob([JSON.stringify({_format:"stromplaner-boxtypes",boxTypes},null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="Kasten-Typen.json"; a.click(); URL.revokeObjectURL(url);
-  };
+  const exportBoxTypes=()=>downloadJSON({_format:"stromplaner-boxtypes",boxTypes},"Kasten-Typen.json");
   const importBoxTypes=(e)=>{
     const file=e.target.files?.[0]; if(!file) return;
     const r=new FileReader(); r.onload=(ev)=>{
@@ -1289,6 +1354,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
         <button style={S.primaryBtn} onClick={addType}>+ Neuen Kasten-Typ</button>
         <button style={S.ghostBtn} onClick={exportBoxTypes}>⬇ Exportieren</button>
         <label style={S.ghostBtn}>↥ Importieren<input type="file" accept=".json" onChange={importBoxTypes} style={{display:"none"}}/></label>
+        {boxTypes.length>0&&<button style={S.dangerBtn} onClick={removeAllTypes}>Alle löschen</button>}
       </div>
       <div style={{marginTop:16}}>
         {boxTypes.map(b=>(
@@ -1303,7 +1369,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                   <Field label="Name"><input style={S.input} value={b.name} onChange={e=>update(b.id,{name:e.target.value})}/></Field>
                   <Field label="Einspeisung">
                     <select style={S.input} value={b.feedConnector} onChange={e=>update(b.id,{feedConnector:e.target.value,feedAmp:CONN[e.target.value]?.amp||b.feedAmp})}>
-                      {Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de")).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                      {CONN_SORTED_ENTRIES.map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                     </select>
                   </Field>
                   <Field label="Max (A)"><input type="number" style={S.input} value={b.feedAmp} onChange={e=>update(b.id,{feedAmp:+e.target.value})}/></Field>
@@ -1343,7 +1409,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                         <td style={S.td}><input style={S.inputSm} value={o.label} onChange={e=>updateOutlet(b.id,o.id,{label:e.target.value})}/></td>
                         <td style={S.td}>
                           <select style={S.selectSm} value={o.connector} onChange={e=>updateOutlet(b.id,o.id,{connector:e.target.value})}>
-                            {Object.entries(CONN).sort((a,b2)=>a[1].label.localeCompare(b2[1].label,"de")).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                            {CONN_SORTED_ENTRIES.map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                           </select>
                         </td>
                         <td style={S.td}><input type="number" style={{...S.inputSm,width:55}} value={o.amp} onChange={e=>updateOutlet(b.id,o.id,{amp:+e.target.value})}/></td>
@@ -1377,7 +1443,58 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                 </table>
                 </div>
                 <p style={{...S.hint,marginTop:6}}>* Steckplätze gilt nur für Multicore-Anschlüsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, …</p>
-                <button style={S.secondaryBtn} onClick={()=>addOutlet(b.id)}>+ Anschluss hinzufügen</button>
+                <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
+                  <span style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginRight:2}}>Bulk:</span>
+                  <input type="number" min={1} max={48} style={{...S.inputSm,width:46}} value={bulk.count} onChange={e=>updBulk({count:Math.max(1,+e.target.value)})} title="Anzahl"/>
+                  <select style={S.selectSm} value={bulk.connector} onChange={e=>updBulk({connector:e.target.value})}>
+                    {CONN_SORTED_ENTRIES.map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                  <input type="number" style={{...S.inputSm,width:52}} value={bulk.amp} onChange={e=>updBulk({amp:+e.target.value})} title="Ampere"/>
+                  <span style={{fontSize:11,color:"#7c8794"}}>A</span>
+                  {!is3ph(bulk.connector)&&!isMulticore(bulk.connector)&&(<>
+                    <select style={{...S.selectSm,width:55}} value={bulk.phase} onChange={e=>updBulk({phase:e.target.value})} disabled={bulk.rotatePhase}>
+                      {PHASES.map(ph=><option key={ph} value={ph}>{ph}</option>)}
+                    </select>
+                    <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:bulk.rotatePhase?"#f5a623":"#9aa4af",cursor:"pointer",userSelect:"none"}} title="Phasen gleichmäßig rotieren (L1→L2→L3→…)">
+                      <input type="checkbox" checked={bulk.rotatePhase} onChange={e=>updBulk({rotatePhase:e.target.checked})} style={{cursor:"pointer"}}/>
+                      Rotation
+                    </label>
+                  </>)}
+                  <select style={{...S.selectSm,width:52}} value={bulk.breaker} onChange={e=>updBulk({breaker:e.target.value})}>
+                    {BREAKER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <select style={{...S.selectSm,width:72}} value={bulk.protection} onChange={e=>updBulk({protection:e.target.value})}>
+                    {PROTECTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                  {(b.rcds||[]).length>0&&(
+                    <select style={{...S.selectSm,width:100}} value={bulk.rcdId||""} onChange={e=>updBulk({rcdId:e.target.value||null})} title="RCD-Gruppe">
+                      <option value="">— kein RCD —</option>
+                      {(b.rcds||[]).map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+                    </select>
+                  )}
+                  <button style={S.secondaryBtn} onClick={()=>{
+                    const base=b.outlets.length;
+                    const phaseFor=(i)=>{
+                      if(is3ph(bulk.connector)) return "L1L2L3";
+                      if(isMulticore(bulk.connector)) return "L1";
+                      if(bulk.rotatePhase) return PHASES[(base+i)%PHASES.length];
+                      return bulk.phase;
+                    };
+                    const neu=Array.from({length:bulk.count},(_,i)=>({
+                      id:uid(),
+                      label:`Anschluss ${base+i+1}`,
+                      connector:bulk.connector,
+                      amp:bulk.amp,
+                      phase:phaseFor(i),
+                      breaker:bulk.breaker,
+                      protection:bulk.protection,
+                      rcdId:bulk.rcdId,
+                      ...(isMulticore(bulk.connector)?{mcSlots:6}:{})
+                    }));
+                    setBoxTypes(s=>s.map(bx=>bx.id!==b.id?bx:{...bx,outlets:[...bx.outlets,...neu]}));
+                  }}>+ {bulk.count}×</button>
+                </div>
+                <button style={{...S.secondaryBtn,marginTop:6}} onClick={()=>addOutlet(b.id)}>+ Einzeln hinzufügen</button>
               </div>
             )}
           </div>
@@ -1395,10 +1512,7 @@ function LoadsTab({ loads,setLoads }) {
   const update=(id,patch)=>setLoads(s=>s.map(l=>l.id===id?{...l,...patch}:l));
   const remove=(id)=>setLoads(s=>s.filter(l=>l.id!==id));
 
-  const exportLoads=()=>{
-    const blob=new Blob([JSON.stringify({_format:"stromplaner-loads",loads},null,2)],{type:"application/json"});
-    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="Verbraucher.json"; a.click(); URL.revokeObjectURL(url);
-  };
+  const exportLoads=()=>downloadJSON({_format:"stromplaner-loads",loads},"Verbraucher.json");
   const importLoads=(e)=>{
     const file=e.target.files?.[0]; if(!file) return;
     const r=new FileReader(); r.onload=(ev)=>{
@@ -1690,21 +1804,6 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     return null;
   };
 
-  /* ── Stecker-Symbol an Outlet-Ausgang (IEC 60617-13-artig) ──────────── */
-  // Rechteck-Gehäuse + zwei Kontakt-Stifte (nach oben zeigend)
-  const PlugIcon = ({cx, cy, col}) => (
-    <g>
-      <line x1={cx-12} y1={cy} x2={cx-8} y2={cy} stroke={col} strokeWidth={1}/>
-      <rect x={cx-8} y={cy-5} width={8} height={9} rx={1.5}
-            stroke={col} strokeWidth={1.1} fill="none"/>
-      <line x1={cx-6} y1={cy-5} x2={cx-6} y2={cy-8}
-            stroke={col} strokeWidth={1.2} strokeLinecap="round"/>
-      <line x1={cx-3} y1={cy-5} x2={cx-3} y2={cy-8}
-            stroke={col} strokeWidth={1.2} strokeLinecap="round"/>
-      <line x1={cx} y1={cy} x2={cx+2} y2={cy} stroke={col} strokeWidth={1}/>
-    </g>
-  );
-
   /* ── Orthogonales Routing ────────────────────────────────────────────── */
   const orthoPath = (x1, y1, x2, y2) => {
     const mx=(x1+x2)/2, dy=y2-y1;
@@ -1729,11 +1828,11 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
       if(!out.breaker) return;
       const ph = is3ph(out.connector)?'3P':isMulticore(out.connector)?'MC':'1P';
       const prot = out.protection==='RCBO'?'RCBO':out.protection==='RCD'?'RCD':'MCB';
-      const key  = `${prot}_${out.breaker}_${out.char||'B'}_${ph}`;
-      if(!mcbMap[key]) mcbMap[key]={prot,breaker:out.breaker,ch:out.char||'B',ph,cnt:0};
+      const key  = `${prot}_${out.breaker}_${ph}`;
+      if(!mcbMap[key]) mcbMap[key]={prot,breaker:out.breaker,ph,cnt:0};
       mcbMap[key].cnt++;
     });
-    const lines = Object.values(mcbMap).map(g=>`${g.cnt}× ${g.prot} ${g.breaker}A ${g.ch} ${g.ph}`);
+    const lines = Object.values(mcbMap).map(g=>`${g.cnt}× ${g.prot} ${g.breaker}A ${g.ph}`);
     rcds.forEach(r=>{
       const ampPart = r.amp?`${r.amp}A/`:'';
       lines.push(`1× RCD ${ampPart}${r.mA}mA${r.poles?` ${r.poles}P`:''}`);
@@ -3087,7 +3186,6 @@ const S={
   rootSub:          {fontSize:12,color:"#9aa4af",fontWeight:400},
   stickyPhase:      {position:"sticky",top:85,zIndex:5,background:PANEL,paddingBottom:8,marginBottom:4},
   normHint:         {fontSize:10,color:"#7c8794",marginTop:2,display:"block"},
-  inspPass:         {textAlign:"center",fontSize:15,fontWeight:700},
   dropdown:         {position:"fixed",background:"#1b2026",border:`1px solid ${LINE}`,borderRadius:6,padding:6,zIndex:9999,boxShadow:"0 8px 32px rgba(0,0,0,.7)"},
   dropdownList:     {maxHeight:320,overflowY:"auto"},
   dropdownItem:     {padding:"6px 8px",borderRadius:4,cursor:"pointer",fontSize:13,color:"#e8eaed"},

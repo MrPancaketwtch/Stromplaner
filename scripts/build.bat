@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0.."
 echo Stromplaner wird gebaut...
 npm run build
 if %errorlevel% equ 0 (

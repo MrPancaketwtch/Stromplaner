@@ -1,15 +1,11 @@
 const { execFileSync } = require('child_process');
 const path = require('path');
-const os = require('os');
 const fs = require('fs');
 
 module.exports = async function(context) {
   if (context.electronPlatformName !== 'win32') return;
 
-  const rcedit = path.join(
-    os.homedir(), 'AppData', 'Local', 'electron-builder',
-    'Cache', 'winCodeSign-2.6.0', 'rcedit-x64.exe'
-  );
+  const rcedit = path.join(context.packager.projectDir, 'node_modules', 'rcedit', 'bin', 'rcedit-x64.exe');
   const exe = path.join(context.appOutDir, 'Stromplaner.exe');
   const ico = path.join(context.packager.projectDir, 'build', 'icon.ico');
 

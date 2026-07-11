@@ -1,12 +1,10 @@
-# Interne Claude-Code-Notizen
-CLAUDE_CODE_ÜBERGABE.md
-
 # Node / Build
 node_modules/
-Das Tool/_entry.js
+app/_entry.js
 
 # Electron-Builder Output
 dist/
+Installer/win-unpacked/
 
 # Build-Zwischendateien (altes Build-System)
 app_standalone.jsx
@@ -14,6 +12,9 @@ app_bundle.js
 
 # Claude Code (intern)
 .claude/
+
+# Installer im Root (wird bei jedem Release ersetzt)
+Stromplaner Setup *.exe
 
 # Windows
 Thumbs.db

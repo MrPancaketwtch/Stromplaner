@@ -23630,11 +23630,11 @@ button:active { filter: brightness(0.95); }
     }
   });
 
-  // Das Tool/_entry.js
+  // app/_entry.js
   var import_react2 = __toESM(require_react());
   var import_client = __toESM(require_client());
 
-  // Das Tool/Stromplaner.jsx
+  // app/Stromplaner.jsx
   var import_react = __toESM(require_react());
 
   // node_modules/xlsx/xlsx.mjs
@@ -44138,7 +44138,7 @@ button:active { filter: brightness(0.95); }
   };
   var version = XLSX.version;
 
-  // Das Tool/Stromplaner.jsx
+  // app/Stromplaner.jsx
   var PHASES = ["L1", "L2", "L3"];
   var VOLT = 230;
   var LS_KEY = "stromplaner_autosave";
@@ -44201,6 +44201,16 @@ button:active { filter: brightness(0.95); }
     if (!+l || !+cosPhi || !+I) return null;
     const fac = threePhase ? Math.sqrt(3) : 2;
     return round2(fac * +I * +l * +cosPhi / (KAPPA_CU * (maxPct / 100) * 230));
+  };
+  var CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
+  var downloadJSON = (data, filename) => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   };
   var is3ph = (c) => (CONN[c]?.phases || 1) === 3;
   var isMulticore = (c) => !!CONN[c]?.isMulticore;
@@ -44410,6 +44420,8 @@ button:active { filter: brightness(0.95); }
   function App() {
     const [tab, setTab] = (0, import_react.useState)("config");
     const [meta, setMeta] = (0, import_react.useState)(DEFAULT_META);
+    const [showUpdateModal, setShowUpdateModal] = (0, import_react.useState)(false);
+    const [updateStatus, setUpdateStatus] = (0, import_react.useState)({ type: "idle" });
     const [mainConns, setMainConns] = (0, import_react.useState)([]);
     const [boxTypes, setBoxTypes] = (0, import_react.useState)(alphaSort(clone(DEFAULT_BOX_TYPES), "name"));
     const [loads, setLoads] = (0, import_react.useState)(alphaSort(clone(DEFAULT_LOADS), "name"));
@@ -44444,6 +44456,11 @@ button:active { filter: brightness(0.95); }
         console.warn("Autosave load error", e);
       }
       setLoaded(true);
+    }, []);
+    (0, import_react.useEffect)(() => {
+      window.electronAPI?.onUpdateStatus((msg) => {
+        setUpdateStatus(msg);
+      });
     }, []);
     const saveTimer = (0, import_react.useRef)(null);
     const schematicSvgRef = (0, import_react.useRef)(null);
@@ -44526,7 +44543,7 @@ button:active { filter: brightness(0.95); }
       });
       return r;
     }, [ownLoad, instances]);
-    const rootInstances = instances.filter((i) => !i.parentId);
+    const rootInstances = (0, import_react.useMemo)(() => instances.filter((i) => !i.parentId), [instances]);
     const isOverloaded = (0, import_react.useCallback)((instanceId) => {
       const t = totalLoad(instanceId);
       const inst = instById[instanceId];
@@ -44612,15 +44629,15 @@ Fortfahren?`);
       setPlacements([]);
       setActivePlan(null);
     };
+    const clearAllInstances = () => {
+      if (!confirm("Alle K\xE4sten und Steckungen l\xF6schen? Kasten-Typen, Verbraucher und Produktionsdaten bleiben erhalten.")) return;
+      setInstances([]);
+      setPlacements([]);
+      setActivePlan(null);
+    };
     const saveJSON = () => {
-      const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances: alphaSort(instances, "name"), placements };
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `Stromplan_${meta.production.replace(/\s+/g, "_")}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances: alphaSort(instances, "name"), placements, inspMeta, inspResults, cableCalcs, voltCalcs };
+      downloadJSON(data, `Stromplan_${meta.production.replace(/\s+/g, "_")}.json`);
     };
     const loadJSON = (e) => {
       const file = e.target.files?.[0];
@@ -44641,6 +44658,8 @@ Fortfahren?`);
           if (d.placements) setPlacements(d.placements);
           if (d.inspMeta) setInspMeta(d.inspMeta);
           if (d.inspResults) setInspResults(d.inspResults);
+          if (d.cableCalcs) setCableCalcs(d.cableCalcs);
+          if (d.voltCalcs) setVoltCalcs(d.voltCalcs);
           setActivePlan(null);
           alert("Planung geladen \u2713");
         } catch (err) {
@@ -44977,7 +44996,7 @@ Fortfahren?`);
       ["erweitert", "Erweitert"]
     ];
     const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, isUnderdimensioned, isAdapted, rootInstances, mainConns, mainConnById };
-    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), window.electronAPI && /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: () => setShowUpdateModal(true) }, updateStatus.type === "downloaded" ? "\u2193 Update bereit" : updateStatus.type === "available" ? "\u2191 Update verf\xFCgbar" : "\u2191 Updates"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
         key: k,
@@ -45000,6 +45019,7 @@ Fortfahren?`);
         removeInstance,
         updateInstance,
         setParentWithValidation,
+        clearAllInstances,
         mainConns,
         addMainConn,
         updateMainConn,
@@ -45030,12 +45050,25 @@ Fortfahren?`);
         setVoltCalcs,
         subTab: erweiterSubTab
       }
-    ))));
+    ))), showUpdateModal && /* @__PURE__ */ import_react.default.createElement(UpdateModal, { status: updateStatus, onClose: () => setShowUpdateModal(false), onCheck: () => window.electronAPI.checkForUpdates(), onInstall: () => window.electronAPI.installUpdate(), setStatus: setUpdateStatus }));
   }
-  function ConfigTab({ meta, setMeta, boxTypes, instances, instById, boxTypeById, addInstance, removeInstance, updateInstance, setParentWithValidation, isOverloaded, isUnderdimensioned, isAdapted, mainConns, addMainConn, updateMainConn, removeMainConn }) {
+  function UpdateModal({ status, onClose, onCheck, onInstall, setStatus }) {
+    const busy = status.type === "checking" || status.type === "downloading";
+    const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1e3, display: "flex", alignItems: "center", justifyContent: "center" };
+    const box = { background: "#1e2530", border: "1px solid #2e3a4a", borderRadius: 10, padding: "28px 32px", minWidth: 340, maxWidth: 420, color: "#e8eaf0", fontFamily: "inherit" };
+    const title = { fontSize: 16, fontWeight: 700, marginBottom: 16, color: "#fff" };
+    const row = { display: "flex", gap: 10, marginTop: 18, justifyContent: "flex-end" };
+    const btn = (c) => ({ padding: "7px 18px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, ...c });
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: overlay, onClick: (e) => {
+      if (e.target === e.currentTarget) onClose();
+    } }, /* @__PURE__ */ import_react.default.createElement("div", { style: box }, /* @__PURE__ */ import_react.default.createElement("div", { style: title }, "Software-Update"), status.type === "idle" && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#aab", margin: 0 } }, "Auf neue Version pr\xFCfen?"), status.type === "checking" && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#aab", margin: 0 } }, "Suche nach Updates\u2026"), status.type === "up-to-date" && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#6dbf7e", margin: 0 } }, "\u2713 Du hast bereits die neueste Version."), status.type === "available" && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#f5a623", margin: 0 } }, "Version ", status.version, " verf\xFCgbar \u2013 wird heruntergeladen\u2026"), status.type === "downloading" && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#5bb8f5", margin: 0 } }, "Wird heruntergeladen\u2026 ", status.percent != null ? status.percent + "%" : ""), status.type === "downloaded" && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#6dbf7e", margin: 0 } }, "\u2713 Version ", status.version || "", " bereit. Nach dem Neustart wird die neue Version installiert."), status.type === "error" && /* @__PURE__ */ import_react.default.createElement("p", { style: { color: "#e06c75", margin: 0 } }, "Fehler: ", status.message || "Update konnte nicht gepr\xFCft werden."), /* @__PURE__ */ import_react.default.createElement("div", { style: row }, status.type === "downloaded" ? /* @__PURE__ */ import_react.default.createElement("button", { style: btn({ background: "#3a7bd5", color: "#fff" }), onClick: onInstall }, "Jetzt neu starten") : /* @__PURE__ */ import_react.default.createElement("button", { style: btn({ background: "#3a7bd5", color: "#fff", opacity: busy ? 0.6 : 1 }), disabled: busy, onClick: () => {
+      setStatus({ type: "checking" });
+      onCheck();
+    } }, "Nach Updates suchen"), /* @__PURE__ */ import_react.default.createElement("button", { style: btn({ background: "#2a3547", color: "#aab" }), onClick: onClose }, "Schlie\xDFen"))));
+  }
+  function ConfigTab({ meta, setMeta, boxTypes, instances, instById, boxTypeById, addInstance, removeInstance, updateInstance, setParentWithValidation, clearAllInstances, isOverloaded, isUnderdimensioned, isAdapted, mainConns, addMainConn, updateMainConn, removeMainConn }) {
     const [pick, setPick] = (0, import_react.useState)(boxTypes[0]?.id || "");
-    const sortedTypes = alphaSort(boxTypes, "name");
-    return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Produktionsdaten" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Produktion" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.production, onChange: (e) => setMeta({ ...meta, production: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Ersteller" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.creator, onChange: (e) => setMeta({ ...meta, creator: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Version" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.version, onChange: (e) => setMeta({ ...meta, version: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "date", style: S.input, value: meta.date, onChange: (e) => setMeta({ ...meta, date: e.target.value }) })))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "Hauptanschl\xFCsse", subtitle: "Definiere alle Einspeisepunkte dieser Produktion. K\xE4sten k\xF6nnen optional einem Hauptanschluss zugewiesen werden." }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addMainConn }, "+ Hauptanschluss hinzuf\xFCgen"), mainConns.length === 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: S.hint }, "Noch keine Hauptanschl\xFCsse definiert. K\xE4sten ohne Zuweisung erscheinen als freie Einspeisepunkte."), mainConns.map((mc) => /* @__PURE__ */ import_react.default.createElement("div", { key: mc.id, style: { display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, flex: 2, minWidth: 150 }, placeholder: "Bezeichnung z.B. NH03-Halle 1", value: mc.name, onChange: (e) => updateMainConn(mc.id, { name: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, placeholder: "Max A", value: mc.amp, onChange: (e) => updateMainConn(mc.id, { amp: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "A"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeMainConn(mc.id) }, "\u2715")))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "K\xE4sten aktivieren", subtitle: "Jeder aktivierte Kasten bekommt im Steckplan ein eigenes Datenblatt." }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.row }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.select, value: pick, onChange: (e) => setPick(e.target.value) }, sortedTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("option", { key: b.id, value: b.id }, b.name))), /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: () => addInstance(pick) }, "+ Kasten hinzuf\xFCgen")), instances.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch keine K\xE4sten aktiviert.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, minWidth: 860, width: "auto" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Typ"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Eingang"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "h\xE4ngt an Kasten\u2026"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "\u2026Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Hauptanschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, instances.map((inst) => {
+    return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Produktionsdaten" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Produktion" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.production, onChange: (e) => setMeta({ ...meta, production: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Ersteller" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.creator, onChange: (e) => setMeta({ ...meta, creator: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Version" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.version, onChange: (e) => setMeta({ ...meta, version: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "date", style: S.input, value: meta.date, onChange: (e) => setMeta({ ...meta, date: e.target.value }) })))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "Hauptanschl\xFCsse", subtitle: "Definiere alle Einspeisepunkte dieser Produktion. K\xE4sten k\xF6nnen optional einem Hauptanschluss zugewiesen werden." }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addMainConn }, "+ Hauptanschluss hinzuf\xFCgen"), mainConns.length === 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: S.hint }, "Noch keine Hauptanschl\xFCsse definiert. K\xE4sten ohne Zuweisung erscheinen als freie Einspeisepunkte."), mainConns.map((mc) => /* @__PURE__ */ import_react.default.createElement("div", { key: mc.id, style: { display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, flex: 2, minWidth: 150 }, placeholder: "Bezeichnung z.B. NH03-Halle 1", value: mc.name, onChange: (e) => updateMainConn(mc.id, { name: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, placeholder: "Max A", value: mc.amp, onChange: (e) => updateMainConn(mc.id, { amp: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "A"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeMainConn(mc.id) }, "\u2715")))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "K\xE4sten aktivieren", subtitle: "Jeder aktivierte Kasten bekommt im Steckplan ein eigenes Datenblatt." }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.row }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.select, value: pick, onChange: (e) => setPick(e.target.value) }, boxTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("option", { key: b.id, value: b.id }, b.name))), /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: () => addInstance(pick) }, "+ Kasten hinzuf\xFCgen")), instances.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch keine K\xE4sten aktiviert.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, minWidth: 860, width: "auto" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Typ"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Eingang"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "h\xE4ngt an Kasten\u2026"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "\u2026Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Hauptanschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, instances.map((inst) => {
       const type = boxTypeById[inst.typeId];
       const parentType = inst.parentId ? boxTypeById[instById[inst.parentId]?.typeId] : null;
       const ol = isOverloaded(inst.id);
@@ -45070,7 +45103,7 @@ Fortfahren?`);
       )), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, isRoot ? /* @__PURE__ */ import_react.default.createElement("select", { style: S.selectSm, value: inst.mainConnectionId || "", onChange: (e) => updateInstance(inst.id, { mainConnectionId: e.target.value || null }) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 frei \u2014"), mainConns.map((mc) => /* @__PURE__ */ import_react.default.createElement("option", { key: mc.id, value: mc.id }, mc.name))) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "via Parent")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => {
         if (confirm(`Kasten \u201E${inst.name}" wirklich l\xF6schen? Alle Steckungen dieses Kastens gehen verloren.`)) removeInstance(inst.id);
       } }, "\u2715")));
-    })))), /* @__PURE__ */ import_react.default.createElement("p", { style: S.hint }, "\u{1F4A1} Phasen bleiben beim Aufstecken erhalten (L1\u2192L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.")));
+    })))), instances.length > 0 && /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 8, display: "flex", justifyContent: "flex-end" } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: clearAllInstances }, "Alle K\xE4sten l\xF6schen")), /* @__PURE__ */ import_react.default.createElement("p", { style: S.hint }, "\u{1F4A1} Phasen bleiben beim Aufstecken erhalten (L1\u2192L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.")));
   }
   function PlanTab({ instances, boxTypeById, loads, loadById, instById, placements, addPlacement, addPlacementsFilled, updatePlacement, removePlacement, activePlan, setActivePlan, ownLoad, totalLoad, isOverloaded, isUnderdimensioned, isAdapted, rootInstances, mainConns, mainConnById, meta }) {
     const [bulkLoadId, setBulkLoadId] = (0, import_react.useState)("");
@@ -45187,6 +45220,15 @@ Fortfahren?`);
   }
   function BoxTypesTab({ boxTypes, setBoxTypes, instances }) {
     const [openId, setOpenId] = (0, import_react.useState)(null);
+    const [bulk, setBulk] = (0, import_react.useState)({ count: 1, connector: "SCHUKO", amp: 16, phase: "L1", breaker: "C", protection: "RCBO", rcdId: null, rotatePhase: false });
+    const updBulk = (patch) => setBulk((s) => {
+      const n = { ...s, ...patch };
+      if (patch.connector) {
+        n.amp = CONN[patch.connector]?.amp || n.amp;
+        n.phase = is3ph(patch.connector) ? "L1L2L3" : isMulticore(patch.connector) ? "L1" : n.phase === "L1L2L3" ? "L1" : n.phase;
+      }
+      return n;
+    });
     const update = (id, patch) => setBoxTypes((s) => s.map((b) => b.id === id ? { ...b, ...patch } : b));
     const updateOutlet = (boxId, outletId, patch) => {
       setBoxTypes((s) => s.map((b) => {
@@ -45224,6 +45266,18 @@ Fortfahren?`);
       if (!confirm("Kasten-Typ wirklich l\xF6schen?")) return;
       setBoxTypes((s) => s.filter((b) => b.id !== id));
     };
+    const removeAllTypes = () => {
+      const inUse = boxTypes.filter((b) => instances.some((i) => i.typeId === b.id));
+      const free = boxTypes.filter((b) => !instances.some((i) => i.typeId === b.id));
+      if (free.length === 0) {
+        alert("Alle Typen sind in Benutzung und k\xF6nnen nicht gel\xF6scht werden.");
+        return;
+      }
+      const msg = inUse.length > 0 ? `${free.length} Typen l\xF6schen? (${inUse.length} in Benutzung werden \xFCbersprungen)` : `Alle ${free.length} Kasten-Typen l\xF6schen?`;
+      if (!confirm(msg)) return;
+      setBoxTypes((s) => s.filter((b) => instances.some((i) => i.typeId === b.id)));
+      setOpenId(null);
+    };
     const addRcd = (boxId) => setBoxTypes((s) => s.map((b) => b.id !== boxId ? b : { ...b, rcds: [...b.rcds || [], { id: uid(), label: "RCD", mA: 30 }] }));
     const updateRcd = (boxId, rcdId, patch) => setBoxTypes((s) => s.map((b) => b.id !== boxId ? b : { ...b, rcds: (b.rcds || []).map((r) => r.id === rcdId ? { ...r, ...patch } : r) }));
     const removeRcd = (boxId, rcdId) => {
@@ -45233,15 +45287,7 @@ Fortfahren?`);
         return { ...b, rcds: (b.rcds || []).filter((r) => r.id !== rcdId), outlets: b.outlets.map((o) => o.rcdId === rcdId ? { ...o, rcdId: null } : o) };
       }));
     };
-    const exportBoxTypes = () => {
-      const blob = new Blob([JSON.stringify({ _format: "stromplaner-boxtypes", boxTypes }, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Kasten-Typen.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    };
+    const exportBoxTypes = () => downloadJSON({ _format: "stromplaner-boxtypes", boxTypes }, "Kasten-Typen.json");
     const importBoxTypes = (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -45267,21 +45313,33 @@ Fortfahren?`);
       r.readAsText(file);
       e.target.value = "";
     };
-    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Kasten-Typen", subtitle: "Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3)." }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addType }, "+ Neuen Kasten-Typ"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: exportBoxTypes }, "\u2B07 Exportieren"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Importieren", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: importBoxTypes, style: { display: "none" } }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 16 } }, boxTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("div", { key: b.id, style: S.card }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.cardHead, onClick: () => setOpenId(openId === b.id ? null : b.id) }, /* @__PURE__ */ import_react.default.createElement("span", { style: S.cardTitle }, openId === b.id ? "\u25BE" : "\u25B8", " ", b.name), /* @__PURE__ */ import_react.default.createElement("span", { style: S.cardSub }, CONN[b.feedConnector]?.label || b.feedConnector, " \xB7 ", b.outlets.length, " Anschl\xFCsse")), openId === b.id && /* @__PURE__ */ import_react.default.createElement("div", { style: S.cardBody }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Name" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: b.name, onChange: (e) => update(b.id, { name: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Einspeisung" }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.input, value: b.feedConnector, onChange: (e) => update(b.id, { feedConnector: e.target.value, feedAmp: CONN[e.target.value]?.amp || b.feedAmp }) }, Object.entries(CONN).sort((a, b2) => a[1].label.localeCompare(b2[1].label, "de")).map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Max (A)" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: S.input, value: b.feedAmp, onChange: (e) => update(b.id, { feedAmp: +e.target.value }) }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "right", marginTop: 4 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtnWide, onClick: () => removeType(b.id) }, "L\xF6schen")), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 12, marginBottom: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 8px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "RCD-Gruppen"), (b.rcds || []).length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: { ...S.hint, margin: "0 0 6px" } }, "Keine RCD-Gruppen \u2014 Anschl\xFCsse werden nur per LS / RCBO gesch\xFCtzt.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 } }, (b.rcds || []).map((rcd) => /* @__PURE__ */ import_react.default.createElement("div", { key: rcd.id, style: { display: "flex", gap: 4, alignItems: "center", background: "#252b33", border: "1px solid #3a424c", borderRadius: 5, padding: "4px 6px" } }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, width: 120 }, value: rcd.label, placeholder: "Bezeichnung", onChange: (e) => updateRcd(b.id, rcd.id, { label: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", min: 10, max: 500, style: { ...S.inputSm, width: 58 }, value: rcd.mA, onChange: (e) => updateRcd(b.id, rcd.id, { mA: +e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#7c8794", whiteSpace: "nowrap" } }, "mA"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeRcd(b.id, rcd.id) }, "\u2715")))), /* @__PURE__ */ import_react.default.createElement("button", { style: S.secondaryBtn, onClick: () => addRcd(b.id) }, "+ RCD hinzuf\xFCgen")), /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name / Steckplatz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Steckpl.*"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Sich."), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "RCD-Gruppe"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, b.outlets.map((o) => /* @__PURE__ */ import_react.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: o.label, onChange: (e) => updateOutlet(b.id, o.id, { label: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.selectSm, value: o.connector, onChange: (e) => updateOutlet(b.id, o.id, { connector: e.target.value }) }, Object.entries(CONN).sort((a, b2) => a[1].label.localeCompare(b2[1].label, "de")).map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 55 }, value: o.amp, onChange: (e) => updateOutlet(b.id, o.id, { amp: +e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, is3ph(o.connector) ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "L1+L2+L3") : isMulticore(o.connector) ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "rotiert") : /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 60 }, value: o.phase || "L1", onChange: (e) => updateOutlet(b.id, o.id, { phase: e.target.value }) }, PHASES.map((ph) => /* @__PURE__ */ import_react.default.createElement("option", { key: ph, value: ph }, ph)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, isMulticore(o.connector) ? /* @__PURE__ */ import_react.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 55 }, value: o.mcSlots || 6, onChange: (e) => updateOutlet(b.id, o.id, { mcSlots: +e.target.value }) }) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: o.breaker || "C", onChange: (e) => updateOutlet(b.id, o.id, { breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 70 }, value: o.protection || "LS", onChange: (e) => updateOutlet(b.id, o.id, { protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, (b.rcds || []).length > 0 ? /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: o.rcdId || "", onChange: (e) => updateOutlet(b.id, o.id, { rcdId: e.target.value || null }) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 kein \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react.default.createElement("option", { key: r.id, value: r.id }, r.label))) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeOutlet(b.id, o.id) }, "\u2715"))))))), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...S.hint, marginTop: 6 } }, "* Steckpl\xE4tze gilt nur f\xFCr Multicore-Anschl\xFCsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, \u2026"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.secondaryBtn, onClick: () => addOutlet(b.id) }, "+ Anschluss hinzuf\xFCgen"))))));
+    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Kasten-Typen", subtitle: "Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3)." }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addType }, "+ Neuen Kasten-Typ"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: exportBoxTypes }, "\u2B07 Exportieren"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Importieren", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: importBoxTypes, style: { display: "none" } })), boxTypes.length > 0 && /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: removeAllTypes }, "Alle l\xF6schen")), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 16 } }, boxTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("div", { key: b.id, style: S.card }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.cardHead, onClick: () => setOpenId(openId === b.id ? null : b.id) }, /* @__PURE__ */ import_react.default.createElement("span", { style: S.cardTitle }, openId === b.id ? "\u25BE" : "\u25B8", " ", b.name), /* @__PURE__ */ import_react.default.createElement("span", { style: S.cardSub }, CONN[b.feedConnector]?.label || b.feedConnector, " \xB7 ", b.outlets.length, " Anschl\xFCsse")), openId === b.id && /* @__PURE__ */ import_react.default.createElement("div", { style: S.cardBody }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Name" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: b.name, onChange: (e) => update(b.id, { name: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Einspeisung" }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.input, value: b.feedConnector, onChange: (e) => update(b.id, { feedConnector: e.target.value, feedAmp: CONN[e.target.value]?.amp || b.feedAmp }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Max (A)" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: S.input, value: b.feedAmp, onChange: (e) => update(b.id, { feedAmp: +e.target.value }) }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { textAlign: "right", marginTop: 4 } }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtnWide, onClick: () => removeType(b.id) }, "L\xF6schen")), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 12, marginBottom: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 8px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "RCD-Gruppen"), (b.rcds || []).length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: { ...S.hint, margin: "0 0 6px" } }, "Keine RCD-Gruppen \u2014 Anschl\xFCsse werden nur per LS / RCBO gesch\xFCtzt.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 } }, (b.rcds || []).map((rcd) => /* @__PURE__ */ import_react.default.createElement("div", { key: rcd.id, style: { display: "flex", gap: 4, alignItems: "center", background: "#252b33", border: "1px solid #3a424c", borderRadius: 5, padding: "4px 6px" } }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, width: 120 }, value: rcd.label, placeholder: "Bezeichnung", onChange: (e) => updateRcd(b.id, rcd.id, { label: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", min: 10, max: 500, style: { ...S.inputSm, width: 58 }, value: rcd.mA, onChange: (e) => updateRcd(b.id, rcd.id, { mA: +e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#7c8794", whiteSpace: "nowrap" } }, "mA"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeRcd(b.id, rcd.id) }, "\u2715")))), /* @__PURE__ */ import_react.default.createElement("button", { style: S.secondaryBtn, onClick: () => addRcd(b.id) }, "+ RCD hinzuf\xFCgen")), /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name / Steckplatz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Steckpl.*"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Sich."), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "RCD-Gruppe"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, b.outlets.map((o) => /* @__PURE__ */ import_react.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.inputSm, value: o.label, onChange: (e) => updateOutlet(b.id, o.id, { label: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.selectSm, value: o.connector, onChange: (e) => updateOutlet(b.id, o.id, { connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 55 }, value: o.amp, onChange: (e) => updateOutlet(b.id, o.id, { amp: +e.target.value }) })), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, is3ph(o.connector) ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "L1+L2+L3") : isMulticore(o.connector) ? /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "rotiert") : /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 60 }, value: o.phase || "L1", onChange: (e) => updateOutlet(b.id, o.id, { phase: e.target.value }) }, PHASES.map((ph) => /* @__PURE__ */ import_react.default.createElement("option", { key: ph, value: ph }, ph)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, isMulticore(o.connector) ? /* @__PURE__ */ import_react.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 55 }, value: o.mcSlots || 6, onChange: (e) => updateOutlet(b.id, o.id, { mcSlots: +e.target.value }) }) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: o.breaker || "C", onChange: (e) => updateOutlet(b.id, o.id, { breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 70 }, value: o.protection || "LS", onChange: (e) => updateOutlet(b.id, o.id, { protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, (b.rcds || []).length > 0 ? /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: o.rcdId || "", onChange: (e) => updateOutlet(b.id, o.id, { rcdId: e.target.value || null }) }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 kein \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react.default.createElement("option", { key: r.id, value: r.id }, r.label))) : /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeOutlet(b.id, o.id) }, "\u2715"))))))), /* @__PURE__ */ import_react.default.createElement("p", { style: { ...S.hint, marginTop: 6 } }, "* Steckpl\xE4tze gilt nur f\xFCr Multicore-Anschl\xFCsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, \u2026"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginRight: 2 } }, "Bulk:"), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 46 }, value: bulk.count, onChange: (e) => updBulk({ count: Math.max(1, +e.target.value) }), title: "Anzahl" }), /* @__PURE__ */ import_react.default.createElement("select", { style: S.selectSm, value: bulk.connector, onChange: (e) => updBulk({ connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react.default.createElement("option", { key: k, value: k }, v.label))), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 52 }, value: bulk.amp, onChange: (e) => updBulk({ amp: +e.target.value }), title: "Ampere" }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 11, color: "#7c8794" } }, "A"), !is3ph(bulk.connector) && !isMulticore(bulk.connector) && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: bulk.phase, onChange: (e) => updBulk({ phase: e.target.value }), disabled: bulk.rotatePhase }, PHASES.map((ph) => /* @__PURE__ */ import_react.default.createElement("option", { key: ph, value: ph }, ph))), /* @__PURE__ */ import_react.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: bulk.rotatePhase ? "#f5a623" : "#9aa4af", cursor: "pointer", userSelect: "none" }, title: "Phasen gleichm\xE4\xDFig rotieren (L1\u2192L2\u2192L3\u2192\u2026)" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "checkbox", checked: bulk.rotatePhase, onChange: (e) => updBulk({ rotatePhase: e.target.checked }), style: { cursor: "pointer" } }), "Rotation")), /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 52 }, value: bulk.breaker, onChange: (e) => updBulk({ breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t))), /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 72 }, value: bulk.protection, onChange: (e) => updBulk({ protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react.default.createElement("option", { key: t, value: t }, t))), (b.rcds || []).length > 0 && /* @__PURE__ */ import_react.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: bulk.rcdId || "", onChange: (e) => updBulk({ rcdId: e.target.value || null }), title: "RCD-Gruppe" }, /* @__PURE__ */ import_react.default.createElement("option", { value: "" }, "\u2014 kein RCD \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react.default.createElement("option", { key: r.id, value: r.id }, r.label))), /* @__PURE__ */ import_react.default.createElement("button", { style: S.secondaryBtn, onClick: () => {
+      const base = b.outlets.length;
+      const phaseFor = (i) => {
+        if (is3ph(bulk.connector)) return "L1L2L3";
+        if (isMulticore(bulk.connector)) return "L1";
+        if (bulk.rotatePhase) return PHASES[(base + i) % PHASES.length];
+        return bulk.phase;
+      };
+      const neu = Array.from({ length: bulk.count }, (_, i) => ({
+        id: uid(),
+        label: `Anschluss ${base + i + 1}`,
+        connector: bulk.connector,
+        amp: bulk.amp,
+        phase: phaseFor(i),
+        breaker: bulk.breaker,
+        protection: bulk.protection,
+        rcdId: bulk.rcdId,
+        ...isMulticore(bulk.connector) ? { mcSlots: 6 } : {}
+      }));
+      setBoxTypes((s) => s.map((bx) => bx.id !== b.id ? bx : { ...bx, outlets: [...bx.outlets, ...neu] }));
+    } }, "+ ", bulk.count, "\xD7")), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.secondaryBtn, marginTop: 6 }, onClick: () => addOutlet(b.id) }, "+ Einzeln hinzuf\xFCgen"))))));
   }
   function LoadsTab({ loads, setLoads }) {
     const add = () => setLoads((s) => [{ id: uid(), name: "Neuer Verbraucher", watt: "", threePhase: false }, ...s]);
     const update = (id, patch) => setLoads((s) => s.map((l) => l.id === id ? { ...l, ...patch } : l));
     const remove = (id) => setLoads((s) => s.filter((l) => l.id !== id));
-    const exportLoads = () => {
-      const blob = new Blob([JSON.stringify({ _format: "stromplaner-loads", loads }, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "Verbraucher.json";
-      a.click();
-      URL.revokeObjectURL(url);
-    };
+    const exportLoads = () => downloadJSON({ _format: "stromplaner-loads", loads }, "Verbraucher.json");
     const importLoads = (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -45418,41 +45476,6 @@ Fortfahren?`);
       if (type === "MC") return SymMulticore;
       return null;
     };
-    const PlugIcon = ({ cx, cy, col }) => /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement("line", { x1: cx - 12, y1: cy, x2: cx - 8, y2: cy, stroke: col, strokeWidth: 1 }), /* @__PURE__ */ import_react.default.createElement(
-      "rect",
-      {
-        x: cx - 8,
-        y: cy - 5,
-        width: 8,
-        height: 9,
-        rx: 1.5,
-        stroke: col,
-        strokeWidth: 1.1,
-        fill: "none"
-      }
-    ), /* @__PURE__ */ import_react.default.createElement(
-      "line",
-      {
-        x1: cx - 6,
-        y1: cy - 5,
-        x2: cx - 6,
-        y2: cy - 8,
-        stroke: col,
-        strokeWidth: 1.2,
-        strokeLinecap: "round"
-      }
-    ), /* @__PURE__ */ import_react.default.createElement(
-      "line",
-      {
-        x1: cx - 3,
-        y1: cy - 5,
-        x2: cx - 3,
-        y2: cy - 8,
-        stroke: col,
-        strokeWidth: 1.2,
-        strokeLinecap: "round"
-      }
-    ), /* @__PURE__ */ import_react.default.createElement("line", { x1: cx, y1: cy, x2: cx + 2, y2: cy, stroke: col, strokeWidth: 1 }));
     const orthoPath = (x1, y1, x2, y2) => {
       const mx = (x1 + x2) / 2, dy = y2 - y1;
       if (Math.abs(dy) < 2) return `M${x1} ${y1} H${x2}`;
@@ -45476,11 +45499,11 @@ Fortfahren?`);
         if (!out.breaker) return;
         const ph = is3ph(out.connector) ? "3P" : isMulticore(out.connector) ? "MC" : "1P";
         const prot = out.protection === "RCBO" ? "RCBO" : out.protection === "RCD" ? "RCD" : "MCB";
-        const key = `${prot}_${out.breaker}_${out.char || "B"}_${ph}`;
-        if (!mcbMap[key]) mcbMap[key] = { prot, breaker: out.breaker, ch: out.char || "B", ph, cnt: 0 };
+        const key = `${prot}_${out.breaker}_${ph}`;
+        if (!mcbMap[key]) mcbMap[key] = { prot, breaker: out.breaker, ph, cnt: 0 };
         mcbMap[key].cnt++;
       });
-      const lines = Object.values(mcbMap).map((g) => `${g.cnt}\xD7 ${g.prot} ${g.breaker}A ${g.ch} ${g.ph}`);
+      const lines = Object.values(mcbMap).map((g) => `${g.cnt}\xD7 ${g.prot} ${g.breaker}A ${g.ph}`);
       rcds.forEach((r) => {
         const ampPart = r.amp ? `${r.amp}A/` : "";
         lines.push(`1\xD7 RCD ${ampPart}${r.mA}mA${r.poles ? ` ${r.poles}P` : ""}`);
@@ -45633,11 +45656,11 @@ Fortfahren?`);
       const pos = positions[inst.id];
       if (!pos) return;
       const leafX = pos.x + NODE_W + Math.round((COL_W - NODE_W) / 2);
-      const blockedRanges = getChildren(inst.id).flatMap((ch) => {
-        const chPos = positions[ch.id];
-        if (!chPos) return [];
-        if (leafX + LEAF_W <= chPos.x || leafX >= chPos.x + NODE_W) return [];
-        return [{ top: chPos.y, bottom: chPos.y + nodeH(instById[ch.id]) }];
+      const blockedRanges = instances.filter((other) => other.id !== inst.id).flatMap((other) => {
+        const otherPos = positions[other.id];
+        if (!otherPos) return [];
+        if (leafX + LEAF_W <= otherPos.x || leafX >= otherPos.x + NODE_W) return [];
+        return [{ top: otherPos.y, bottom: otherPos.y + nodeH(other) }];
       }).sort((a, b) => a.top - b.top);
       const claimedRanges = [];
       outlets.forEach((out) => {
@@ -46685,14 +46708,13 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     rootSub: { fontSize: 12, color: "#9aa4af", fontWeight: 400 },
     stickyPhase: { position: "sticky", top: 85, zIndex: 5, background: PANEL, paddingBottom: 8, marginBottom: 4 },
     normHint: { fontSize: 10, color: "#7c8794", marginTop: 2, display: "block" },
-    inspPass: { textAlign: "center", fontSize: 15, fontWeight: 700 },
     dropdown: { position: "fixed", background: "#1b2026", border: `1px solid ${LINE}`, borderRadius: 6, padding: 6, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,.7)" },
     dropdownList: { maxHeight: 320, overflowY: "auto" },
     dropdownItem: { padding: "6px 8px", borderRadius: 4, cursor: "pointer", fontSize: 13, color: "#e8eaed" },
     dropdownItemActive: { background: ACCENT, color: "#1c2127", fontWeight: 600 }
   };
 
-  // Das Tool/_entry.js
+  // app/_entry.js
   import_client.default.createRoot(document.getElementById("root")).render(import_react2.default.createElement(App));
 })();
 /*! Bundled license information:

@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0.."
 echo Stromplaner App wird gebaut (JSX + Installer)...
 npm run dist
 if %errorlevel% equ 0 (

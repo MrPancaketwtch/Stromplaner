@@ -1,7 +1,9 @@
-const { app, BrowserWindow, shell, dialog } = require('electron');
+const { app, BrowserWindow, shell, ipcMain } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
+
+const root = app.getAppPath();
 
 function createWindow() {
   const splash = new BrowserWindow({
@@ -18,7 +20,7 @@ function createWindow() {
 
   splash.loadFile(path.join(__dirname, 'splash.html'));
 
-  const iconPath = path.join(__dirname, 'build', 'icon.png');
+  const iconPath = path.join(root, 'build', 'icon.png');
   const icon = fs.existsSync(iconPath) ? iconPath : undefined;
 
   const win = new BrowserWindow({
@@ -32,11 +34,12 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
     },
   });
 
   win.setMenuBarVisibility(false);
-  win.loadFile(path.join(__dirname, 'Das Tool', 'Stromplaner.html'));
+  win.loadFile(path.join(root, 'app', 'Stromplaner.html'));
 
   let shown = false;
   const tryShow = () => {
@@ -49,7 +52,7 @@ function createWindow() {
       if (!splash.isDestroyed()) splash.close();
       win.show();
       win.focus();
-      if (app.isPackaged) checkForUpdates(win);
+      if (app.isPackaged) setupAutoUpdater(win);
     }, 300);
   };
 
@@ -76,23 +79,44 @@ function createWindow() {
   });
 }
 
-function checkForUpdates(win) {
-  autoUpdater.checkForUpdates().catch(() => {});
+function setupAutoUpdater(win) {
+  const send = (type, payload) => {
+    if (!win.isDestroyed()) win.webContents.send('update-status', { type, ...payload });
+  };
 
-  autoUpdater.once('update-downloaded', (info) => {
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Update verfügbar',
-      message: `Stromplaner ${info.version} wurde heruntergeladen.`,
-      detail: 'Die neue Version wird nach dem Neustart installiert.',
-      buttons: ['Jetzt neu starten', 'Später'],
-      defaultId: 0,
-    }).then(({ response }) => {
-      if (response === 0) autoUpdater.quitAndInstall();
+  let updateReady = false;
+
+  autoUpdater.on('checking-for-update',  () => send('checking'));
+  autoUpdater.on('update-not-available', () => send('up-to-date'));
+  autoUpdater.on('error', (err) => {
+    console.error('AutoUpdater error:', err?.message || err);
+    send('error', { message: err?.message || String(err) });
+  });
+  autoUpdater.on('download-progress', (p) =>
+    send('downloading', { percent: Math.round(p.percent) })
+  );
+  autoUpdater.on('update-available', (info) =>
+    send('available', { version: info.version })
+  );
+  autoUpdater.on('update-downloaded', (info) => {
+    updateReady = true;
+    send('downloaded', { version: info.version });
+  });
+
+  ipcMain.handle('check-for-updates', () => {
+    if (updateReady) { send('downloaded'); return; }
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('checkForUpdates error:', err?.message || err);
+      send('error', { message: err?.message || String(err) });
     });
   });
+
+  ipcMain.handle('install-update', () => {
+    autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.checkForUpdates().catch(() => {});
 }
 
 app.whenReady().then(createWindow);
-
 app.on('window-all-closed', () => app.quit());

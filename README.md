@@ -1,8 +1,8 @@
 # ⚡ Stromplaner
 
-Browserbasiertes Planungs- und Prüftool für mobile Drehstrom-Verteilanlagen in der Veranstaltungstechnik.
+Planungs- und Prüftool für mobile Drehstrom-Verteilanlagen in der Veranstaltungstechnik.
 
-Das Tool bildet die vollständige Stromverteilung einer Produktion ab: Kästen werden in einer Kaskade miteinander verbunden, Verbraucher auf Steckplätze verteilt, Phasenlasten automatisch berechnet. Ein Blockschaltbild visualisiert die gesamte Topologie. Integriert sind ein Errichtungsprüfungs-Protokoll nach DIN VDE 0100-600 sowie Berechnungshelfer für Leitungsdimensionierung und Spannungsfall.
+Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Kästen werden in einer Kaskade miteinander verbunden, Verbraucher auf Steckplätze verteilt, Phasenlasten automatisch berechnet. Ein Blockschaltbild visualisiert die gesamte Topologie. Integriert sind ein Errichtungsprüfungs-Protokoll nach DIN VDE 0100-600 sowie Berechnungshelfer für Leitungsdimensionierung und Spannungsfall.
 
 > **Hinweis:** Die Werte sind eine Planungshilfe. Auslegung, Absicherung und sichere Installation liegen in der Verantwortung der zuständigen Elektrofachkraft.
 
@@ -10,14 +10,15 @@ Das Tool bildet die vollständige Stromverteilung einer Produktion ab: Kästen w
 
 ## Schnellstart
 
-**Als Desktop-App (empfohlen):**
-1. Installer aus `dist/` ausführen (einmalig) oder `start.bat` für den Dev-Start
-2. **Erster Start:** **↥ Laden** → `Das Tool/Standard.json` auswählen, um Kasten-Typen und Verbraucher vorzuladen
+1. Installer aus `Installer/` ausführen (einmalig)
+2. **Erster Start:** **↥ Laden** → `app/Standard.json` auswählen, um Kasten-Typen und Verbraucher vorzuladen
 3. Planen, stecken, prüfen
 4. Mit **💾 Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
 5. **🖨 PDF** für den fertigen Stromplan oder das Prüfprotokoll
 
-Das Tool speichert den Zustand automatisch (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen oder zu archivieren.
+Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen oder zu archivieren.
+
+**Updates** werden automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **↓ Update bereit**-Button, der einen Neustart-Dialog öffnet.
 
 ---
 
@@ -25,16 +26,23 @@ Das Tool speichert den Zustand automatisch (localStorage). Ein explizites Speich
 
 ```
 Stromplaner/
-├── Das Tool/
-│   ├── Stromplaner.html      ← Gebundelte App (Output von build.js)
+├── app/
+│   ├── Stromplaner.html      ← Gebündelte App (Output von build.js)
 │   ├── Stromplaner.jsx       ← Quellcode (React 18)
 │   └── Standard.json         ← Vorgeladene Kasten-Typen & Verbraucher
+├── Installer/                ← NSIS-Installer (für Weitergabe)
 ├── Speicherstände/           ← Eigene Planungen (.json) ablegen
-├── main.js                   ← Electron-Hauptprozess
-├── build.js                  ← Build-Skript (esbuild → standalone HTML)
-├── build.bat                 ← JSX neu bauen (→ Stromplaner.html)
-├── start.bat                 ← App direkt starten (Dev-Modus)
-├── dist.bat                  ← Installer bauen (→ dist/)
+├── src/
+│   ├── main.js               ← Electron-Hauptprozess
+│   ├── preload.js            ← IPC-Brücke (contextBridge)
+│   └── splash.html           ← Startbildschirm
+├── scripts/
+│   ├── build.js              ← Build-Skript (esbuild → standalone HTML)
+│   ├── afterPack.js          ← rcedit-Hook (Icon in .exe einbetten)
+│   └── release.bat           ← Version bauen & auf GitHub veröffentlichen
+├── build/
+│   ├── icon.png
+│   └── icon.ico
 └── package.json
 ```
 
@@ -51,11 +59,12 @@ Grundlegende Produktionsdaten und Aufbau der Verteilerstruktur.
 - Pro Kasten: übergeordneten Kasten und Ausgang wählen (oder einem Hauptanschluss zuweisen)
 - Adapter-Verbindungen sind möglich, werden farblich hervorgehoben
 - Überlastete Kästen werden mit ⚠ markiert; unterdimensionierte Anschlüsse ebenso
+- **Alle Kästen löschen** entfernt alle angelegten Instanzen auf einmal
 
 ### 2 · Steckplan
 Verbraucher auf Steckplätze der Kästen verteilen.
 
-- Pro aktiviertem Kasten ein eigenes Abschnitt
+- Pro aktiviertem Kasten ein eigener Abschnitt
 - Live-Anzeige der Phasenlast (L1 / L2 / L3) mit Farbkodierung: grün ≤ 80 % · orange > 80 % · rot = Überlast
 - Verbraucher wählen → Anschluss wählen → Phase wird automatisch gesetzt
 - Nur passende Steckplätze sichtbar (1-phasig ↔ 3-phasig getrennt)
@@ -103,7 +112,9 @@ Verwaltung aller Verteilerkästen-Typen.
 - Name, Eingangs-Steckverbinder, maximaler Speisestrom
 - Beliebig viele Ausgänge: Label, Stecker-Typ, Nennstrom, Phase, Sicherungscharakteristik (B/C/D/K), Schutzart (LS / RCBO / Keine)
   - Multicore-Ausgänge: Anzahl Steckplätze (1–48) konfigurierbar
+- **Bulk-Hinzufügen:** Mehrere Ausgänge gleichen Typs auf einmal anlegen — Anzahl, Stecker, Ampere, Sicherung, Schutzart wählen; optional RCD-Gruppe zuweisen und Phasenrotation aktivieren (L1→L2→L3→…)
 - RCD-Objekte (separate FI-Schalter): Strom, Auslösestrom (mA), Polzahl
+- **Alle Kasten-Typen löschen** entfernt alle Typen auf einmal
 - Import / Export als JSON
 
 ### Verbraucher *(Stammdaten)*
@@ -161,6 +172,7 @@ Beide Unter-Tabs erlauben beliebig viele benannte Einzel-Rechnungen (**+ Neue Re
 | **💾 Speichern** | Aktuellen Stand als `.json` exportieren |
 | **↺ Neu** | Planung zurücksetzen (Kasten-Typen und Verbraucher bleiben erhalten) |
 | **🖨 PDF** | Druckbaren Stromplan als PDF öffnen |
+| **↓ Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
 
 ---
 
@@ -200,37 +212,41 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | Build | esbuild → standalone IIFE |
 | Output | Einzelne HTML-Datei (keine externen Abhängigkeiten) |
 | Desktop-Wrapper | Electron 33 (NSIS-Installer für Windows) |
+| Auto-Update | electron-updater via GitHub Releases |
 | Persistenz | localStorage (Autosave, 600 ms debounce) |
 | Diagramm | SVG (manuelles Layout, kein D3 o. ä.) |
 
-### Build
+### Build & Release
 
 **Einmalige Einrichtung:**
 ```bash
 npm install
 ```
 
-**Nach jeder Änderung an `Das Tool/Stromplaner.jsx`:**
+**Nach Änderungen an `app/Stromplaner.jsx` neu bauen:**
 ```bash
-node build.js
-# oder
 npm run build
-# oder unter Windows: build.bat doppelklicken
 ```
-Das Skript bündelt JSX + React mit esbuild zu `Das Tool/Stromplaner.html`.
+Das Skript bündelt JSX + React mit esbuild zu `app/Stromplaner.html`.
 
 **App starten (Dev-Modus, kein Installer nötig):**
 ```bash
 npm start
-# oder: start.bat doppelklicken
 ```
 
-**Installer bauen (Windows x64, NSIS):**
+**Lokalen Installer bauen (ohne GitHub-Release):**
 ```bash
 npm run dist
-# oder: dist.bat doppelklicken
-# → Installer landet in dist/
+# → dist/Stromplaner Setup x.x.x.exe
 ```
+
+**Neue Version veröffentlichen:**
+1. Version in `package.json` erhöhen (z. B. `1.0.7` → `1.0.8`)
+2. `scripts\release.bat` ausführen (oder `npm run release`)
+3. Das Skript baut, signiert und lädt den Installer + Metadaten als GitHub Release hoch
+4. Installierte Apps erkennen das Update beim nächsten Start automatisch
+
+> Für den Release wird ein GitHub-Token mit `repo`-Berechtigung als Windows-Umgebungsvariable `GH_TOKEN` benötigt.
 
 ### Dateiformat (Autosave / JSON-Export)
 ```json
