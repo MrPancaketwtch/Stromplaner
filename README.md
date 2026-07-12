@@ -10,13 +10,13 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Käste
 
 ## Schnellstart
 
-1. Installer aus `Installer/` ausführen (einmalig)
-2. **Erster Start:** **↥ Laden** → `app/Standard.json` auswählen, um Kasten-Typen und Verbraucher vorzuladen
+1. Installer aus `dist/` ausführen (einmalig)
+2. **Erster Start:** **Kästen und Verbraucher selber anlegen** oder **↥ Laden** → `app/Standard.json` auswählen, um NDR-Kasten-Typen und Verbraucher vorzuladen
 3. Planen, stecken, prüfen
 4. Mit **💾 Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
-5. **🖨 PDF** für den fertigen Stromplan oder das Prüfprotokoll
+5. **🖨 PDF** für den fertigen Stromplan oder das Prüfprotokoll → **Achtung** zwei verschiedene Exports: Einer für den Plan, einer für die Errichtungsprüfung
 
-Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen oder zu archivieren.
+Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen, um zu archivieren, oder um in einem anderem Projekt zu arbeiten und vorher den aktuellen Stand zu sichern.
 
 **Updates** werden automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **↓ Update bereit**-Button, der einen Neustart-Dialog öffnet.
 
@@ -30,7 +30,7 @@ Stromplaner/
 │   ├── Stromplaner.html      ← Gebündelte App (Output von build.js)
 │   ├── Stromplaner.jsx       ← Quellcode (React 18)
 │   └── Standard.json         ← Vorgeladene Kasten-Typen & Verbraucher
-├── Installer/                ← NSIS-Installer (für Weitergabe)
+├── dist/                     ← NSIS-Installer (für Weitergabe)
 ├── Speicherstände/           ← Eigene Planungen (.json) ablegen
 ├── src/
 │   ├── main.js               ← Electron-Hauptprozess
