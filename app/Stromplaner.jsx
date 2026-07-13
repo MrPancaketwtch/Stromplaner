@@ -80,6 +80,9 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.0.4": [
+    "Changelog-Popup erscheint jetzt zuverlässig nach Updates",
+  ],
   "1.0.3": [
     "Intro-Animation mit Video und Sound beim Start",
     "Spendenbutton (☕) im Header – GitHub Sponsors",
