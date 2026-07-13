@@ -44203,6 +44203,16 @@ button:active { filter: brightness(0.95); }
     return round2(fac * +I * +l * +cosPhi / (KAPPA_CU * (maxPct / 100) * 230));
   };
   var CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
+  var CHANGELOG = {
+    "1.0.3": [
+      "Intro-Animation mit Video und Sound beim Start",
+      "Spendenbutton (\u2615) im Header \u2013 GitHub Sponsors",
+      "Bulk-Add f\xFCr Ausg\xE4nge: Phasenrotation & RCD-Gruppe w\xE4hlbar",
+      "Alle K\xE4sten auf einmal l\xF6schen (Konfiguration)",
+      "Alle Kasten-Typen auf einmal l\xF6schen",
+      "Leitungsberechnungen werden beim JSON-Import jetzt korrekt wiederhergestellt"
+    ]
+  };
   var downloadJSON = (data, filename) => {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -44422,6 +44432,8 @@ button:active { filter: brightness(0.95); }
     const [meta, setMeta] = (0, import_react.useState)(DEFAULT_META);
     const [showUpdateModal, setShowUpdateModal] = (0, import_react.useState)(false);
     const [updateStatus, setUpdateStatus] = (0, import_react.useState)({ type: "idle" });
+    const [showDonateModal, setShowDonateModal] = (0, import_react.useState)(false);
+    const [changelogVersion, setChangelogVersion] = (0, import_react.useState)(null);
     const [mainConns, setMainConns] = (0, import_react.useState)([]);
     const [boxTypes, setBoxTypes] = (0, import_react.useState)(alphaSort(clone(DEFAULT_BOX_TYPES), "name"));
     const [loads, setLoads] = (0, import_react.useState)(alphaSort(clone(DEFAULT_LOADS), "name"));
@@ -44460,6 +44472,19 @@ button:active { filter: brightness(0.95); }
     (0, import_react.useEffect)(() => {
       window.electronAPI?.onUpdateStatus((msg) => {
         setUpdateStatus(msg);
+      });
+    }, []);
+    (0, import_react.useEffect)(() => {
+      if (!localStorage.getItem("stromplaner_donated")) setShowDonateModal(true);
+    }, []);
+    (0, import_react.useEffect)(() => {
+      if (!window.electronAPI?.appVersion) return;
+      window.electronAPI.appVersion().then((v) => {
+        const seen = localStorage.getItem("stromplaner_seen_version");
+        if (seen !== v && CHANGELOG[v]) {
+          setChangelogVersion(v);
+          localStorage.setItem("stromplaner_seen_version", v);
+        }
       });
     }, []);
     const saveTimer = (0, import_react.useRef)(null);
@@ -44996,7 +45021,7 @@ Fortfahren?`);
       ["erweitert", "Erweitert"]
     ];
     const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, isUnderdimensioned, isAdapted, rootInstances, mainConns, mainConnById };
-    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), window.electronAPI && /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: () => setShowUpdateModal(true) }, updateStatus.type === "downloaded" ? "\u2193 Update bereit" : updateStatus.type === "available" ? "\u2191 Update verf\xFCgbar" : "\u2191 Updates"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), window.electronAPI && /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: () => setShowUpdateModal(true) }, updateStatus.type === "downloaded" ? "\u2193 Update bereit" : updateStatus.type === "available" ? "\u2191 Update verf\xFCgbar" : "\u2191 Updates"), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, color: "#f5a623" }, onClick: () => setShowDonateModal(true) }, "\u2615"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
         key: k,
@@ -45050,7 +45075,10 @@ Fortfahren?`);
         setVoltCalcs,
         subTab: erweiterSubTab
       }
-    ))), showUpdateModal && /* @__PURE__ */ import_react.default.createElement(UpdateModal, { status: updateStatus, onClose: () => setShowUpdateModal(false), onCheck: () => window.electronAPI.checkForUpdates(), onInstall: () => window.electronAPI.installUpdate(), setStatus: setUpdateStatus }));
+    ))), changelogVersion && /* @__PURE__ */ import_react.default.createElement(ChangelogModal, { version: changelogVersion, onClose: () => setChangelogVersion(null) }), showDonateModal && /* @__PURE__ */ import_react.default.createElement(DonateModal, { onClose: () => {
+      localStorage.setItem("stromplaner_donated", "1");
+      setShowDonateModal(false);
+    } }), showUpdateModal && /* @__PURE__ */ import_react.default.createElement(UpdateModal, { status: updateStatus, onClose: () => setShowUpdateModal(false), onCheck: () => window.electronAPI.checkForUpdates(), onInstall: () => window.electronAPI.installUpdate(), setStatus: setUpdateStatus }));
   }
   function UpdateModal({ status, onClose, onCheck, onInstall, setStatus }) {
     const busy = status.type === "checking" || status.type === "downloading";
@@ -45065,6 +45093,30 @@ Fortfahren?`);
       setStatus({ type: "checking" });
       onCheck();
     } }, "Nach Updates suchen"), /* @__PURE__ */ import_react.default.createElement("button", { style: btn({ background: "#2a3547", color: "#aab" }), onClick: onClose }, "Schlie\xDFen"))));
+  }
+  function ChangelogModal({ version: version2, onClose }) {
+    const entries = CHANGELOG[version2] || [];
+    const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1e3, display: "flex", alignItems: "center", justifyContent: "center" };
+    const box = { background: "#1e2530", border: "1px solid #2e3a4a", borderRadius: 12, padding: "28px 32px", maxWidth: 420, width: "90%", color: "#e8eaf0", fontFamily: "inherit" };
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: overlay, onClick: (e) => {
+      if (e.target === e.currentTarget) onClose();
+    } }, /* @__PURE__ */ import_react.default.createElement("div", { style: box }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 15, fontWeight: 700, color: "#fff", marginBottom: 4 } }, "Was ist neu in v", version2), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#5a6a7a", marginBottom: 16 } }, "Stromplaner wurde aktualisiert"), /* @__PURE__ */ import_react.default.createElement("ul", { style: { margin: 0, padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: 7 } }, entries.map((e, i) => /* @__PURE__ */ import_react.default.createElement("li", { key: i, style: { fontSize: 13, color: "#c8d0da", lineHeight: 1.5 } }, e))), /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 22, display: "flex", justifyContent: "flex-end" } }, /* @__PURE__ */ import_react.default.createElement("button", { onClick: onClose, style: { padding: "7px 20px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "#3a7bd5", color: "#fff" } }, "Los geht's"))));
+  }
+  function DonateModal({ onClose }) {
+    const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1e3, display: "flex", alignItems: "center", justifyContent: "center" };
+    const box = { background: "#1e2530", border: "1px solid #2e3a4a", borderRadius: 12, padding: "32px 36px", maxWidth: 380, color: "#e8eaf0", fontFamily: "inherit", textAlign: "center" };
+    const btn = (c) => ({ padding: "8px 20px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, ...c });
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: overlay }, /* @__PURE__ */ import_react.default.createElement("div", { style: box }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 42, marginBottom: 12 } }, "\u2615"), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 17, fontWeight: 700, marginBottom: 10, color: "#fff" } }, "Stromplaner gef\xE4llt dir?"), /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 13, color: "#9aa4af", lineHeight: 1.6, marginBottom: 24 } }, "Das Tool ist kostenlos und wird in meiner Freizeit weiterentwickelt.", /* @__PURE__ */ import_react.default.createElement("br", null), "Wenn es dir bei deiner Arbeit hilft, freue ich mich \xFCber einen Kaffee. \u2615"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 10, justifyContent: "center" } }, /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        style: btn({ background: "#f5a623", color: "#1b2026" }),
+        onClick: () => {
+          window.open("https://github.com/sponsors/MrPancaketwtch", "_blank");
+          onClose();
+        }
+      },
+      "Einen Kaffee spendieren"
+    ), /* @__PURE__ */ import_react.default.createElement("button", { style: btn({ background: "#2a3547", color: "#9aa4af" }), onClick: onClose }, "Vielleicht sp\xE4ter"))));
   }
   function ConfigTab({ meta, setMeta, boxTypes, instances, instById, boxTypeById, addInstance, removeInstance, updateInstance, setParentWithValidation, clearAllInstances, isOverloaded, isUnderdimensioned, isAdapted, mainConns, addMainConn, updateMainConn, removeMainConn }) {
     const [pick, setPick] = (0, import_react.useState)(boxTypes[0]?.id || "");

@@ -115,6 +115,7 @@ function setupAutoUpdater(win) {
   ipcMain.handle('install-update', () => {
     autoUpdater.quitAndInstall();
   });
+  ipcMain.handle('app-version', () => app.getVersion());
 
   autoUpdater.checkForUpdates().catch(() => {});
 }

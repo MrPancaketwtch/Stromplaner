@@ -79,6 +79,17 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
+const CHANGELOG = {
+  "1.0.3": [
+    "Intro-Animation mit Video und Sound beim Start",
+    "Spendenbutton (☕) im Header – GitHub Sponsors",
+    "Bulk-Add für Ausgänge: Phasenrotation & RCD-Gruppe wählbar",
+    "Alle Kästen auf einmal löschen (Konfiguration)",
+    "Alle Kasten-Typen auf einmal löschen",
+    "Leitungsberechnungen werden beim JSON-Import jetzt korrekt wiederhergestellt",
+  ],
+};
+
 const downloadJSON = (data, filename) => {
   const blob = new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const url  = URL.createObjectURL(blob);
@@ -317,8 +328,10 @@ function FilterSelect({ options, value, onChange, placeholder, style }) {
 export default function App() {
   const [tab,  setTab]  = useState("config");
   const [meta, setMeta] = useState(DEFAULT_META);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [updateStatus, setUpdateStatus] = useState({ type: 'idle' });
+  const [showUpdateModal,   setShowUpdateModal]   = useState(false);
+  const [updateStatus,      setUpdateStatus]      = useState({ type: 'idle' });
+  const [showDonateModal,   setShowDonateModal]   = useState(false);
+  const [changelogVersion,  setChangelogVersion]  = useState(null);
 
   // Hauptanschlüsse: [{id, name, amp}]
   const [mainConns, setMainConns] = useState([]);
@@ -364,6 +377,21 @@ export default function App() {
   useEffect(()=>{
     window.electronAPI?.onUpdateStatus(msg => {
       setUpdateStatus(msg);
+    });
+  },[]);
+
+  useEffect(()=>{
+    if(!localStorage.getItem("stromplaner_donated")) setShowDonateModal(true);
+  },[]);
+
+  useEffect(()=>{
+    if(!window.electronAPI?.appVersion) return;
+    window.electronAPI.appVersion().then(v=>{
+      const seen = localStorage.getItem("stromplaner_seen_version");
+      if(seen !== v && CHANGELOG[v]) {
+        setChangelogVersion(v);
+        localStorage.setItem("stromplaner_seen_version", v);
+      }
     });
   },[]);
 
@@ -838,6 +866,7 @@ export default function App() {
         {window.electronAPI&&<button style={S.ghostBtn} onClick={()=>setShowUpdateModal(true)}>
           {updateStatus.type==='downloaded'?'↓ Update bereit':updateStatus.type==='available'?'↑ Update verfügbar':'↑ Updates'}
         </button>}
+        <button style={{...S.ghostBtn,color:'#f5a623'}} onClick={()=>setShowDonateModal(true)}>☕</button>
         <button style={S.exportBtn} onClick={exportPDF}>🖨 PDF</button>
       </header>
       <nav style={S.nav}>
@@ -891,6 +920,8 @@ export default function App() {
             subTab={erweiterSubTab}/>
         </div>
       </main>
+      {changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
+      {showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
       {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus}/>}
     </div>
   );
@@ -921,6 +952,57 @@ function UpdateModal({status,onClose,onCheck,onInstall,setStatus}){
             :<button style={btn({background:'#3a7bd5',color:'#fff',opacity:busy?0.6:1})} disabled={busy} onClick={()=>{setStatus({type:'checking'});onCheck();}}>Nach Updates suchen</button>
           }
           <button style={btn({background:'#2a3547',color:'#aab'})} onClick={onClose}>Schließen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChangelogModal({ version, onClose }) {
+  const entries = CHANGELOG[version] || [];
+  const overlay = { position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center' };
+  const box     = { background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:12,padding:'28px 32px',maxWidth:420,width:'90%',color:'#e8eaf0',fontFamily:'inherit' };
+  return (
+    <div style={overlay} onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style={box}>
+        <div style={{fontSize:15,fontWeight:700,color:'#fff',marginBottom:4}}>Was ist neu in v{version}</div>
+        <div style={{fontSize:11,color:'#5a6a7a',marginBottom:16}}>Stromplaner wurde aktualisiert</div>
+        <ul style={{margin:0,padding:'0 0 0 18px',display:'flex',flexDirection:'column',gap:7}}>
+          {entries.map((e,i)=>(
+            <li key={i} style={{fontSize:13,color:'#c8d0da',lineHeight:1.5}}>{e}</li>
+          ))}
+        </ul>
+        <div style={{marginTop:22,display:'flex',justifyContent:'flex-end'}}>
+          <button onClick={onClose} style={{padding:'7px 20px',borderRadius:6,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,background:'#3a7bd5',color:'#fff'}}>
+            Los geht's
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DonateModal({ onClose }) {
+  const overlay = { position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center' };
+  const box     = { background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:12,padding:'32px 36px',maxWidth:380,color:'#e8eaf0',fontFamily:'inherit',textAlign:'center' };
+  const btn     = (c) => ({ padding:'8px 20px',borderRadius:6,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,...c });
+  return (
+    <div style={overlay}>
+      <div style={box}>
+        <div style={{fontSize:42,marginBottom:12}}>☕</div>
+        <div style={{fontSize:17,fontWeight:700,marginBottom:10,color:'#fff'}}>Stromplaner gefällt dir?</div>
+        <p style={{fontSize:13,color:'#9aa4af',lineHeight:1.6,marginBottom:24}}>
+          Das Tool ist kostenlos und wird in meiner Freizeit weiterentwickelt.<br/>
+          Wenn es dir bei deiner Arbeit hilft, freue ich mich über einen Kaffee. ☕
+        </p>
+        <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+          <button style={btn({background:'#f5a623',color:'#1b2026'})}
+            onClick={()=>{ window.open('https://github.com/sponsors/MrPancaketwtch','_blank'); onClose(); }}>
+            Einen Kaffee spendieren
+          </button>
+          <button style={btn({background:'#2a3547',color:'#9aa4af'})} onClick={onClose}>
+            Vielleicht später
+          </button>
         </div>
       </div>
     </div>
