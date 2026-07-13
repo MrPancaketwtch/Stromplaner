@@ -1,4 +1,5 @@
 const { app, BrowserWindow, shell, ipcMain } = require('electron');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
@@ -60,7 +61,7 @@ function createWindow() {
   let minTimeUp = false;
 
   win.once('ready-to-show', () => { appReady = true; tryShow(); });
-  setTimeout(() => { minTimeUp = true; tryShow(); }, 900);
+  setTimeout(() => { minTimeUp = true; tryShow(); }, 3000);
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url || url === 'about:blank') {
