@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+﻿import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import * as XLSX from "xlsx";
 
 /* ============================================================================
@@ -2984,11 +2984,11 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             const ckIk=ikVal?pdfChk(ikVal,ikLimO,undefined):"";
             const ck=ckIk==="bad"||ckZs==="bad"?"bad":ckIk==="ok"||ckZs==="ok"?"ok":"";
             const uvNote=`<span style="font-size:8px;color:#888"> (UV)</span>`;
-            const ovNote=hasOv?`<span style="font-size:8px;color:#e67e22"> (direkt gemessen; abgel.: ${d.zs||"–"} Ω / ${d.ik||"–"} A)</span>`:"";
+            const ovMark=hasOv?`<span style="font-size:8px;color:#e67e22"> ✎</span>`:"";
             const lblTxt=hasOv
-              ? `Separat gemessen am Eingang &#x2013; abgeleiteter Wert (${d.zs||"–"}&thinsp;&Omega;&hairsp;/&hairsp;${d.ik||"–"}&thinsp;A) &uuml;berschritt Grenzwert; Messung gem. DIN VDE 0100-600 Abschn. 643`
-              : `Messung aus angeschlossener Unterverteilung (ung&uuml;nstigster Punkt gem. DIN VDE 0100-600 Abschn. 643)`;
-            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">${lblTxt}</span><span class="r">${zsVal?esc(zsVal)+" &Omega;"+(hasOv?ovNote:uvNote):"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+(hasOv?"":uvNote):"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">&ge; ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
+              ? `Separat gemessen am Eingang – abgel. Wert (${d.zs||"–"} Ω / ${d.ik||"–"} A) überschritt Grenzwert (DIN VDE 0100-600 §643)`
+              : `Messung aus angeschlossener Unterverteilung (ungünstigster Punkt, DIN VDE 0100-600 §643)`;
+            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">${lblTxt}</span><span class="r">${zsVal?esc(zsVal)+" &Omega;"+(hasOv?ovMark:uvNote):"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+(hasOv?"":uvNote):"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
           }
           const zsVal=is3p?pdfWorstZs(or.zsL1,or.zsL2,or.zsL3):(or.zs||"");
           const ikVal=is3p?pdfWorstIk(or.ikL1,or.ikL2,or.ikL3):(or.ik||"");
