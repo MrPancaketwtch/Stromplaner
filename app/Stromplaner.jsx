@@ -2716,7 +2716,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
   const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...IR_DEF,...sv,sicht:sv.sicht?[...sv.sicht]:[...IR_DEF.sicht],outlets:sv.outlets||{}}; };
   const updIR = (iid,patch) => setInspResults(s=>({...s,[iid]:{...getIR(iid),...patch}}));
 
-  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",zsL1:"",zsL2:"",zsL3:"",ikL1:"",ikL2:"",ikL3:"",notInUse:false,cableLen:"",cableA:"",cosPhi:"0.95" };
+  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",zsL1:"",zsL2:"",zsL3:"",ikL1:"",ikL2:"",ikL3:"",notInUse:false,zsOverride:"",ikOverride:"",cableLen:"",cableA:"",cosPhi:"0.95" };
   const getOR = (iid,oid) => ({...OR_DEF,...((getIR(iid).outlets||{})[oid]||{})});
   const updOR = (iid,oid,patch) => {
     const ir=getIR(iid);
@@ -2977,11 +2977,18 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           if(or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">–</span><span class="r muted">–</span><span class="r muted">—</span></div>`;
           if(hasChild){
             const d=childDerived(childInstIds||[]);
-            const ckZs=d.zs?pdfChk(d.zs,undefined,zsLimO):"";
-            const ckIk=d.ik?pdfChk(d.ik,ikLimO,undefined):"";
+            const hasOv=!!(or.zsOverride||or.ikOverride);
+            const zsVal=or.zsOverride||d.zs||"";
+            const ikVal=or.ikOverride||d.ik||"";
+            const ckZs=zsVal?pdfChk(zsVal,undefined,zsLimO):"";
+            const ckIk=ikVal?pdfChk(ikVal,ikLimO,undefined):"";
             const ck=ckIk==="bad"||ckZs==="bad"?"bad":ckIk==="ok"||ckZs==="ok"?"ok":"";
-            const note=`<span style="font-size:8px;color:#888"> (UV)</span>`;
-            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Messung aus angeschlossener Unterverteilung</span><span class="r">${d.zs?esc(d.zs)+" Ω"+note:"–"}</span><span class="r"><strong>${d.ik?esc(d.ik)+" A"+note:"–"}</strong>${d.ik?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
+            const uvNote=`<span style="font-size:8px;color:#888"> (UV)</span>`;
+            const ovNote=hasOv?`<span style="font-size:8px;color:#e67e22"> (direkt gemessen; abgel.: ${d.zs||"–"} Ω / ${d.ik||"–"} A)</span>`:"";
+            const lblTxt=hasOv
+              ? `Separat gemessen am Eingang &#x2013; abgeleiteter Wert (${d.zs||"–"}&thinsp;&Omega;&hairsp;/&hairsp;${d.ik||"–"}&thinsp;A) &uuml;berschritt Grenzwert; Messung gem. DIN VDE 0100-600 Abschn. 643`
+              : `Messung aus angeschlossener Unterverteilung (ung&uuml;nstigster Punkt gem. DIN VDE 0100-600 Abschn. 643)`;
+            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">${lblTxt}</span><span class="r">${zsVal?esc(zsVal)+" &Omega;"+(hasOv?ovNote:uvNote):"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+(hasOv?"":uvNote):"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">&ge; ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
           }
           const zsVal=is3p?pdfWorstZs(or.zsL1,or.zsL2,or.zsL3):(or.zs||"");
           const ikVal=is3p?pdfWorstIk(or.ikL1,or.ikL2,or.ikL3):(or.ik||"");
@@ -3219,15 +3226,37 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 
                         if(hasChild){
                           const d=childDerived(childInstIds||[]);
-                          const okZs=d.zs?chk(d.zs,undefined,zsLim):null;
-                          const okIk=d.ik?chk(d.ik,ikLim,undefined):null;
+                          const effZs=or.zsOverride||d.zs;
+                          const effIk=or.ikOverride||d.ik;
+                          const okZs=effZs?chk(effZs,undefined,zsLim):null;
+                          const okIk=effIk?chk(effIk,ikLim,undefined):null;
                           const anyBad=okZs===false||okIk===false;
                           const anyOk=okZs===true||okIk===true;
+                          const hasOverride=!!(or.zsOverride||or.ikOverride);
                           return (
                             <div key={oid} style={{background:anyBad?"rgba(231,76,60,0.07)":anyOk?"rgba(46,204,113,0.05)":"rgba(245,166,35,0.04)",border:`1px solid ${anyBad?"#e74c3c":anyOk?"#2ecc71":"rgba(245,166,35,0.3)"}`,borderRadius:5,padding:"6px 8px"}}>
-                              <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:3}}>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></div>
+                              <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:3,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                <span>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></span>
+                                <button onClick={()=>updOR(inst.id,oid,hasOverride?{zsOverride:"",ikOverride:""}:{zsOverride:d.zs||"",ikOverride:d.ik||""})} style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6,flexShrink:0,color:hasOverride?"#f5a623":"#9aa4af"}}>
+                                  {hasOverride?"↩ Ableitung":"✎ Nachtragen"}
+                                </button>
+                              </div>
                               <div style={{fontSize:10,color:"#f5a623",marginBottom:4}}>↳ <strong>{childName}</strong> · Messung aus angeschlossener Unterverteilung</div>
-                              {(d.zs||d.ik)?(
+                              {hasOverride?(
+                                <div>
+                                  <div style={{fontSize:10,color:"#e67e22",marginBottom:4,fontStyle:"italic"}}>Separat gemessener Wert am Eingang (abgeleiteter Wert: {d.zs||"–"} Ω / {d.ik||"–"} A)</div>
+                                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                                    <div>
+                                      <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>Z_s (Ω) <span style={{color:"#555"}}>≤ {zsLim.toFixed(2).replace(".",",")} Ω</span></div>
+                                      <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okZs)}} value={or.zsOverride||""} onChange={e=>updOR(inst.id,oid,{zsOverride:e.target.value})}/>
+                                    </div>
+                                    <div>
+                                      <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>I_k (A) <span style={{color:"#555"}}>≥ {ikLim} A</span></div>
+                                      <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okIk)}} value={or.ikOverride||""} onChange={e=>updOR(inst.id,oid,{ikOverride:e.target.value})}/>
+                                    </div>
+                                  </div>
+                                </div>
+                              ):(d.zs||d.ik)?(
                                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                                   <div>
                                     <div style={{fontSize:10,color:"#555",marginBottom:2}}>Z_s (Ω) <span style={{color:"#444"}}>≤ {zsLim.toFixed(2).replace(".",",")+(hasRcd?" (RCD)":"")} Ω</span></div>
