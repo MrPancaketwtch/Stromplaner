@@ -600,7 +600,9 @@ export default function App() {
     ];
     instances.forEach(inst=>{
       const t=totalLoad(inst.id); const type=boxTypeById[inst.typeId];
-      const maxA=type?.feedAmp||0; const conn=type?(CONN[type.feedConnector]?.label||""):"";
+      const pOut=inst.parentId?boxTypeById[instById[inst.parentId]?.typeId]?.outlets?.find(o=>o.id===inst.parentOutletId):null;
+      const maxA=pOut?Math.min(type?.feedAmp||0,pOut.amp):(type?.feedAmp||0);
+      const conn=type?(CONN[type.feedConnector]?.label||""):"";
       const peak=Math.max(t.L1,t.L2,t.L3); const pct=maxA?Math.round((peak/maxA)*100):0;
       const note=maxA&&peak>maxA?"ÜBERLAST!":pct>80?">80%":"";
       const mainC=inst.mainConnectionId?mainConnById[inst.mainConnectionId]?.name:"—";
@@ -1690,7 +1692,9 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
           </tr></thead>
           <tbody>
             {instances.map(inst=>{
-              const t=totalLoad(inst.id); const type=boxTypeById[inst.typeId]; const maxA=type?.feedAmp||0;
+              const t=totalLoad(inst.id); const type=boxTypeById[inst.typeId];
+              const parentOutlet=inst.parentId?boxTypeById[instById[inst.parentId]?.typeId]?.outlets?.find(o=>o.id===inst.parentOutletId):null;
+              const maxA=parentOutlet?Math.min(type?.feedAmp||0,parentOutlet.amp):(type?.feedAmp||0);
               const peak=Math.max(t.L1,t.L2,t.L3); const pct=maxA?(peak/maxA)*100:0;
               const conn=type?(CONN[type.feedConnector]?.label||""):"";
               const stat=pct>100?"⚠ ÜBERLAST":pct>80?"●>80%":peak>0?"✓ OK":"–";

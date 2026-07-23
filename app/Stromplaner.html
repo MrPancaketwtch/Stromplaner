@@ -44711,7 +44711,8 @@ Fortfahren?`);
       instances.forEach((inst) => {
         const t = totalLoad(inst.id);
         const type = boxTypeById[inst.typeId];
-        const maxA = type?.feedAmp || 0;
+        const pOut = inst.parentId ? boxTypeById[instById[inst.parentId]?.typeId]?.outlets?.find((o) => o.id === inst.parentOutletId) : null;
+        const maxA = pOut ? Math.min(type?.feedAmp || 0, pOut.amp) : type?.feedAmp || 0;
         const conn = type ? CONN[type.feedConnector]?.label || "" : "";
         const peak = Math.max(t.L1, t.L2, t.L3);
         const pct = maxA ? Math.round(peak / maxA * 100) : 0;
@@ -45452,7 +45453,8 @@ Fortfahren?`);
     })), /* @__PURE__ */ import_react.default.createElement(Section, { title: "Alle K\xE4sten" }, /* @__PURE__ */ import_react.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Kasten"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Eingang"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "h\xE4ngt an"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "L1(A)"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "L2(A)"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "L3(A)"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Max(A)"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Status"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, instances.map((inst) => {
       const t = totalLoad(inst.id);
       const type = boxTypeById[inst.typeId];
-      const maxA = type?.feedAmp || 0;
+      const parentOutlet = inst.parentId ? boxTypeById[instById[inst.parentId]?.typeId]?.outlets?.find((o) => o.id === inst.parentOutletId) : null;
+      const maxA = parentOutlet ? Math.min(type?.feedAmp || 0, parentOutlet.amp) : type?.feedAmp || 0;
       const peak = Math.max(t.L1, t.L2, t.L3);
       const pct = maxA ? peak / maxA * 100 : 0;
       const conn = type ? CONN[type.feedConnector]?.label || "" : "";
