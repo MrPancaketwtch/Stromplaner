@@ -46303,11 +46303,19 @@ Fortfahren?`);
       return { ...IR_DEF, ...sv, sicht: sv.sicht ? [...sv.sicht] : [...IR_DEF.sicht], outlets: sv.outlets || {} };
     };
     const updIR = (iid, patch) => setInspResults((s) => ({ ...s, [iid]: { ...getIR(iid), ...patch } }));
-    const OR_DEF = { rcdT1: "", rcdIan: "", ok: false, zs: "", ik: "", cableLen: "", cableA: "", cosPhi: "0.95" };
+    const OR_DEF = { rcdT1: "", rcdIan: "", ok: false, zs: "", ik: "", zsL1: "", zsL2: "", zsL3: "", ikL1: "", ikL2: "", ikL3: "", notInUse: false, cableLen: "", cableA: "", cosPhi: "0.95" };
     const getOR = (iid, oid) => ({ ...OR_DEF, ...(getIR(iid).outlets || {})[oid] || {} });
     const updOR = (iid, oid, patch) => {
       const ir = getIR(iid);
       setInspResults((s) => ({ ...s, [iid]: { ...ir, outlets: { ...ir.outlets || {}, [oid]: { ...getOR(iid, oid), ...patch } } } }));
+    };
+    const worstZs = (...vs) => {
+      const v = vs.filter((x) => x !== "").map(Number);
+      return v.length ? Math.max(...v).toFixed(2) : "";
+    };
+    const worstIk = (...vs) => {
+      const v = vs.filter((x) => x !== "").map(Number);
+      return v.length ? Math.min(...v).toFixed(0) : "";
     };
     const cycleSicht = (iid, idx) => {
       const ir = getIR(iid);
@@ -46542,26 +46550,41 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                 const oid = `${o.id}_s${s}`;
                 const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id && p.mcSlot === s);
                 const lbl = pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
-                abgRows.push({ oid, label: `${o.label} SP${s}`, lbl, amp: o.amp || 16 });
+                abgRows.push({ oid, label: `${o.label} SP${s}`, lbl, amp: o.amp || 16, is3p: false, hasChild: false });
               }
             } else {
               const childInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === o.id);
               const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id);
               const lbl = childInsts.length ? childInsts[0].name : pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
-              abgRows.push({ oid: o.id, label: o.label, lbl, amp: o.amp || type?.feedAmp || 16 });
+              abgRows.push({ oid: o.id, label: o.label, lbl, amp: o.amp || type?.feedAmp || 16, is3p: is3ph(o.connector), hasChild: childInsts.length > 0 });
             }
           });
+          const pdfWorstZs = (...vs) => {
+            const v = vs.filter((x) => x !== "").map(Number);
+            return v.length ? Math.max(...v).toFixed(2) : "";
+          };
+          const pdfWorstIk = (...vs) => {
+            const v = vs.filter((x) => x !== "").map(Number);
+            return v.length ? Math.min(...v).toFixed(0) : "";
+          };
           return `<section class="block"><header class="bar"><span><strong>${n}.${abgSec} \xB7 Abg\xE4nge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
       <div class="block-body">
-        <div class="thead" style="grid-template-columns:80px 1fr 80px 95px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (\u03A9)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">\u2265 In\xD710 A</span></span><span class="r">Befund</span></div>
-        ${abgRows.map(({ oid, label, lbl, amp }, i) => {
+        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (\u03A9)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">\u2265 In\xD710 A</span></span><span class="r">Befund</span></div>
+        ${abgRows.map(({ oid, label, lbl, amp, is3p, hasChild }, i) => {
             const or = getOR(inst.id, oid);
             const ikLimO = amp * 10;
             const zsLimO = parseFloat((230 / (amp * 10)).toFixed(2));
-            const ckZsO = pdfChk(or.zs, void 0, zsLimO);
-            const ckIkO = pdfChk(or.ik, ikLimO, void 0);
+            const last = i === abgRows.length - 1 ? " row-last" : "";
+            if (or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
+            if (hasChild) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">\u21B3 Unterverteiler: ${esc(lbl)}</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
+            const zsVal = is3p ? pdfWorstZs(or.zsL1, or.zsL2, or.zsL3) : or.zs || "";
+            const ikVal = is3p ? pdfWorstIk(or.ikL1, or.ikL2, or.ikL3) : or.ik || "";
+            const zsNote = is3p && zsVal ? ` <span style="font-size:8px;color:#888">(${[or.zsL1, or.zsL2, or.zsL3].filter((x) => x).join("/")})</span>` : "";
+            const ikNote = is3p && ikVal ? ` <span style="font-size:8px;color:#888">(${[or.ikL1, or.ikL2, or.ikL3].filter((x) => x).join("/")})</span>` : "";
+            const ckZsO = pdfChk(zsVal, void 0, zsLimO);
+            const ckIkO = pdfChk(ikVal, ikLimO, void 0);
             const ckO = ckIkO === "bad" || ckZsO === "bad" ? "bad" : ckIkO === "ok" || ckZsO === "ok" ? "ok" : "";
-            return `<div class="trow${i === abgRows.length - 1 ? " row-last" : ""}" style="grid-template-columns:80px 1fr 80px 95px 55px"><span class="id">${esc(label)}</span><span class="ell">${esc(lbl)}</span><span class="r">${or.zs ? esc(or.zs) + " \u03A9" : "\u2013"}</span><span class="r"><strong>${or.ik ? esc(or.ik) + " A" : "\u2013"}</strong><br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
+            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell">${esc(lbl)}</span><span class="r">${zsVal ? esc(zsVal) + " \u03A9" + zsNote : "\u2013"}</span><span class="r"><strong>${ikVal ? esc(ikVal) + " A" + ikNote : "\u2013"}</strong><br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
           }).join("")}
       </div></section>`;
         })()}
@@ -46688,20 +46711,42 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             if (isMulticore(outlet.connector)) {
               const slots = outlet.mcSlots || 6;
               for (let s = 1; s <= slots; s++)
-                schleifenRows.push({ oid: `${outlet.id}_s${s}`, label: `${outlet.label} \u2013 SP ${s}`, subLabel: `${PHASES[(s - 1) % 3]} \xB7 ${outlet.amp}A`, amp: outlet.amp || 16 });
+                schleifenRows.push({ oid: `${outlet.id}_s${s}`, label: `${outlet.label} \u2013 SP ${s}`, subLabel: `${PHASES[(s - 1) % 3]} \xB7 ${outlet.amp}A`, amp: outlet.amp || 16, is3p: false, hasChild: false, childName: "" });
             } else {
-              schleifenRows.push({ oid: outlet.id, label: outlet.label, subLabel: `${CONN[outlet.connector]?.label || ""} ${outlet.amp}A`, amp: outlet.amp || type?.feedAmp || 16 });
+              const childInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === outlet.id);
+              schleifenRows.push({ oid: outlet.id, label: outlet.label, subLabel: `${CONN[outlet.connector]?.label || ""} ${outlet.amp}A`, amp: outlet.amp || type?.feedAmp || 16, is3p: is3ph(outlet.connector), hasChild: childInsts.length > 0, childName: childInsts[0]?.name || "" });
             }
           });
-          return /* @__PURE__ */ import_react.default.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Schleifenimpedanz"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 4 } }, schleifenRows.map(({ oid, label, subLabel, amp }) => {
+          return /* @__PURE__ */ import_react.default.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ import_react.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Schleifenimpedanz & Kurzschluss"), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 4 } }, schleifenRows.map(({ oid, label, subLabel, amp, is3p, hasChild, childName }) => {
             const or = getOR(inst.id, oid);
             const zsLim = parseFloat((230 / (amp * 10)).toFixed(2));
             const ikLim = amp * 10;
+            if (hasChild) return /* @__PURE__ */ import_react.default.createElement("div", { key: oid, style: { background: "rgba(245,166,35,0.05)", border: `1px solid rgba(245,166,35,0.25)`, borderRadius: 5, padding: "6px 8px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginBottom: 4 } }, label, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, marginLeft: 5, color: "#555" } }, subLabel)), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#f5a623" } }, "\u21B3 Unterverteiler: ", /* @__PURE__ */ import_react.default.createElement("strong", null, childName)), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#555", marginTop: 2 } }, "Messung wird an angeschlossenen Steckpl\xE4tzen durchgef\xFChrt und entf\xE4llt an dieser Stelle."));
+            if (or.notInUse) return /* @__PURE__ */ import_react.default.createElement("div", { key: oid, style: { background: "rgba(80,80,80,0.06)", border: `1px dashed #3a424c`, borderRadius: 5, padding: "6px 8px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("span", null, label, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, marginLeft: 5, color: "#555" } }, subLabel)), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => updOR(inst.id, oid, { notInUse: false }), style: { ...S.ghostBtn, fontSize: 10, padding: "2px 6px", marginLeft: 6 } }, "\u21A9 Reaktivieren")), /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#555", fontStyle: "italic" } }, "Nicht in Betrieb / nicht gemessen"));
+            if (is3p) {
+              const eZs = worstZs(or.zsL1, or.zsL2, or.zsL3);
+              const eIk = worstIk(or.ikL1, or.ikL2, or.ikL3);
+              const okZs2 = eZs !== "" ? chk(eZs, void 0, zsLim) : null;
+              const okIk2 = eIk !== "" ? chk(eIk, ikLim, void 0) : null;
+              const anyBad2 = okZs2 === false || okIk2 === false;
+              const anyOk2 = okZs2 === true || okIk2 === true;
+              return /* @__PURE__ */ import_react.default.createElement("div", { key: oid, style: { background: anyBad2 ? "rgba(231,76,60,0.08)" : anyOk2 ? "rgba(46,204,113,0.06)" : "#1b2026", border: `1px solid ${anyBad2 ? "#e74c3c" : anyOk2 ? "#2ecc71" : LINE}`, borderRadius: 5, padding: "6px 8px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginBottom: 5, display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, label, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, marginLeft: 5, color: "#666" } }, subLabel)), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => updOR(inst.id, oid, { notInUse: true }), title: "Als 'Nicht in Betrieb' markieren", style: { ...S.ghostBtn, fontSize: 10, padding: "2px 6px", marginLeft: 6, flexShrink: 0 } }, "Nicht in Betrieb")), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 } }, /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#7c8794", marginBottom: 3 } }, "Z_s (\u03A9) ", /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555" } }, "\u2264 ", zsLim.toFixed(2).replace(".", ","), " \u03A9")), ["L1", "L2", "L3"].map((ph) => {
+                const key = `zs${ph}`;
+                const v = or[key] || "";
+                const ok = v !== "" ? chk(v, void 0, zsLim) : null;
+                return /* @__PURE__ */ import_react.default.createElement("div", { key: ph, style: { display: "flex", alignItems: "center", gap: 4, marginBottom: 2 } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#666", width: 18 } }, ph), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "\u2013", style: { ...S.inputSm, width: 72, ...inpBorder(ok) }, value: v, onChange: (e) => updOR(inst.id, oid, { [key]: e.target.value }) }));
+              })), /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#7c8794", marginBottom: 3 } }, "I_k (A) ", /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#555" } }, "\u2265 ", ikLim, " A")), ["L1", "L2", "L3"].map((ph) => {
+                const key = `ik${ph}`;
+                const v = or[key] || "";
+                const ok = v !== "" ? chk(v, ikLim, void 0) : null;
+                return /* @__PURE__ */ import_react.default.createElement("div", { key: ph, style: { display: "flex", alignItems: "center", gap: 4, marginBottom: 2 } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#666", width: 18 } }, ph), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "\u2013", style: { ...S.inputSm, width: 72, ...inpBorder(ok) }, value: v, onChange: (e) => updOR(inst.id, oid, { [key]: e.target.value }) }));
+              }))), (eZs || eIk) && /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#666", marginTop: 5, borderTop: `1px solid ${LINE}`, paddingTop: 4 } }, "Schlechtester Wert:\xA0", /* @__PURE__ */ import_react.default.createElement("span", { style: { color: okZs2 === false ? "#e74c3c" : okZs2 === true ? "#2ecc71" : "#9aa4af" } }, eZs || "\u2013", " \u03A9"), "\xA0/\xA0", /* @__PURE__ */ import_react.default.createElement("span", { style: { color: okIk2 === false ? "#e74c3c" : okIk2 === true ? "#2ecc71" : "#9aa4af" } }, eIk || "\u2013", " A")));
+            }
             const okZs = chk(or.zs, void 0, zsLim);
             const okIk = chk(or.ik, ikLim, void 0);
             const anyBad = okZs === false || okIk === false;
             const anyOk = okZs === true || okIk === true;
-            return /* @__PURE__ */ import_react.default.createElement("div", { key: oid, style: { background: anyBad ? "rgba(231,76,60,0.08)" : anyOk ? "rgba(46,204,113,0.06)" : "#1b2026", border: `1px solid ${anyBad ? "#e74c3c" : anyOk ? "#2ecc71" : LINE}`, borderRadius: 5, padding: "6px 8px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#9aa4af", marginBottom: 5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, label, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, marginLeft: 5, color: "#666" } }, subLabel)), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#7c8794", marginBottom: 2 } }, "Z_s (\u03A9)"), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "\u2013", style: { ...S.inputSm, width: 80, ...inpBorder(okZs) }, value: or.zs || "", onChange: (e) => updOR(inst.id, oid, { zs: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 ", zsLim.toFixed(2).replace(".", ","), " \u03A9")), /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#7c8794", marginBottom: 2 } }, "I_k (A)"), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "\u2013", style: { ...S.inputSm, width: 80, ...inpBorder(okIk) }, value: or.ik || "", onChange: (e) => updOR(inst.id, oid, { ik: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2265 ", ikLim, " A"))));
+            return /* @__PURE__ */ import_react.default.createElement("div", { key: oid, style: { background: anyBad ? "rgba(231,76,60,0.08)" : anyOk ? "rgba(46,204,113,0.06)" : "#1b2026", border: `1px solid ${anyBad ? "#e74c3c" : anyOk ? "#2ecc71" : LINE}`, borderRadius: 5, padding: "6px 8px" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginBottom: 5, display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, label, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, marginLeft: 5, color: "#666" } }, subLabel)), /* @__PURE__ */ import_react.default.createElement("button", { onClick: () => updOR(inst.id, oid, { notInUse: true }), title: "Als 'Nicht in Betrieb' markieren", style: { ...S.ghostBtn, fontSize: 10, padding: "2px 6px", marginLeft: 6, flexShrink: 0 } }, "Nicht in Betrieb")), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#7c8794", marginBottom: 2 } }, "Z_s (\u03A9)"), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "0.01", placeholder: "\u2013", style: { ...S.inputSm, width: 80, ...inpBorder(okZs) }, value: or.zs || "", onChange: (e) => updOR(inst.id, oid, { zs: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2264 ", zsLim.toFixed(2).replace(".", ","), " \u03A9")), /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontSize: 10, color: "#7c8794", marginBottom: 2 } }, "I_k (A)"), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", step: "1", placeholder: "\u2013", style: { ...S.inputSm, width: 80, ...inpBorder(okIk) }, value: or.ik || "", onChange: (e) => updOR(inst.id, oid, { ik: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: S.normHint }, "\u2265 ", ikLim, " A"))));
           })));
         })(),
         /* @__PURE__ */ import_react.default.createElement("div", { style: { marginTop: 8 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: "1 1 300px" } }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Bemerkung / Auflage" }, /* @__PURE__ */ import_react.default.createElement("textarea", { style: { ...S.input, width: "100%", minHeight: 54, resize: "vertical" }, value: ir.bemerkung || "", onChange: (e) => updIR(inst.id, { bemerkung: e.target.value }), placeholder: "Freiwillig: Hinweis oder Mangel eintragen\u2026" }))), /* @__PURE__ */ import_react.default.createElement("div", { style: { width: 130, paddingBottom: 2 } }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Schweregrad" }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.input, value: ir.bemerkungSchwere || "bad", onChange: (e) => updIR(inst.id, { bemerkungSchwere: e.target.value }), disabled: !ir.bemerkung }, /* @__PURE__ */ import_react.default.createElement("option", { value: "bad" }, "\u2715 Mangel"), /* @__PURE__ */ import_react.default.createElement("option", { value: "warn" }, "! Hinweis"))))))

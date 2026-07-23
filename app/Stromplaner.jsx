@@ -2712,12 +2712,14 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
   const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...IR_DEF,...sv,sicht:sv.sicht?[...sv.sicht]:[...IR_DEF.sicht],outlets:sv.outlets||{}}; };
   const updIR = (iid,patch) => setInspResults(s=>({...s,[iid]:{...getIR(iid),...patch}}));
 
-  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",cableLen:"",cableA:"",cosPhi:"0.95" };
+  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",zsL1:"",zsL2:"",zsL3:"",ikL1:"",ikL2:"",ikL3:"",notInUse:false,cableLen:"",cableA:"",cosPhi:"0.95" };
   const getOR = (iid,oid) => ({...OR_DEF,...((getIR(iid).outlets||{})[oid]||{})});
   const updOR = (iid,oid,patch) => {
     const ir=getIR(iid);
     setInspResults(s=>({...s,[iid]:{...ir,outlets:{...(ir.outlets||{}),[oid]:{...getOR(iid,oid),...patch}}}}));
   };
+  const worstZs = (...vs) => { const v=vs.filter(x=>x!=="").map(Number); return v.length ? Math.max(...v).toFixed(2) : ""; };
+  const worstIk = (...vs) => { const v=vs.filter(x=>x!=="").map(Number); return v.length ? Math.min(...v).toFixed(0) : ""; };
 
   const cycleSicht = (iid,idx) => {
     const ir=getIR(iid); const sicht=[...(ir.sicht||Array(6).fill(null))];
@@ -2918,26 +2920,35 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             const oid=`${o.id}_s${s}`;
             const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id&&p.mcSlot===s);
             const lbl=pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–";
-            abgRows.push({oid,label:`${o.label} SP${s}`,lbl,amp:o.amp||16});
+            abgRows.push({oid,label:`${o.label} SP${s}`,lbl,amp:o.amp||16,is3p:false,hasChild:false});
           }
         } else {
           const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===o.id);
           const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id);
           const lbl=childInsts.length?childInsts[0].name:(pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–");
-          abgRows.push({oid:o.id,label:o.label,lbl,amp:o.amp||type?.feedAmp||16});
+          abgRows.push({oid:o.id,label:o.label,lbl,amp:o.amp||type?.feedAmp||16,is3p:is3ph(o.connector),hasChild:childInsts.length>0});
         }
       });
+      const pdfWorstZs=(...vs)=>{const v=vs.filter(x=>x!=="").map(Number);return v.length?Math.max(...v).toFixed(2):"";};
+      const pdfWorstIk=(...vs)=>{const v=vs.filter(x=>x!=="").map(Number);return v.length?Math.min(...v).toFixed(0):"";};
       return `<section class="block"><header class="bar"><span><strong>${n}.${abgSec} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
       <div class="block-body">
-        <div class="thead" style="grid-template-columns:80px 1fr 80px 95px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
-        ${abgRows.map(({oid,label,lbl,amp},i)=>{
+        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
+        ${abgRows.map(({oid,label,lbl,amp,is3p,hasChild},i)=>{
           const or=getOR(inst.id,oid);
           const ikLimO=amp*10;
           const zsLimO=parseFloat((230/(amp*10)).toFixed(2));
-          const ckZsO=pdfChk(or.zs,undefined,zsLimO);
-          const ckIkO=pdfChk(or.ik,ikLimO,undefined);
+          const last=i===abgRows.length-1?" row-last":"";
+          if(or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">–</span><span class="r muted">–</span><span class="r muted">—</span></div>`;
+          if(hasChild) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">↳ Unterverteiler: ${esc(lbl)}</span><span class="r muted">–</span><span class="r muted">–</span><span class="r muted">—</span></div>`;
+          const zsVal=is3p?pdfWorstZs(or.zsL1,or.zsL2,or.zsL3):(or.zs||"");
+          const ikVal=is3p?pdfWorstIk(or.ikL1,or.ikL2,or.ikL3):(or.ik||"");
+          const zsNote=is3p&&zsVal?` <span style="font-size:8px;color:#888">(${[or.zsL1,or.zsL2,or.zsL3].filter(x=>x).join("/")})</span>`:"";
+          const ikNote=is3p&&ikVal?` <span style="font-size:8px;color:#888">(${[or.ikL1,or.ikL2,or.ikL3].filter(x=>x).join("/")})</span>`:"";
+          const ckZsO=pdfChk(zsVal,undefined,zsLimO);
+          const ckIkO=pdfChk(ikVal,ikLimO,undefined);
           const ckO=ckIkO==="bad"||ckZsO==="bad"?"bad":ckIkO==="ok"||ckZsO==="ok"?"ok":"";
-          return `<div class="trow${i===abgRows.length-1?" row-last":""}" style="grid-template-columns:80px 1fr 80px 95px 55px"><span class="id">${esc(label)}</span><span class="ell">${esc(lbl)}</span><span class="r">${or.zs?esc(or.zs)+" Ω":"–"}</span><span class="r"><strong>${or.ik?esc(or.ik)+" A":"–"}</strong><br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
+          return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell">${esc(lbl)}</span><span class="r">${zsVal?esc(zsVal)+" Ω"+zsNote:"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+ikNote:"–"}</strong><br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
         }).join("")}
       </div></section>`;
     })()}
@@ -3143,34 +3154,101 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 
               {/* ── Schleifenimpedanz (pro Abgang) – MC-Slots expandiert ── */}
               {outlets.length>0&&(()=>{
-                // MC-Outlets in einzelne Slots expandieren (analog zu expandedRcdRows)
                 const schleifenRows=[];
                 outlets.forEach(outlet=>{
                   if(isMulticore(outlet.connector)){
                     const slots=outlet.mcSlots||6;
                     for(let s=1;s<=slots;s++)
-                      schleifenRows.push({oid:`${outlet.id}_s${s}`,label:`${outlet.label} – SP ${s}`,subLabel:`${PHASES[(s-1)%3]} · ${outlet.amp}A`,amp:outlet.amp||16});
+                      schleifenRows.push({oid:`${outlet.id}_s${s}`,label:`${outlet.label} – SP ${s}`,subLabel:`${PHASES[(s-1)%3]} · ${outlet.amp}A`,amp:outlet.amp||16,is3p:false,hasChild:false,childName:""});
                   } else {
-                    schleifenRows.push({oid:outlet.id,label:outlet.label,subLabel:`${CONN[outlet.connector]?.label||""} ${outlet.amp}A`,amp:outlet.amp||type?.feedAmp||16});
+                    const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===outlet.id);
+                    schleifenRows.push({oid:outlet.id,label:outlet.label,subLabel:`${CONN[outlet.connector]?.label||""} ${outlet.amp}A`,amp:outlet.amp||type?.feedAmp||16,is3p:is3ph(outlet.connector),hasChild:childInsts.length>0,childName:childInsts[0]?.name||""});
                   }
                 });
                 return (
                   <div style={{marginBottom:14}}>
-                    <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Schleifenimpedanz</p>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:4}}>
-                      {schleifenRows.map(({oid,label,subLabel,amp})=>{
+                    <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Schleifenimpedanz &amp; Kurzschluss</p>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:4}}>
+                      {schleifenRows.map(({oid,label,subLabel,amp,is3p,hasChild,childName})=>{
                         const or=getOR(inst.id,oid);
                         const zsLim=parseFloat((230/(amp*10)).toFixed(2));
                         const ikLim=amp*10;
+
+                        if(hasChild) return (
+                          <div key={oid} style={{background:"rgba(245,166,35,0.05)",border:`1px solid rgba(245,166,35,0.25)`,borderRadius:5,padding:"6px 8px"}}>
+                            <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:4}}>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></div>
+                            <div style={{fontSize:11,color:"#f5a623"}}>↳ Unterverteiler: <strong>{childName}</strong></div>
+                            <div style={{fontSize:10,color:"#555",marginTop:2}}>Messung wird an angeschlossenen Steckplätzen durchgeführt und entfällt an dieser Stelle.</div>
+                          </div>
+                        );
+
+                        if(or.notInUse) return (
+                          <div key={oid} style={{background:"rgba(80,80,80,0.06)",border:`1px dashed #3a424c`,borderRadius:5,padding:"6px 8px"}}>
+                            <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                              <span>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></span>
+                              <button onClick={()=>updOR(inst.id,oid,{notInUse:false})} style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6}}>↩ Reaktivieren</button>
+                            </div>
+                            <div style={{fontSize:11,color:"#555",fontStyle:"italic"}}>Nicht in Betrieb / nicht gemessen</div>
+                          </div>
+                        );
+
+                        if(is3p){
+                          const eZs=worstZs(or.zsL1,or.zsL2,or.zsL3);
+                          const eIk=worstIk(or.ikL1,or.ikL2,or.ikL3);
+                          const okZs=eZs!==""?chk(eZs,undefined,zsLim):null;
+                          const okIk=eIk!==""?chk(eIk,ikLim,undefined):null;
+                          const anyBad=okZs===false||okIk===false;
+                          const anyOk=okZs===true||okIk===true;
+                          return (
+                            <div key={oid} style={{background:anyBad?"rgba(231,76,60,0.08)":anyOk?"rgba(46,204,113,0.06)":"#1b2026",border:`1px solid ${anyBad?"#e74c3c":anyOk?"#2ecc71":LINE}`,borderRadius:5,padding:"6px 8px"}}>
+                              <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                                <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}<span style={{fontWeight:400,marginLeft:5,color:"#666"}}>{subLabel}</span></span>
+                                <button onClick={()=>updOR(inst.id,oid,{notInUse:true})} title="Als 'Nicht in Betrieb' markieren" style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6,flexShrink:0}}>Nicht in Betrieb</button>
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                                <div>
+                                  <div style={{fontSize:10,color:"#7c8794",marginBottom:3}}>Z_s (Ω) <span style={{color:"#555"}}>≤ {zsLim.toFixed(2).replace(".",",")} Ω</span></div>
+                                  {["L1","L2","L3"].map(ph=>{
+                                    const key=`zs${ph}`; const v=or[key]||"";
+                                    const ok=v!==""?chk(v,undefined,zsLim):null;
+                                    return <div key={ph} style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
+                                      <span style={{fontSize:10,color:"#666",width:18}}>{ph}</span>
+                                      <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:72,...inpBorder(ok)}} value={v} onChange={e=>updOR(inst.id,oid,{[key]:e.target.value})}/>
+                                    </div>;
+                                  })}
+                                </div>
+                                <div>
+                                  <div style={{fontSize:10,color:"#7c8794",marginBottom:3}}>I_k (A) <span style={{color:"#555"}}>≥ {ikLim} A</span></div>
+                                  {["L1","L2","L3"].map(ph=>{
+                                    const key=`ik${ph}`; const v=or[key]||"";
+                                    const ok=v!==""?chk(v,ikLim,undefined):null;
+                                    return <div key={ph} style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
+                                      <span style={{fontSize:10,color:"#666",width:18}}>{ph}</span>
+                                      <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:72,...inpBorder(ok)}} value={v} onChange={e=>updOR(inst.id,oid,{[key]:e.target.value})}/>
+                                    </div>;
+                                  })}
+                                </div>
+                              </div>
+                              {(eZs||eIk)&&<div style={{fontSize:10,color:"#666",marginTop:5,borderTop:`1px solid ${LINE}`,paddingTop:4}}>
+                                Schlechtester Wert:&nbsp;
+                                <span style={{color:okZs===false?"#e74c3c":okZs===true?"#2ecc71":"#9aa4af"}}>{eZs||"–"} Ω</span>
+                                &nbsp;/&nbsp;
+                                <span style={{color:okIk===false?"#e74c3c":okIk===true?"#2ecc71":"#9aa4af"}}>{eIk||"–"} A</span>
+                              </div>}
+                            </div>
+                          );
+                        }
+
+                        // Einphasig
                         const okZs=chk(or.zs,undefined,zsLim);
                         const okIk=chk(or.ik,ikLim,undefined);
                         const anyBad=okZs===false||okIk===false;
                         const anyOk=okZs===true||okIk===true;
                         return (
                           <div key={oid} style={{background:anyBad?"rgba(231,76,60,0.08)":anyOk?"rgba(46,204,113,0.06)":"#1b2026",border:`1px solid ${anyBad?"#e74c3c":anyOk?"#2ecc71":LINE}`,borderRadius:5,padding:"6px 8px"}}>
-                            <div style={{fontSize:11,color:"#9aa4af",marginBottom:5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                              {label}
-                              <span style={{fontWeight:400,marginLeft:5,color:"#666"}}>{subLabel}</span>
+                            <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:5,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                              <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}<span style={{fontWeight:400,marginLeft:5,color:"#666"}}>{subLabel}</span></span>
+                              <button onClick={()=>updOR(inst.id,oid,{notInUse:true})} title="Als 'Nicht in Betrieb' markieren" style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6,flexShrink:0}}>Nicht in Betrieb</button>
                             </div>
                             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                               <div>
