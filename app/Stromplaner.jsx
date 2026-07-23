@@ -2721,6 +2721,37 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
   const worstZs = (...vs) => { const v=vs.filter(x=>x!=="").map(Number); return v.length ? Math.max(...v).toFixed(2) : ""; };
   const worstIk = (...vs) => { const v=vs.filter(x=>x!=="").map(Number); return v.length ? Math.min(...v).toFixed(0) : ""; };
 
+  // Leitet Zs/Ik aus den Abgängen eines Unterverteilers ab – rekursiv über beliebig viele Ebenen
+  const childDerived = (childInstIds) => {
+    const zsVals=[], ikVals=[];
+    childInstIds.forEach(cid=>{
+      const cType=boxTypeById[instById[cid]?.typeId];
+      (cType?.outlets||[]).forEach(co=>{
+        const grandChildInsts=instances.filter(ci=>ci.parentId===cid&&ci.parentOutletId===co.id);
+        if(grandChildInsts.length>0){
+          // Outlet hat selbst einen Unterverteiler → rekursiv ableiten
+          const d=childDerived(grandChildInsts.map(ci=>ci.id));
+          if(d.zs) zsVals.push(Number(d.zs));
+          if(d.ik) ikVals.push(Number(d.ik));
+        } else {
+          const collect=(cor)=>{
+            if(cor.notInUse) return;
+            if(is3ph(co.connector)){
+              ["zsL1","zsL2","zsL3"].forEach(k=>{ if(cor[k]) zsVals.push(Number(cor[k])); });
+              ["ikL1","ikL2","ikL3"].forEach(k=>{ if(cor[k]) ikVals.push(Number(cor[k])); });
+            } else {
+              if(cor.zs) zsVals.push(Number(cor.zs));
+              if(cor.ik) ikVals.push(Number(cor.ik));
+            }
+          };
+          if(isMulticore(co.connector)){ for(let s=1;s<=(co.mcSlots||6);s++) collect(getOR(cid,`${co.id}_s${s}`)); }
+          else collect(getOR(cid,co.id));
+        }
+      });
+    });
+    return { zs: zsVals.length?Math.max(...zsVals).toFixed(2):"", ik: ikVals.length?Math.min(...ikVals).toFixed(0):"" };
+  };
+
   const cycleSicht = (iid,idx) => {
     const ir=getIR(iid); const sicht=[...(ir.sicht||Array(6).fill(null))];
     sicht[idx]=sicht[idx]===true?null:true;   // toggle: ok ↔ nicht eingetragen
@@ -2926,7 +2957,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===o.id);
           const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id);
           const lbl=childInsts.length?childInsts[0].name:(pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–");
-          abgRows.push({oid:o.id,label:o.label,lbl,amp:o.amp||type?.feedAmp||16,is3p:is3ph(o.connector),hasChild:childInsts.length>0});
+          abgRows.push({oid:o.id,label:o.label,lbl,amp:o.amp||type?.feedAmp||16,is3p:is3ph(o.connector),hasChild:childInsts.length>0,childInstIds:childInsts.map(ci=>ci.id)});
         }
       });
       const pdfWorstZs=(...vs)=>{const v=vs.filter(x=>x!=="").map(Number);return v.length?Math.max(...v).toFixed(2):"";};
@@ -2934,13 +2965,20 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       return `<section class="block"><header class="bar"><span><strong>${n}.${abgSec} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
-        ${abgRows.map(({oid,label,lbl,amp,is3p,hasChild},i)=>{
+        ${abgRows.map(({oid,label,lbl,amp,is3p,hasChild,childInstIds},i)=>{
           const or=getOR(inst.id,oid);
           const ikLimO=amp*10;
           const zsLimO=parseFloat((230/(amp*10)).toFixed(2));
           const last=i===abgRows.length-1?" row-last":"";
           if(or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">–</span><span class="r muted">–</span><span class="r muted">—</span></div>`;
-          if(hasChild) return `<div class="trow${last}" style="grid-template-columns:80px 1fr"><span class="id">${esc(label)}</span><span class="muted" style="font-style:italic;grid-column:2/-1">Messung wird an angeschlossenen Steckpl&#228;tzen durchgef&#252;hrt und entf&#228;llt an dieser Stelle.</span></div>`;
+          if(hasChild){
+            const d=childDerived(childInstIds||[]);
+            const ckZs=d.zs?pdfChk(d.zs,undefined,zsLimO):"";
+            const ckIk=d.ik?pdfChk(d.ik,ikLimO,undefined):"";
+            const ck=ckIk==="bad"||ckZs==="bad"?"bad":ckIk==="ok"||ckZs==="ok"?"ok":"";
+            const note=`<span style="font-size:8px;color:#888"> (UV)</span>`;
+            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">↳ Unterverteiler</span><span class="r">${d.zs?esc(d.zs)+" Ω"+note:"–"}</span><span class="r"><strong>${d.ik?esc(d.ik)+" A"+note:"–"}</strong>${d.ik?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
+          }
           const zsVal=is3p?pdfWorstZs(or.zsL1,or.zsL2,or.zsL3):(or.zs||"");
           const ikVal=is3p?pdfWorstIk(or.ikL1,or.ikL2,or.ikL3):(or.ik||"");
           const zsNote=is3p&&zsVal?` <span style="font-size:8px;color:#888">(${[or.zsL1,or.zsL2,or.zsL3].filter(x=>x).join("/")})</span>`:"";
@@ -3162,25 +3200,46 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                       schleifenRows.push({oid:`${outlet.id}_s${s}`,label:`${outlet.label} – SP ${s}`,subLabel:`${PHASES[(s-1)%3]} · ${outlet.amp}A`,amp:outlet.amp||16,is3p:false,hasChild:false,childName:""});
                   } else {
                     const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===outlet.id);
-                    schleifenRows.push({oid:outlet.id,label:outlet.label,subLabel:`${CONN[outlet.connector]?.label||""} ${outlet.amp}A`,amp:outlet.amp||type?.feedAmp||16,is3p:is3ph(outlet.connector),hasChild:childInsts.length>0,childName:childInsts[0]?.name||""});
+                    schleifenRows.push({oid:outlet.id,label:outlet.label,subLabel:`${CONN[outlet.connector]?.label||""} ${outlet.amp}A`,amp:outlet.amp||type?.feedAmp||16,is3p:is3ph(outlet.connector),hasChild:childInsts.length>0,childName:childInsts[0]?.name||"",childInstIds:childInsts.map(ci=>ci.id)});
                   }
                 });
                 return (
                   <div style={{marginBottom:14}}>
                     <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Schleifenimpedanz &amp; Kurzschluss</p>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:4}}>
-                      {schleifenRows.map(({oid,label,subLabel,amp,is3p,hasChild,childName})=>{
+                      {schleifenRows.map(({oid,label,subLabel,amp,is3p,hasChild,childName,childInstIds})=>{
                         const or=getOR(inst.id,oid);
                         const zsLim=parseFloat((230/(amp*10)).toFixed(2));
                         const ikLim=amp*10;
 
-                        if(hasChild) return (
-                          <div key={oid} style={{background:"rgba(245,166,35,0.05)",border:`1px solid rgba(245,166,35,0.25)`,borderRadius:5,padding:"6px 8px"}}>
-                            <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:4}}>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></div>
-                            <div style={{fontSize:11,color:"#f5a623"}}>↳ Unterverteiler: <strong>{childName}</strong></div>
-                            <div style={{fontSize:10,color:"#555",marginTop:2}}>Messung wird an angeschlossenen Steckplätzen durchgeführt und entfällt an dieser Stelle.</div>
-                          </div>
-                        );
+                        if(hasChild){
+                          const d=childDerived(childInstIds||[]);
+                          const okZs=d.zs?chk(d.zs,undefined,zsLim):null;
+                          const okIk=d.ik?chk(d.ik,ikLim,undefined):null;
+                          const anyBad=okZs===false||okIk===false;
+                          const anyOk=okZs===true||okIk===true;
+                          return (
+                            <div key={oid} style={{background:anyBad?"rgba(231,76,60,0.07)":anyOk?"rgba(46,204,113,0.05)":"rgba(245,166,35,0.04)",border:`1px solid ${anyBad?"#e74c3c":anyOk?"#2ecc71":"rgba(245,166,35,0.3)"}`,borderRadius:5,padding:"6px 8px"}}>
+                              <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:3}}>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></div>
+                              <div style={{fontSize:10,color:"#f5a623",marginBottom:4}}>↳ Unterverteiler: <strong>{childName}</strong> · Messung entfällt hier</div>
+                              {(d.zs||d.ik)?(
+                                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                                  <div>
+                                    <div style={{fontSize:10,color:"#555",marginBottom:2}}>Z_s (Ω) <span style={{color:"#444"}}>≤ {zsLim.toFixed(2).replace(".",",")} Ω</span></div>
+                                    <input readOnly value={d.zs} style={{...S.inputSm,width:80,...inpBorder(okZs),opacity:0.55,cursor:"default"}}/>
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:10,color:"#555",marginBottom:2}}>I_k (A) <span style={{color:"#444"}}>≥ {ikLim} A</span></div>
+                                    <input readOnly value={d.ik} style={{...S.inputSm,width:80,...inpBorder(okIk),opacity:0.55,cursor:"default"}}/>
+                                  </div>
+                                  <div style={{fontSize:9,color:"#555",alignSelf:"flex-end",paddingBottom:2}}>schlechtester Wert<br/>aus Unterverteiler</div>
+                                </div>
+                              ):(
+                                <div style={{fontSize:10,color:"#444",fontStyle:"italic"}}>Noch keine Messwerte im Unterverteiler eingetragen.</div>
+                              )}
+                            </div>
+                          );
+                        }
 
                         if(or.notInUse) return (
                           <div key={oid} style={{background:"rgba(80,80,80,0.06)",border:`1px dashed #3a424c`,borderRadius:5,padding:"6px 8px"}}>
