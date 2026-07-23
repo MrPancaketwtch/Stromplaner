@@ -2786,9 +2786,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     })();
     const total=sorted2.length;
     const hdr=`<strong>Stromplaner</strong> · Errichtungsprüfung · DIN VDE 0100-600`;
-    const subR=`${esc(meta?.production||"Planung")} · v${esc(meta?.version||"1")} · ${esc(inspMeta.date||"")}`;
+    const subR=`${esc(meta?.production||"Planung")} · ${esc(inspMeta.date||"")}`;
     const ftrL=esc(inspMeta.inspector||"–");
-    const ftrC=`EP-${(meta?.production||"Plan").replace(/[^A-Za-z0-9]/g,"-").slice(0,30)}-v${meta?.version||1}`;
+    const ftrC=`EP-${(meta?.production||"Plan").replace(/[^A-Za-z0-9]/g,"-").slice(0,30)}`;
 
     // Collect Mängel
     const maengel=[];
@@ -2815,7 +2815,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
   <main class="page-body">
     <div class="page-title"><div class="kicker">Errichtungsprüfung · DIN VDE 0100-600 · mobile Stromverteilung</div>
       <h1>${esc(meta?.production||"Planung")}<span class="muted"> · ${esc(inspMeta.address||inspMeta.location||"")}</span></h1></div>
-    <section class="block"><header class="bar"><span><strong>Produktion</strong></span><span class="bar-right">v${esc(meta?.version||"1")} · ${esc(inspMeta.date||"")}</span></header>
+    <section class="block"><header class="bar"><span><strong>Produktion</strong></span><span class="bar-right">${esc(inspMeta.date||"")}</span></header>
       <div class="block-body"><div class="kv kv-2">
         <div class="kv-row"><span class="k">Produktion</span><span class="v">${esc(meta?.production||"–")}</span></div>
         <div class="kv-row kv-right"><span class="k">Ersteller</span><span class="v">${esc(meta?.creator||"–")}</span></div>
@@ -2882,7 +2882,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     <div class="page-title"><div class="page-title-row">
       <div><div class="kicker">Kasten ${n} von ${total} · ${esc(type?.name||"")}</div>
         <h1><span class="id-h1">${esc(inst.name)}</span><span class="muted muted-h1"> · ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A · ${esc(type?.name||"")}</span></h1></div>
-      <span class="befund-label ${befundCls}">${befundLbl}</span>
+      ${hasMangel?`<span class="befund-label bad">✕ Mangel</span>`:hasHinweis?`<span class="befund-label warn">! Hinweis</span>`:""}
     </div></div>
     <section class="block"><header class="bar"><span><strong>${n}.1 · Stammdaten</strong></span></header>
       <div class="block-body"><div class="kv kv-3">
