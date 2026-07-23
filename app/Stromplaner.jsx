@@ -2977,7 +2977,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             const ckIk=d.ik?pdfChk(d.ik,ikLimO,undefined):"";
             const ck=ckIk==="bad"||ckZs==="bad"?"bad":ckIk==="ok"||ckZs==="ok"?"ok":"";
             const note=`<span style="font-size:8px;color:#888"> (UV)</span>`;
-            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">↳ Unterverteiler</span><span class="r">${d.zs?esc(d.zs)+" Ω"+note:"–"}</span><span class="r"><strong>${d.ik?esc(d.ik)+" A"+note:"–"}</strong>${d.ik?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
+            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Messung aus angeschlossener Unterverteilung</span><span class="r">${d.zs?esc(d.zs)+" Ω"+note:"–"}</span><span class="r"><strong>${d.ik?esc(d.ik)+" A"+note:"–"}</strong>${d.ik?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
           }
           const zsVal=is3p?pdfWorstZs(or.zsL1,or.zsL2,or.zsL3):(or.zs||"");
           const ikVal=is3p?pdfWorstIk(or.ikL1,or.ikL2,or.ikL3):(or.ik||"");
@@ -3221,7 +3221,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                           return (
                             <div key={oid} style={{background:anyBad?"rgba(231,76,60,0.07)":anyOk?"rgba(46,204,113,0.05)":"rgba(245,166,35,0.04)",border:`1px solid ${anyBad?"#e74c3c":anyOk?"#2ecc71":"rgba(245,166,35,0.3)"}`,borderRadius:5,padding:"6px 8px"}}>
                               <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:3}}>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></div>
-                              <div style={{fontSize:10,color:"#f5a623",marginBottom:4}}>↳ Unterverteiler: <strong>{childName}</strong> · Messung entfällt hier</div>
+                              <div style={{fontSize:10,color:"#f5a623",marginBottom:4}}>↳ <strong>{childName}</strong> · Messung aus angeschlossener Unterverteilung</div>
                               {(d.zs||d.ik)?(
                                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                                   <div>
@@ -3232,7 +3232,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                                     <div style={{fontSize:10,color:"#555",marginBottom:2}}>I_k (A) <span style={{color:"#444"}}>≥ {ikLim} A</span></div>
                                     <input readOnly value={d.ik} style={{...S.inputSm,width:80,...inpBorder(okIk),opacity:0.55,cursor:"default"}}/>
                                   </div>
-                                  <div style={{fontSize:9,color:"#555",alignSelf:"flex-end",paddingBottom:2}}>schlechtester Wert<br/>aus Unterverteiler</div>
+                                  <div style={{fontSize:9,color:"#555",alignSelf:"flex-end",paddingBottom:2}}>schlechtester Wert<br/>aus Unterverteilung</div>
                                 </div>
                               ):(
                                 <div style={{fontSize:10,color:"#444",fontStyle:"italic"}}>Noch keine Messwerte im Unterverteiler eingetragen.</div>
