@@ -46576,7 +46576,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             const zsLimO = parseFloat((230 / (amp * 10)).toFixed(2));
             const last = i === abgRows.length - 1 ? " row-last" : "";
             if (or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
-            if (hasChild) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">\u21B3 Unterverteiler: ${esc(lbl)}</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
+            if (hasChild) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Messung wird an angeschlossenen Steckpl&#228;tzen durchgef&#252;hrt und entf&#228;llt an dieser Stelle.</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
             const zsVal = is3p ? pdfWorstZs(or.zsL1, or.zsL2, or.zsL3) : or.zs || "";
             const ikVal = is3p ? pdfWorstIk(or.ikL1, or.ikL2, or.ikL3) : or.ik || "";
             const zsNote = is3p && zsVal ? ` <span style="font-size:8px;color:#888">(${[or.zsL1, or.zsL2, or.zsL3].filter((x) => x).join("/")})</span>` : "";
