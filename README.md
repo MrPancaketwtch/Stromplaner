@@ -102,6 +102,7 @@ Vollständiges Prüfprotokoll nach DIN VDE 0100-600 für mobile Stromverteilunge
   - RCBO-Ausgänge einzeln; **Multicore-Ausgänge werden in Einzelslots expandiert** (SP 1 … SP n, je mit Phasenzuordnung)
 - Schleifenimpedanz Z_s (Ω) und Kurzschlussstrom I_k (A) pro Abgang
   - Multicore-Ausgänge ebenfalls in Einzelslots aufgeteilt
+  - **Grenzwerte:** Ohne RCD gilt `Z_s ≤ U₀ / (Iₙ × 10)` (Abschaltbedingung LSS). Bei RCD-/RCBO-geschützten Abgängen wäre der theoretische Grenzwert `U₀ / IΔn ≈ 7.666 Ω` (30 mA), da der RCD bereits bei 30 mA auslöst — unabhängig von der Schleifenimpedanz. In der Praxis signalisieren Werte über **2 Ω** jedoch einen schlechten Schutzleiterkontakt und sollten untersucht werden. Das Tool verwendet daher **2 Ω** als Praxisgrenze für RCD-geschützte Stromkreise.
 - Bemerkung / Auflage mit Schweregrad (Mangel / Hinweis)
 
 **Export:** Mehrseitiges Prüfprotokoll als druckbares PDF im DIN-A4-Layout mit Deckblatt, Mängelliste und Unterschrift.
