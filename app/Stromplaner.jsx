@@ -2797,7 +2797,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 .ok{color:var(--ep-ok);font-weight:600;white-space:nowrap}.bad{color:var(--ep-bad);font-weight:600;white-space:nowrap}.warn{color:var(--ep-warn);font-weight:600;white-space:nowrap}
 .kv{display:grid}.kv-2{grid-template-columns:repeat(2,1fr)}.kv-3{grid-template-columns:repeat(3,1fr)}.kv-row{display:grid;grid-template-columns:110px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);border-right:1px solid var(--ep-rule2)}.kv-row.kv-right{border-right:none}.kv-row.kv-last{border-bottom:none}.kv-row .k{color:var(--ep-ink3)}.kv-row .v{color:var(--ep-ink)}
 .thead{display:grid;padding:4px 10px;background:var(--ep-band);border-bottom:1px solid var(--ep-rule2);font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.thead .r{text-align:right}
-.trow{display:grid;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);align-items:center}.trow.row-last{border-bottom:none}.trow.row-bad{background:var(--ep-badrow)}.trow .r{text-align:right}.trow .muted{color:var(--ep-ink3)}.trow .no{margin-right:8px}
+.trow{display:grid;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);align-items:start}.trow.row-last{border-bottom:none}.trow.row-bad{background:var(--ep-badrow)}.trow .r{text-align:right}.trow .muted{color:var(--ep-ink3)}.trow .no{margin-right:8px}
 .id{color:var(--ep-warn);font-weight:600}.muted{color:var(--ep-ink3)}.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dual{display:grid;grid-template-columns:1fr 1fr}.sicht-cell{display:grid;grid-template-columns:36px 1fr 60px;padding:var(--ep-row-pad);align-items:center}.sicht-cell .r{text-align:right}.sicht-cell.row-bad{background:var(--ep-badrow)}.sicht-cell.row-warn{background:var(--ep-warnrow)}.sicht-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.sicht-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}.abg-cell{display:grid;grid-template-columns:70px 1fr;padding:var(--ep-row-pad);align-items:center}.abg-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.abg-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr)}.kpi{padding:8px 12px}.kpi.kpi-sep{border-right:1px solid var(--ep-rule2)}.kpi-k{font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.kpi-v{font-size:16px;font-weight:700;margin-top:2px}.kpi-s{font-size:9px}
@@ -2988,16 +2988,16 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             const lblTxt=hasOv
               ? `Separat gemessen am Eingang – abgel. Wert (${d.zs||"–"} Ω / ${d.ik||"–"} A) überschritt Grenzwert (DIN VDE 0100-600 §643)`
               : `Messung aus angeschlossener Unterverteilung (ungünstigster Punkt, DIN VDE 0100-600 §643)`;
-            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">${lblTxt}</span><span class="r">${zsVal?esc(zsVal)+" &Omega;"+(hasOv?ovMark:uvNote):"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+(hasOv?"":uvNote):"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
+            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="muted" style="font-style:italic;min-width:0">${lblTxt}</span><span class="r">${zsVal?esc(zsVal)+" &Omega;"+(hasOv?ovMark:uvNote):"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+(hasOv?"":uvNote):"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
           }
           const zsVal=is3p?pdfWorstZs(or.zsL1,or.zsL2,or.zsL3):(or.zs||"");
           const ikVal=is3p?pdfWorstIk(or.ikL1,or.ikL2,or.ikL3):(or.ik||"");
-          const zsNote=is3p&&zsVal?` <span style="font-size:8px;color:#888">(${[or.zsL1,or.zsL2,or.zsL3].filter(x=>x).join("/")})</span>`:"";
-          const ikNote=is3p&&ikVal?` <span style="font-size:8px;color:#888">(${[or.ikL1,or.ikL2,or.ikL3].filter(x=>x).join("/")})</span>`:"";
+          const zsNote=is3p&&zsVal?`<br><span style="font-size:8px;color:#888">${[or.zsL1,or.zsL2,or.zsL3].filter(x=>x).join(" / ")} Ω</span>`:"";
+          const ikNote=is3p&&ikVal?`<br><span style="font-size:8px;color:#888">${[or.ikL1,or.ikL2,or.ikL3].filter(x=>x).join(" / ")} A</span>`:``;
           const ckZsO=pdfChk(zsVal,undefined,zsLimO);
           const ckIkO=pdfChk(ikVal,ikLimO,undefined);
           const ckO=ckIkO==="bad"||ckZsO==="bad"?"bad":ckIkO==="ok"||ckZsO==="ok"?"ok":"";
-          return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="ell">${esc(lbl)}</span><span class="r">${zsVal?esc(zsVal)+" Ω"+zsNote:"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+ikNote:"–"}</strong><br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
+          return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span style="min-width:0">${esc(lbl)}</span><span class="r">${zsVal?esc(zsVal)+" Ω"+zsNote:"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+ikNote:"–"}</strong><br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span></span><span class="r">${badge(ckO)}</span></div>`;
         }).join("")}
       </div></section>`;
     })()}
