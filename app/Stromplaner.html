@@ -46120,7 +46120,7 @@ Fortfahren?`);
     },
     verteilertypen: {
       title: "Verteiler-Typen",
-      text: "Ein Verteiler-Typ beschreibt den physischen Aufbau eines Verteilers: Eingangs-Steckertyp (z.B. CEE 63A), Eingangs-Absicherung sowie alle Abg\xE4nge. F\xFCr jeden Abgang legst du Steckertyp, Schutzcharakter (B/C/D/K), Nennstrom und Schutzart (LS, RCBO oder keine) fest. Bei Multicore-Abg\xE4ngen konfigurierst du au\xDFerdem die Anzahl der Steckpl\xE4tze \u2013 die Phase rotiert dann automatisch von L1 bis L3.",
+      text: "Ein Verteiler-Typ beschreibt den physischen Aufbau eines Verteilers: Eingangs-Steckertyp (z.B. CEE 63A) und alle Steckpl\xE4tze. F\xFCr jeden Steckplatz legst du Steckertyp, Schutzcharakter (B/C/D/K), Nennstrom und Schutzart (LS, RCBO oder keine) fest. Bei Multicore-Steckpl\xE4tzen konfigurierst du au\xDFerdem die Anzahl der Kan\xE4le \u2013 die Phase rotiert dann automatisch von L1 bis L3.",
       extra: 'Verteiler-Typen sind produktions\xFCbergreifend gespeichert \u2013 du legst jeden Typ einmal an und verwendest ihn in beliebig vielen Produktionen. \xDCber "Exportieren" und "Importieren" im Tab kannst du deine Bibliothek als JSON-Datei sichern und auf anderen Ger\xE4ten einspielen.'
     },
     verbraucher: {
@@ -46131,16 +46131,16 @@ Fortfahren?`);
     hauptanschluesse: {
       title: "Hauptanschl\xFCsse",
       text: 'Hier definierst du die Einspeisepunkte deiner Anlage \u2013 also die Anschl\xFCsse, aus denen deine Verteiler gespeist werden. Gib jedem Hauptanschluss einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung B\xFChne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
-      extra: "Verteiler k\xF6nnen optional einem Hauptanschluss zugewiesen werden \u2013 so wird die summierte Last je Einspeisepunkt berechnet und im \xDCbersichts-Tab angezeigt."
+      extra: ""
     },
     verteiler: {
       title: "Verteiler hinzuf\xFCgen",
-      text: 'Hier f\xFCgst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzuf\xFCgen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben \u2013 dort definierst du Eingangs-Steckertyp, Absicherung und alle Abg\xE4nge.',
-      extra: "Nach dem Hinzuf\xFCgen kannst du f\xFCr jeden Verteiler festlegen, wo er in der Topologie h\xE4ngt: entweder direkt an einem Hauptanschluss oder als Unterverteilung an einem Abgang eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird."
+      text: 'Hier f\xFCgst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzuf\xFCgen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben \u2013 dort definierst du Eingangs-Steckertyp und alle Steckpl\xE4tze.',
+      extra: "Nach dem Hinzuf\xFCgen kannst du f\xFCr jeden Verteiler festlegen, wo er in der Topologie h\xE4ngt: entweder direkt an einem Hauptanschluss oder als Unterverteilung an einem Steckplatz eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird."
     },
     steckplan: {
       title: "Steckplan",
-      text: 'Im Steckplan belegst du die einzelnen Abg\xE4nge deines Verteilers mit Verbrauchern. W\xE4hle oben den Verteiler aus, den du bearbeiten m\xF6chtest. \xDCber die Schnellerfassung kannst du gezielt einen Anschluss und einen Verbraucher ausw\xE4hlen und mit dem "Menge"-K\xE4stchen gleich mehrere identische Verbraucher auf einmal stecken.',
+      text: 'Im Steckplan belegst du die einzelnen Steckpl\xE4tze deines Verteilers mit Verbrauchern. W\xE4hle oben den Verteiler aus, den du bearbeiten m\xF6chtest. \xDCber die Schnellerfassung kannst du gezielt einen Steckplatz und einen Verbraucher ausw\xE4hlen und mit dem "Menge"-K\xE4stchen gleich mehrere identische Verbraucher auf einmal stecken.',
       extra: "Du kannst auch erst den Anschluss w\xE4hlen und dann den Verbraucher \u2013 der Anschluss bleibt erhalten. F\xFCr jeden gesteckten Verbraucher werden Phase, Leistung und Ampere automatisch berechnet und in der Phasenlastanzeige summiert."
     },
     rccb: {
@@ -46155,7 +46155,7 @@ Fortfahren?`);
     },
     schaltbild: {
       title: "Schaltbild",
-      text: "Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Hauptanschl\xFCssen \xFCber die Verteiler bis zu den einzelnen Abg\xE4ngen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.",
+      text: "Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Hauptanschl\xFCssen \xFCber die Verteiler bis zu den einzelnen Steckpl\xE4tzen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.",
       extra: 'Das Schaltbild eignet sich gut als \xDCbergabedokument: \xFCber "Stromplan drucken" im Header l\xE4sst es sich zusammen mit der Laststabelle als PDF ausgeben.'
     },
     erweitert: {
@@ -46166,17 +46166,17 @@ Fortfahren?`);
     errichtungspruefung: {
       title: "Errichtungspr\xFCfung",
       text: "Hier dokumentierst du die Pr\xFCfung deiner Anlage nach DIN VDE 0100-600. W\xE4hle einen Verteiler aus der Liste und f\xFClle die Felder der Reihe nach aus: zuerst Stammdaten des Pr\xFCfers, Datum und Pr\xFCfort, dann die sechs Punkte der Sichtpr\xFCfung, anschlie\xDFend die elektrischen Messwerte \u2013 Drehfeld, Spannungen (U L-N, U L-L, U N-PE, U L-PE), RCD-Ausl\xF6sezeiten und Schleifenimpedanzen je Abgang. Werte au\xDFerhalb der Norm-Grenzwerte werden direkt rot markiert und im Abschlussprotokoll als M\xE4ngel aufgef\xFChrt.",
-      extra: "Hast du kaskadierte Verteiler \u2013 also eine Unterverteilung die an einem Abgang eines \xFCbergeordneten Verteilers h\xE4ngt \u2013 \xFCbernimmt das Tool den ung\xFCnstigsten Zs-Wert aus der Unterverteilung automatisch f\xFCr den entsprechenden Abgang des Hauptverteilers. Wenn du die Impedanz dort zus\xE4tzlich separat gemessen hast, kannst du den Wert manuell \xFCberschreiben; er wird dann mit einem \u270E gekennzeichnet."
+      extra: "Hast du kaskadierte Verteiler \u2013 also eine Unterverteilung die an einem Steckplatz eines \xFCbergeordneten Verteilers h\xE4ngt \u2013 \xFCbernimmt das Tool die ung\xFCnstigsten Messwerte (Zs und Kurzschlussstrom) aus der Unterverteilung automatisch f\xFCr den entsprechenden Steckplatz des Hauptverteilers. Wenn du die Werte dort zus\xE4tzlich separat gemessen hast, kannst du sie manuell \xFCberschreiben; sie werden dann mit einem \u270E gekennzeichnet."
     },
     speichern: {
       title: "Speichern, Laden & Exportieren",
       text: 'Im Header findest du zwei Schaltfl\xE4chen: "Laden" \xF6ffnet eine JSON-Datei, die du zuvor gespeichert hast, und stellt den kompletten Projektstand wieder her. "Speichern" exportiert den aktuellen Stand als JSON-Datei auf deinen Rechner \u2013 inklusive aller Verteiler, Steckungen, Messwerte und Einstellungen.',
-      extra: "Au\xDFerdem kannst du den Stromplan als Excel-Datei (XLSX) exportieren \u2013 das Symbol befindet sich ebenfalls im Header. Die Excel-Datei enth\xE4lt Tabellenbl\xE4tter f\xFCr \xDCbersicht, Steckplan und Produktionsdaten. Verteiler-Typen und Verbraucher lassen sich separat im jeweiligen Tab im- und exportieren, um die Bibliotheken ger\xE4te\xFCbergreifend zu nutzen."
+      extra: "Verteiler-Typen und Verbraucher lassen sich separat im jeweiligen Tab im- und exportieren, um die Bibliotheken ger\xE4te\xFCbergreifend zu nutzen."
     },
     logo: {
       title: "Firmenlogo",
       text: '\xDCber den kleinen "+ Logo"-Button rechts neben dem App-Titel kannst du ein Unternehmens- oder Veranstaltungslogo hochladen (PNG, JPG oder SVG). Das Logo erscheint sofort im App-Header und wird automatisch in alle PDF-Exporte eingebunden: in die Kopfzeile des Errichtungspr\xFCfdokuments sowie in den Stromplan-Ausdruck.',
-      extra: 'Das Logo wird lokal im Browser gespeichert (localStorage) und bleibt auch nach einem Neustart erhalten. Mit dem kleinen "x"-Button neben dem Logo kannst du es jederzeit wieder entfernen. Das Logo ist ger\xE4tespezifisch gespeichert und wird nicht mit der JSON-Projektdatei \xFCbertragen.'
+      extra: 'Das Logo wird lokal in der App gespeichert und bleibt auch nach einem Neustart erhalten. Mit dem kleinen "x"-Button neben dem Logo kannst du es jederzeit wieder entfernen. Es wird nicht mit der JSON-Projektdatei \xFCbertragen und ist daher ger\xE4tespezifisch.'
     },
     updates: {
       title: "Software-Updates",

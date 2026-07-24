@@ -2461,7 +2461,7 @@ const HELP_SECTIONS = {
   },
   verteilertypen: {
     title: 'Verteiler-Typen',
-    text: 'Ein Verteiler-Typ beschreibt den physischen Aufbau eines Verteilers: Eingangs-Steckertyp (z.B. CEE 63A), Eingangs-Absicherung sowie alle Abgänge. Für jeden Abgang legst du Steckertyp, Schutzcharakter (B/C/D/K), Nennstrom und Schutzart (LS, RCBO oder keine) fest. Bei Multicore-Abgängen konfigurierst du außerdem die Anzahl der Steckplätze – die Phase rotiert dann automatisch von L1 bis L3.',
+    text: 'Ein Verteiler-Typ beschreibt den physischen Aufbau eines Verteilers: Eingangs-Steckertyp (z.B. CEE 63A) und alle Steckplätze. Für jeden Steckplatz legst du Steckertyp, Schutzcharakter (B/C/D/K), Nennstrom und Schutzart (LS, RCBO oder keine) fest. Bei Multicore-Steckplätzen konfigurierst du außerdem die Anzahl der Kanäle – die Phase rotiert dann automatisch von L1 bis L3.',
     extra: 'Verteiler-Typen sind produktionsübergreifend gespeichert – du legst jeden Typ einmal an und verwendest ihn in beliebig vielen Produktionen. Über "Exportieren" und "Importieren" im Tab kannst du deine Bibliothek als JSON-Datei sichern und auf anderen Geräten einspielen.'
   },
   verbraucher: {
@@ -2472,16 +2472,16 @@ const HELP_SECTIONS = {
   hauptanschluesse: {
     title: 'Hauptanschlüsse',
     text: 'Hier definierst du die Einspeisepunkte deiner Anlage – also die Anschlüsse, aus denen deine Verteiler gespeist werden. Gib jedem Hauptanschluss einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung Bühne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
-    extra: 'Verteiler können optional einem Hauptanschluss zugewiesen werden – so wird die summierte Last je Einspeisepunkt berechnet und im Übersichts-Tab angezeigt.'
+    extra: ''
   },
   verteiler: {
     title: 'Verteiler hinzufügen',
-    text: 'Hier fügst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzufügen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben – dort definierst du Eingangs-Steckertyp, Absicherung und alle Abgänge.',
-    extra: 'Nach dem Hinzufügen kannst du für jeden Verteiler festlegen, wo er in der Topologie hängt: entweder direkt an einem Hauptanschluss oder als Unterverteilung an einem Abgang eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird.'
+    text: 'Hier fügst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzufügen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben – dort definierst du Eingangs-Steckertyp und alle Steckplätze.',
+    extra: 'Nach dem Hinzufügen kannst du für jeden Verteiler festlegen, wo er in der Topologie hängt: entweder direkt an einem Hauptanschluss oder als Unterverteilung an einem Steckplatz eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird.'
   },
   steckplan: {
     title: 'Steckplan',
-    text: 'Im Steckplan belegst du die einzelnen Abgänge deines Verteilers mit Verbrauchern. Wähle oben den Verteiler aus, den du bearbeiten möchtest. Über die Schnellerfassung kannst du gezielt einen Anschluss und einen Verbraucher auswählen und mit dem "Menge"-Kästchen gleich mehrere identische Verbraucher auf einmal stecken.',
+    text: 'Im Steckplan belegst du die einzelnen Steckplätze deines Verteilers mit Verbrauchern. Wähle oben den Verteiler aus, den du bearbeiten möchtest. Über die Schnellerfassung kannst du gezielt einen Steckplatz und einen Verbraucher auswählen und mit dem "Menge"-Kästchen gleich mehrere identische Verbraucher auf einmal stecken.',
     extra: 'Du kannst auch erst den Anschluss wählen und dann den Verbraucher – der Anschluss bleibt erhalten. Für jeden gesteckten Verbraucher werden Phase, Leistung und Ampere automatisch berechnet und in der Phasenlastanzeige summiert.'
   },
   rccb: {
@@ -2496,7 +2496,7 @@ const HELP_SECTIONS = {
   },
   schaltbild: {
     title: 'Schaltbild',
-    text: 'Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Hauptanschlüssen über die Verteiler bis zu den einzelnen Abgängen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.',
+    text: 'Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Hauptanschlüssen über die Verteiler bis zu den einzelnen Steckplätzen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.',
     extra: 'Das Schaltbild eignet sich gut als Übergabedokument: über "Stromplan drucken" im Header lässt es sich zusammen mit der Laststabelle als PDF ausgeben.'
   },
   erweitert: {
@@ -2507,17 +2507,17 @@ const HELP_SECTIONS = {
   errichtungspruefung: {
     title: 'Errichtungsprüfung',
     text: 'Hier dokumentierst du die Prüfung deiner Anlage nach DIN VDE 0100-600. Wähle einen Verteiler aus der Liste und fülle die Felder der Reihe nach aus: zuerst Stammdaten des Prüfers, Datum und Prüfort, dann die sechs Punkte der Sichtprüfung, anschließend die elektrischen Messwerte – Drehfeld, Spannungen (U L-N, U L-L, U N-PE, U L-PE), RCD-Auslösezeiten und Schleifenimpedanzen je Abgang. Werte außerhalb der Norm-Grenzwerte werden direkt rot markiert und im Abschlussprotokoll als Mängel aufgeführt.',
-    extra: 'Hast du kaskadierte Verteiler – also eine Unterverteilung die an einem Abgang eines übergeordneten Verteilers hängt – übernimmt das Tool den ungünstigsten Zs-Wert aus der Unterverteilung automatisch für den entsprechenden Abgang des Hauptverteilers. Wenn du die Impedanz dort zusätzlich separat gemessen hast, kannst du den Wert manuell überschreiben; er wird dann mit einem ✎ gekennzeichnet.'
+    extra: 'Hast du kaskadierte Verteiler – also eine Unterverteilung die an einem Steckplatz eines übergeordneten Verteilers hängt – übernimmt das Tool die ungünstigsten Messwerte (Zs und Kurzschlussstrom) aus der Unterverteilung automatisch für den entsprechenden Steckplatz des Hauptverteilers. Wenn du die Werte dort zusätzlich separat gemessen hast, kannst du sie manuell überschreiben; sie werden dann mit einem ✎ gekennzeichnet.'
   },
   speichern: {
     title: 'Speichern, Laden & Exportieren',
     text: 'Im Header findest du zwei Schaltflächen: "Laden" öffnet eine JSON-Datei, die du zuvor gespeichert hast, und stellt den kompletten Projektstand wieder her. "Speichern" exportiert den aktuellen Stand als JSON-Datei auf deinen Rechner – inklusive aller Verteiler, Steckungen, Messwerte und Einstellungen.',
-    extra: 'Außerdem kannst du den Stromplan als Excel-Datei (XLSX) exportieren – das Symbol befindet sich ebenfalls im Header. Die Excel-Datei enthält Tabellenblätter für Übersicht, Steckplan und Produktionsdaten. Verteiler-Typen und Verbraucher lassen sich separat im jeweiligen Tab im- und exportieren, um die Bibliotheken geräteübergreifend zu nutzen.'
+    extra: 'Verteiler-Typen und Verbraucher lassen sich separat im jeweiligen Tab im- und exportieren, um die Bibliotheken geräteübergreifend zu nutzen.'
   },
   logo: {
     title: 'Firmenlogo',
     text: 'Über den kleinen "+ Logo"-Button rechts neben dem App-Titel kannst du ein Unternehmens- oder Veranstaltungslogo hochladen (PNG, JPG oder SVG). Das Logo erscheint sofort im App-Header und wird automatisch in alle PDF-Exporte eingebunden: in die Kopfzeile des Errichtungsprüfdokuments sowie in den Stromplan-Ausdruck.',
-    extra: 'Das Logo wird lokal im Browser gespeichert (localStorage) und bleibt auch nach einem Neustart erhalten. Mit dem kleinen "x"-Button neben dem Logo kannst du es jederzeit wieder entfernen. Das Logo ist gerätespezifisch gespeichert und wird nicht mit der JSON-Projektdatei übertragen.'
+    extra: 'Das Logo wird lokal in der App gespeichert und bleibt auch nach einem Neustart erhalten. Mit dem kleinen "x"-Button neben dem Logo kannst du es jederzeit wieder entfernen. Es wird nicht mit der JSON-Projektdatei übertragen und ist daher gerätespezifisch.'
   },
   updates: {
     title: 'Software-Updates',
