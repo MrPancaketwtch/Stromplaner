@@ -80,6 +80,13 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.0.5": [
+    "Errichtungsprüfung wurde überarbeitet: Zusätzliche Felder bei Schleifenimpedanz und Kurzschlussstrom für Drehstromanschlüsse & Kaskadierungslogik mit Möglichkeit zum Nachtragen von Prüfergebnissen",
+    "Hilfe Bubbles wurden für einige Felder hinzugefügt",
+    "Eine Komplettanleitung ist jetzt im Tool verfügbar",
+    "Corporate Logos lassen sich importieren und werden in den PDFs angezeigt",
+    "Kleine Bugfixes und Verbesserungen",
+  ],
   "1.0.4": [
     "Changelog-Popup erscheint jetzt zuverlässig nach Updates",
   ],

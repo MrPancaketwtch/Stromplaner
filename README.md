@@ -2,7 +2,7 @@
 
 Planungs- und Prüftool für mobile Drehstrom-Verteilanlagen in der Veranstaltungstechnik.
 
-Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Kästen werden in einer Kaskade miteinander verbunden, Verbraucher auf Steckplätze verteilt, Phasenlasten automatisch berechnet. Ein Blockschaltbild visualisiert die gesamte Topologie. Integriert sind ein Errichtungsprüfungs-Protokoll nach DIN VDE 0100-600 sowie Berechnungshelfer für Leitungsdimensionierung und Spannungsfall.
+Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Verteiler werden in einer Kaskade miteinander verbunden, Verbraucher auf Steckplätze verteilt, Phasenlasten automatisch berechnet. Ein Schaltbild visualisiert die gesamte Topologie. Integriert sind ein Errichtungsprüfungs-Protokoll nach DIN VDE 0100-600 sowie Berechnungshelfer für Leitungsdimensionierung und Spannungsfall.
 
 > **Hinweis:** Die Werte sind eine Planungshilfe. Auslegung, Absicherung und sichere Installation liegen in der Verantwortung der zuständigen Elektrofachkraft.
 
@@ -11,7 +11,7 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Käste
 ## Schnellstart
 
 1. Neueste Version von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** herunterladen und installieren (einmalig)
-2. **Erster Start:** **Kästen und Verbraucher selber anlegen** oder **↥ Laden** → `app/Standard.json` auswählen, um NDR-Kasten-Typen und Verbraucher vorzuladen
+2. **Erster Start:** **Verteiler-Typen und Verbraucher selber anlegen** oder **↥ Laden** → `app/Standard.json` auswählen, um Verteiler-Typen und Verbraucher vorzuladen
 3. Planen, stecken, prüfen
 4. Mit **💾 Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
 5. **🖨 PDF** für den fertigen Stromplan oder das Prüfprotokoll → **Achtung** zwei verschiedene Exports: Einer für den Plan, einer für die Errichtungsprüfung
@@ -29,7 +29,7 @@ Stromplaner/
 ├── app/
 │   ├── Stromplaner.html      ← Gebündelte App (Output von build.js)
 │   ├── Stromplaner.jsx       ← Quellcode (React 18)
-│   └── Standard.json         ← Vorgeladene Kasten-Typen & Verbraucher
+│   └── Standard.json         ← Vorgeladene Verteiler-Typen & Verbraucher
 ├── dist/                     ← NSIS-Installer (gitignoriert – wird via GitHub Releases verteilt)
 ├── Speicherstände/           ← Eigene Planungen (.json) ablegen
 ├── src/
@@ -54,37 +54,37 @@ Stromplaner/
 Grundlegende Produktionsdaten und Aufbau der Verteilerstruktur.
 
 - Produktionsname, Ersteller, Version, Datum eintragen
-- **Hauptanschlüsse** definieren: Bezeichnung und Maximalstrom (erscheinen links im Blockschaltbild)
-- **Kästen aktivieren:** Typ wählen → Name vergeben → **+ Kasten hinzufügen**
-- Pro Kasten: übergeordneten Kasten und Ausgang wählen (oder einem Hauptanschluss zuweisen)
+- **Hauptanschlüsse** definieren: Bezeichnung und Maximalstrom (erscheinen links im Schaltbild)
+- **Verteiler hinzufügen:** Typ wählen → Name vergeben → **+ Verteiler hinzufügen**
+- Pro Verteiler: übergeordneten Verteiler und Steckplatz wählen (oder einem Hauptanschluss zuweisen)
 - Adapter-Verbindungen sind möglich, werden farblich hervorgehoben
-- Überlastete Kästen werden mit ⚠ markiert; unterdimensionierte Anschlüsse ebenso
-- **Alle Kästen löschen** entfernt alle angelegten Instanzen auf einmal
+- Überlastete Verteiler werden mit ⚠ markiert; unterdimensionierte Anschlüsse ebenso
 
 ### 2 · Steckplan
-Verbraucher auf Steckplätze der Kästen verteilen.
+Verbraucher auf Steckplätze der Verteiler verteilen.
 
-- Pro aktiviertem Kasten ein eigener Abschnitt
+- Pro Verteiler ein eigener Abschnitt
 - Live-Anzeige der Phasenlast (L1 / L2 / L3) mit Farbkodierung: grün ≤ 80 % · orange > 80 % · rot = Überlast
-- Verbraucher wählen → Anschluss wählen → Phase wird automatisch gesetzt
+- Verbraucher wählen → Steckplatz wählen → Phase wird automatisch gesetzt
 - Nur passende Steckplätze sichtbar (1-phasig ↔ 3-phasig getrennt)
-- **Multicore-Sonderfall:** Bei MC-Anschlüssen wird zusätzlich der Steckplatz (Slot 1–n) gewählt; Phase rotiert automatisch (L1→L2→L3→L1…)
+- **Multicore-Sonderfall:** Bei MC-Steckplätzen wird zusätzlich der Slot (1–n) gewählt; Phase rotiert automatisch (L1→L2→L3→L1…)
 - Bulk-Eintrag: mehrere identische Verbraucher auf einmal hinzufügen
+- **RCCB-Gruppen:** Pro Verteiler können RCCB-Gruppen (Fehlerstromschutzschalter) definiert werden; einzelne Steckplätze werden dann der zugehörigen Gruppe zugewiesen
 
 ### 3 · Übersicht
 Kompakte Gesamtschau der Anlage.
 
 - Alle Hauptanschlüsse mit Summenlast je Phase
-- Tabelle aller Kästen mit Typ, Einspeisung, Last und Status
+- Tabelle aller Verteiler mit Typ, Einspeisung, Last und Status
 
-### Blockschaltbild
+### Schaltbild
 Topologie der gesamten Verteilerkaskade als SVG-Baumdiagramm.
 
-- Kästen als Blöcke mit Einspeisung, Ausgängen (IEC 60309-Symbolen), MCB/RCD-Übersicht im Footer
-- Verbindungslinien exakt am jeweiligen Ausgang des Eltern-Kastens; Steckerfamilie als Label
+- Verteiler als Blöcke mit Einspeisung, Steckplätzen (IEC 60309-Symbolen), MCB/RCCB-Übersicht im Footer
+- Verbindungslinien exakt am jeweiligen Steckplatz des Eltern-Verteilers; Steckerfamilie als Label
 - Connector-Type-Fallback: fehlende oder veraltete `parentOutletId` wird automatisch über den Eingangs-Steckertyp aufgelöst; orange gestrichelte Linie + ⚠ als Warnung
-- Verbraucher als Leaf-Boxen rechts neben dem Ausgang (Name, Watt, Ampere)
-- **Multicore:** Ch.X-Badge je Verbraucher-Box zeigt den belegten Steckplatz
+- Verbraucher als Leaf-Boxen rechts neben dem Steckplatz (Name, Watt, Ampere)
+- **Multicore:** Ch.X-Badge je Verbraucher-Box zeigt den belegten Slot
 - Adapter-Verbindungen lila hervorgehoben
 - PDF-Export: SVG wird automatisch auf Seitenbreite skaliert, vollständige Farbumwandlung Dark → Light für druckfreundliche Darstellung
 
@@ -93,30 +93,29 @@ Vollständiges Prüfprotokoll nach DIN VDE 0100-600 für mobile Stromverteilunge
 
 **Kopfdaten:** Prüfer, Datum, Uhrzeit, Messgerät, Adresse, Ort, Netzform
 
-**Pro Kasten:**
+**Pro Verteiler:**
 - Sichtprüfung (6 Punkte, klickbar ok / offen)
 - Netzspannungen L–N, L–L, L–PE, N–PE mit Grenzwertampel
 - Drehfeld (Rechts- / Linksdrehfeld)
-- RCD-Prüfung pro Schutzorgan: Auslösezeit t_A (ms) ≤ 300 ms · Auslösestrom I_An (mA) ≤ Nennwert · OK-Checkbox
-  - Separate RCD-Objekte (FI-Schalter für Gruppe) als eigene Zeilen
-  - RCBO-Ausgänge einzeln; **Multicore-Ausgänge werden in Einzelslots expandiert** (SP 1 … SP n, je mit Phasenzuordnung)
-- Schleifenimpedanz Z_s (Ω) und Kurzschlussstrom I_k (A) pro Abgang
-  - Multicore-Ausgänge ebenfalls in Einzelslots aufgeteilt
-  - **Grenzwerte:** Ohne RCD gilt `Z_s ≤ U₀ / (Iₙ × 10)` (Abschaltbedingung LSS). Bei RCD-/RCBO-geschützten Abgängen wäre der theoretische Grenzwert `U₀ / IΔn ≈ 7.666 Ω` (30 mA), da der RCD bereits bei 30 mA auslöst — unabhängig von der Schleifenimpedanz. In der Praxis signalisieren Werte über **2 Ω** jedoch einen schlechten Schutzleiterkontakt und sollten untersucht werden. Das Tool verwendet daher **2 Ω** als Praxisgrenze für RCD-geschützte Stromkreise.
-  - **Kaskadierte Unterverteiler:** Schleifenimpedanz steigt entlang des Leitungswegs — jedes Kabel addiert Impedanz. Damit gilt zwingend `Z_s(Eingang UV) < Z_s(Schuko-Abgang)`. Die Messung am **ungünstigsten Punkt** (schlechtester Schuko-Abgang) deckt alle vorgelagerten Kabelabschnitte mit ab und macht eine separate Messung am CEE-Eingang des Unterverteilers entbehrlich (DIN VDE 0100-600, Abschn. 643). Das Tool leitet den Z_s-Wert am UV-Eingang automatisch aus den Downstream-Messungen ab (kaskadiert über beliebig viele Ebenen). Falls der abgeleitete Wert den Grenzwert des Eingangsanschlusses überschreitet, kann per **„✎ Nachtragen"** ein separat gemessener Wert eingetragen werden — das Prüfprotokoll dokumentiert in diesem Fall automatisch den Grund und den abgeleiteten Vergleichswert.
+- RCCB-Prüfung pro Schutzorgan: Auslösezeit t_A (ms) ≤ 300 ms · Auslösestrom I_An (mA) ≤ Nennwert · OK-Checkbox
+  - RCCB-Gruppen (FI-Schalter für Gruppe) als eigene Prüfzeilen
+  - RCBO-Steckplätze einzeln; **Multicore-Steckplätze werden in Einzelslots expandiert** (SP 1 … SP n, je mit Phasenzuordnung)
+- Schleifenimpedanz Z_s (Ω) und Kurzschlussstrom I_k (A) pro Steckplatz
+  - Multicore-Steckplätze ebenfalls in Einzelslots aufgeteilt
+  - **Grenzwerte:** Ohne RCD gilt `Z_s ≤ U₀ / (Iₙ × 10)` (Abschaltbedingung LSS). Bei RCCB-/RCBO-geschützten Steckplätzen wäre der theoretische Grenzwert `U₀ / IΔn ≈ 7.666 Ω` (30 mA), da der RCD bereits bei 30 mA auslöst — unabhängig von der Schleifenimpedanz. In der Praxis signalisieren Werte über **2 Ω** jedoch einen schlechten Schutzleiterkontakt und sollten untersucht werden. Das Tool verwendet daher **2 Ω** als Praxisgrenze für RCD-geschützte Stromkreise.
+  - **Kaskadierte Unterverteiler:** Schleifenimpedanz steigt entlang des Leitungswegs — jedes Kabel addiert Impedanz. Damit gilt zwingend `Z_s(Eingang UV) < Z_s(Schuko-Steckplatz)`. Die Messung am **ungünstigsten Punkt** (schlechtester Schuko-Steckplatz) deckt alle vorgelagerten Kabelabschnitte mit ab und macht eine separate Messung am CEE-Eingang des Unterverteilers entbehrlich (DIN VDE 0100-600, Abschn. 643). Das Tool leitet den Z_s-Wert am UV-Eingang automatisch aus den Downstream-Messungen ab (kaskadiert über beliebig viele Ebenen). Falls der abgeleitete Wert den Grenzwert des Eingangsanschlusses überschreitet, kann per **„✎ Nachtragen"** ein separat gemessener Wert eingetragen werden — das Prüfprotokoll dokumentiert in diesem Fall automatisch den Grund und den abgeleiteten Vergleichswert.
 - Bemerkung / Auflage mit Schweregrad (Mangel / Hinweis)
 
 **Export:** Mehrseitiges Prüfprotokoll als druckbares PDF im DIN-A4-Layout mit Deckblatt, Mängelliste und Unterschrift.
 
-### Kasten-Typen *(Stammdaten)*
-Verwaltung aller Verteilerkästen-Typen.
+### Verteiler-Typen *(Stammdaten)*
+Verwaltung aller Verteiler-Typen.
 
-- Name, Eingangs-Steckverbinder, maximaler Speisestrom
-- Beliebig viele Ausgänge: Label, Stecker-Typ, Nennstrom, Phase, Sicherungscharakteristik (B/C/D/K), Schutzart (LS / RCBO / Keine)
-  - Multicore-Ausgänge: Anzahl Steckplätze (1–48) konfigurierbar
-- **Bulk-Hinzufügen:** Mehrere Ausgänge gleichen Typs auf einmal anlegen — Anzahl, Stecker, Ampere, Sicherung, Schutzart wählen; optional RCD-Gruppe zuweisen und Phasenrotation aktivieren (L1→L2→L3→…)
-- RCD-Objekte (separate FI-Schalter): Strom, Auslösestrom (mA), Polzahl
-- **Alle Kasten-Typen löschen** entfernt alle Typen auf einmal
+- Name, Eingangs-Steckverbinder
+- Beliebig viele Steckplätze: Label, Stecker-Typ, Nennstrom, Phase, Sicherungscharakteristik (B/C/D/K), Schutzart (LS / RCBO / Keine)
+  - Multicore-Steckplätze: Anzahl Slots (1–48) konfigurierbar
+- **Bulk-Hinzufügen:** Mehrere Steckplätze gleichen Typs auf einmal anlegen — Anzahl, Stecker, Ampere, Sicherung, Schutzart wählen; optional RCCB-Gruppe zuweisen und Phasenrotation aktivieren (L1→L2→L3→…)
+- RCCB-Gruppen (separate FI-Schalter): Strom, Auslösestrom (mA), Polzahl
 - Import / Export als JSON
 
 ### Verbraucher *(Stammdaten)*
@@ -164,15 +163,20 @@ Ergebnis: ΔU in V und %, Mindestquerschnitt für ΔU ≤ 3 %, Farbampel (≤ 3 
 
 Beide Unter-Tabs erlauben beliebig viele benannte Einzel-Rechnungen (**+ Neue Rechnung**). Alle Rechnungen werden automatisch gespeichert.
 
+### ℹ Anleitung
+Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich über den **ℹ Anleitung**-Tab in der Navigation. An mehreren Stellen in der App gibt es zusätzlich **?**-Buttons, die direkt zur passenden Hilfe-Seite springen.
+
 ---
 
 ## Header-Buttons
 
 | Button | Funktion |
 |--------|----------|
+| **+ Logo** / **✎ Logo** | Firmenlogo hochladen oder ersetzen (PNG, JPG, SVG) — erscheint in der App und im PDF |
+| **✕** *(neben Logo)* | Hochgeladenes Logo entfernen |
 | **↥ Laden** | Gespeicherten Stand (`.json`) laden |
 | **💾 Speichern** | Aktuellen Stand als `.json` exportieren |
-| **↺ Neu** | Planung zurücksetzen (Kasten-Typen und Verbraucher bleiben erhalten) |
+| **↺ Neu** | Planung zurücksetzen (Verteiler-Typen und Verbraucher bleiben erhalten) |
 | **🖨 PDF** | Druckbaren Stromplan als PDF öffnen |
 | **↓ Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
 
@@ -182,11 +186,11 @@ Beide Unter-Tabs erlauben beliebig viele benannte Einzel-Rechnungen (**+ Neue Re
 
 ### Phasen & Last
 ```
-1-phasig:  I (A) = W / 230  → auf die Phase des Anschlusses
+1-phasig:  I (A) = W / 230  → auf die Phase des Steckplatzes
 3-phasig:  I (A) = W / 230  → gleicher Wert auf L1, L2, L3
 Multicore: Phase rotiert nach Slot-Nummer: L1 → L2 → L3 → L1 …
 ```
-Kaskadenberechnung: Die Last eines Kastens umfasst alle direkt gesteckten Verbraucher plus die Summe aller angehängten Unter-Kästen (rekursiv).
+Kaskadenberechnung: Die Last eines Verteilers umfasst alle direkt gesteckten Verbraucher plus die Summe aller angehängten Unterverteiler (rekursiv).
 
 ### Leitungsdimensionierung
 ```
@@ -270,7 +274,7 @@ npm run dist
 
 ### Wichtige Datenstrukturen
 ```
-BoxType:    { id, name, feedConnector, feedAmp, outlets[], rcds[] }
+BoxType:    { id, name, feedConnector, outlets[], rcds[] }
 Outlet:     { id, label, connector, amp, phase, breaker, char, protection, rcdId, mcSlots? }
 RCD:        { id, label, amp, mA, poles }
 Instance:   { id, typeId, name, parentId, parentOutletId, mainConnectionId }
@@ -281,7 +285,7 @@ Load:       { id, name, watt, threePhase }
 ### Connector-Typen
 `CEE16` · `CEE32` · `CEE63` · `CEE125` · `CEE16_1` · `CEE32_1` · `PL125` · `PL200` · `PL400` · `MC` · `SCHUKO`
 
-Adapter-Verbindungen sind innerhalb einer Steckerfamilie (CEE3P, CEE1P, PL, MC, SCHUKO) erlaubt und werden im Blockschaltbild lila hervorgehoben.
+Adapter-Verbindungen sind innerhalb einer Steckerfamilie (CEE3P, CEE1P, PL, MC, SCHUKO) erlaubt und werden im Schaltbild lila hervorgehoben.
 
 ---
 
