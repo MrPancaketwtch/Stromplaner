@@ -44445,6 +44445,22 @@ button:active { filter: brightness(0.95); }
     const [activePlan, setActivePlan] = (0, import_react.useState)(null);
     const [inspMeta, setInspMeta] = (0, import_react.useState)({ inspector: "", date: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), time: "", equipment: "", address: "", location: "", netType: "" });
     const [inspResults, setInspResults] = (0, import_react.useState)({});
+    const [corpLogo, setCorpLogo] = (0, import_react.useState)(() => localStorage.getItem("sp_corp_logo") || "");
+    const uploadLogo = (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        setCorpLogo(r.result);
+        localStorage.setItem("sp_corp_logo", r.result);
+      };
+      r.readAsDataURL(f);
+      e.target.value = "";
+    };
+    const removeLogo = () => {
+      setCorpLogo("");
+      localStorage.removeItem("sp_corp_logo");
+    };
     const [cableCalcs, setCableCalcs] = (0, import_react.useState)([]);
     const [voltCalcs, setVoltCalcs] = (0, import_react.useState)([]);
     const [erweiterSubTab, setErweiterSubTab] = (0, import_react.useState)("dim");
@@ -44795,7 +44811,7 @@ Fortfahren?`);
         <div style="height:5px;background:#eee;border-radius:3px;margin:3px 0"><div style="height:100%;width:${Math.min(pct, 100)}%;background:${col};border-radius:3px"></div></div>
         <div style="font-size:9px;color:#666">${maxA ? pct + "% von " + maxA + "A" : ""}</div></div>`;
       }).join("");
-      let body = `<h1 style="font-size:18px;margin:0 0 4px">\u26A1 STROMPLAN</h1>
+      let body = `${corpLogo ? `<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g, "&quot;")}" style="max-height:40px;max-width:140px;object-fit:contain"></div>` : ""}<h1 style="font-size:18px;margin:0 0 4px">\u26A1 STROMPLAN</h1>
       <div style="font-size:12px;color:#555;margin-bottom:16px">${meta.production} \xB7 ${meta.creator} \xB7 v${meta.version} \xB7 ${meta.date}</div>`;
       if (mainConns.length) {
         body += `<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Hauptanschl\xFCsse</h2>`;
@@ -45025,7 +45041,7 @@ Fortfahren?`);
       ["erweitert", "Erweitert"]
     ];
     const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, isUnderdimensioned, isAdapted, rootInstances, mainConns, mainConnById };
-    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), window.electronAPI && /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: () => setShowUpdateModal(true) }, updateStatus.type === "downloaded" ? "\u2193 Update bereit" : updateStatus.type === "available" ? "\u2191 Update verf\xFCgbar" : "\u2191 Updates"), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, color: "#f5a623" }, onClick: () => setShowDonateModal(true) }, "\u2615"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), corpLogo && /* @__PURE__ */ import_react.default.createElement("img", { src: corpLogo, alt: "Logo", style: { height: 26, maxWidth: 100, objectFit: "contain", display: "block", marginLeft: 6 } }), /* @__PURE__ */ import_react.default.createElement("label", { style: { ...S.ghostBtn, padding: "3px 7px", fontSize: 9, cursor: "pointer" }, title: corpLogo ? "Logo ersetzen" : "Firmenlogo hochladen" }, corpLogo ? "\u270E Logo" : "+ Logo", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: "image/*", style: { display: "none" }, onChange: uploadLogo })), corpLogo && /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, padding: "3px 6px", fontSize: 9 }, onClick: removeLogo, title: "Logo entfernen" }, "\u2715"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), window.electronAPI && /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: () => setShowUpdateModal(true) }, updateStatus.type === "downloaded" ? "\u2193 Update bereit" : updateStatus.type === "available" ? "\u2191 Update verf\xFCgbar" : "\u2191 Updates"), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, color: "#f5a623" }, onClick: () => setShowDonateModal(true) }, "\u2615"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
         key: k,
@@ -46363,32 +46379,29 @@ Fortfahren?`);
     const inpBorder = (ok) => ok === true ? { borderColor: "#2ecc71" } : ok === false ? { borderColor: "#e74c3c" } : {};
     const cellBg = (ok) => ({ ...S.td, background: ok === true ? "rgba(46,204,113,0.12)" : ok === false ? "rgba(231,76,60,0.12)" : "transparent" });
     const exportInspectionPDF = () => {
-      const pw = window.open("", "_blank", "width=920,height=800");
-      if (!pw) {
-        alert("Popup-Blocker aktiv \u2013 bitte erlauben.");
-        return;
-      }
-      const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const pdfChk = (val, lo, hi) => {
-        if (val === "" || val === void 0 || val === null) return "";
-        const n = parseFloat(val);
-        if (isNaN(n)) return "";
-        if (lo !== void 0 && n < lo) return "bad";
-        if (hi !== void 0 && n > hi) return "bad";
-        return "ok";
-      };
-      const pdfChkAll = (vals, lo, hi) => {
-        const vs = vals.filter((v) => v !== "");
-        if (!vs.length) return "";
-        return vs.some((v) => pdfChk(v, lo, hi) === "bad") ? "bad" : "ok";
-      };
-      const badge = (r) => r === "ok" ? `<span class="ok">\u2713 ok</span>` : r === "bad" ? `<span class="bad">\u2715 Mangel</span>` : `<span class="muted">\u2013</span>`;
-      const sichtBadge = (v) => v === true ? `<span class="ok">\u2713 ok</span>` : `<span class="muted">\u2013</span>`;
-      const fv = (...vals) => vals.filter((v) => v !== "").map((v) => esc(v) + "&thinsp;V").join(" / ") || "\u2013";
-      const css = `:root{--ep-accent:#f5a623;--ep-dark:#1c2127;--ep-ink:#1c2127;--ep-ink2:#4a5159;--ep-ink3:#7a8290;--ep-rule:#c8ccd1;--ep-rule2:#e6e9ec;--ep-band:#f3f4f6;--ep-paper:#ffffff;--ep-ok:#1c7a3e;--ep-bad:#b91c1c;--ep-warn:#8a5500;--ep-badrow:#fcf2f2;--ep-warnrow:#fdf7e6;--ep-font:'Segoe UI',system-ui,-apple-system,sans-serif;--ep-pad-x:44px;--ep-row-pad:4px 10px;--ep-gap-y:10px}
+      try {
+        const _cl = localStorage.getItem("sp_corp_logo") || "";
+        const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const pdfChk = (val, lo, hi) => {
+          if (val === "" || val === void 0 || val === null) return "";
+          const n = parseFloat(val);
+          if (isNaN(n)) return "";
+          if (lo !== void 0 && n < lo) return "bad";
+          if (hi !== void 0 && n > hi) return "bad";
+          return "ok";
+        };
+        const pdfChkAll = (vals, lo, hi) => {
+          const vs = vals.filter((v) => v !== "");
+          if (!vs.length) return "";
+          return vs.some((v) => pdfChk(v, lo, hi) === "bad") ? "bad" : "ok";
+        };
+        const badge = (r) => r === "ok" ? `<span class="ok">\u2713 ok</span>` : r === "bad" ? `<span class="bad">\u2715 Mangel</span>` : `<span class="muted">\u2013</span>`;
+        const sichtBadge = (v) => v === true ? `<span class="ok">\u2713 ok</span>` : `<span class="muted">\u2013</span>`;
+        const fv = (...vals) => vals.filter((v) => v !== "").map((v) => esc(v) + "&thinsp;V").join(" / ") || "\u2013";
+        const css = `:root{--ep-accent:#f5a623;--ep-dark:#1c2127;--ep-ink:#1c2127;--ep-ink2:#4a5159;--ep-ink3:#7a8290;--ep-rule:#c8ccd1;--ep-rule2:#e6e9ec;--ep-band:#f3f4f6;--ep-paper:#ffffff;--ep-ok:#1c7a3e;--ep-bad:#b91c1c;--ep-warn:#8a5500;--ep-badrow:#fcf2f2;--ep-warnrow:#fdf7e6;--ep-font:'Segoe UI',system-ui,-apple-system,sans-serif;--ep-pad-x:44px;--ep-row-pad:4px 10px;--ep-gap-y:10px}
 html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box-sizing:border-box}
 .ep-stage{min-height:100vh;padding:28px 0 80px;display:flex;flex-direction:column;align-items:center;gap:18px}
-.page{width:794px;height:1123px;background:var(--ep-paper);color:var(--ep-ink);font-size:9.5px;line-height:1.45;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,.05),0 18px 40px -22px rgba(0,0,0,.4)}
+.page{width:794px;min-height:1123px;background:var(--ep-paper);color:var(--ep-ink);font-size:9.5px;line-height:1.45;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(0,0,0,.05),0 18px 40px -22px rgba(0,0,0,.4)}
 .page-body{flex:1;padding:10px var(--ep-pad-x) 0;display:flex;flex-direction:column;min-height:0}.spacer-auto{flex:1;min-height:8px}
 .page-h,.page-f{display:flex;justify-content:space-between;align-items:center;padding:8px var(--ep-pad-x);font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase}
 .page-h{border-bottom:1px solid var(--ep-rule)}.page-f{border-top:1px solid var(--ep-rule);padding-bottom:10px;padding-top:6px;letter-spacing:.08em}.page-h strong{color:var(--ep-ink)}
@@ -46405,61 +46418,63 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 .num-row{display:grid;grid-template-columns:30px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2)}.num-row.row-last{border-bottom:none}
 .confirm{padding:8px 12px;color:var(--ep-ink2);line-height:1.55}.confirm strong{color:var(--ep-ink)}.bemerkung{padding:var(--ep-row-pad);background:var(--ep-warnrow)}.bemerkung.small{background:transparent;font-size:9px;color:var(--ep-ink2);line-height:1.5;padding:6px 10px}
 .sign-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--ep-rule2)}.sign{padding:8px 12px}.sign.sign-r{border-left:1px solid var(--ep-rule2)}.sign-role{font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:28px}.sign-line{border-bottom:1px solid var(--ep-ink);height:24px}.sign-name{margin-top:4px;font-weight:600}.sign .muted{font-size:9px}
-@media print{html,body,.ep-stage{background:#fff;padding:0;gap:0}.page{box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}@page{size:A4 portrait;margin:0}`;
-      const sorted2 = (() => {
-        const result = [];
-        const visited = /* @__PURE__ */ new Set();
-        const visit = (parentId) => {
-          alphaSort(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
+@media print{html,body,.ep-stage{background:#fff;padding:0;gap:0}.page{box-shadow:none;break-after:page;page-break-after:always}.page:last-child{break-after:auto;page-break-after:auto}}@page{size:A4 portrait;margin:0}`;
+        const sorted2 = (() => {
+          const result = [];
+          const visited = /* @__PURE__ */ new Set();
+          const visit = (parentId) => {
+            alphaSort(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
+              if (!visited.has(inst.id)) {
+                visited.add(inst.id);
+                result.push(inst);
+                visit(inst.id);
+              }
+            });
+          };
+          alphaSort(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
             if (!visited.has(inst.id)) {
               visited.add(inst.id);
               result.push(inst);
               visit(inst.id);
             }
           });
-        };
-        alphaSort(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
-          if (!visited.has(inst.id)) {
-            visited.add(inst.id);
-            result.push(inst);
-            visit(inst.id);
-          }
+          return result;
+        })();
+        const total = sorted2.length;
+        const hdr = `<strong>Stromplaner</strong> \xB7 Errichtungspr\xFCfung \xB7 DIN VDE 0100-600`;
+        const subR = `${esc(meta?.production || "Planung")} \xB7 ${esc(inspMeta.date || "")}`;
+        const ftrL = esc(inspMeta.inspector || "\u2013");
+        const ftrC = `EP-${(meta?.production || "Plan").replace(/[^A-Za-z0-9]/g, "-").slice(0, 30)}`;
+        const _logoHtml = _cl ? `<img src="${_cl}" style="height:20px;max-width:90px;object-fit:contain;vertical-align:middle">` : "";
+        const pageH = _logoHtml ? `<header class="page-h"><span>${hdr}</span><span style="display:flex;align-items:center;gap:8px"><span>${subR}</span>${_logoHtml}</span></header>` : `<header class="page-h"><span>${hdr}</span><span>${subR}</span></header>`;
+        const maengel = [];
+        sorted2.forEach((inst) => {
+          const ir = getIR(inst.id);
+          if (ir.bemerkung) maengel.push({ inst, item: ir.bemerkung, type: ir.bemerkungSchwere || "bad" });
         });
-        return result;
-      })();
-      const total = sorted2.length;
-      const hdr = `<strong>Stromplaner</strong> \xB7 Errichtungspr\xFCfung \xB7 DIN VDE 0100-600`;
-      const subR = `${esc(meta?.production || "Planung")} \xB7 ${esc(inspMeta.date || "")}`;
-      const ftrL = esc(inspMeta.inspector || "\u2013");
-      const ftrC = `EP-${(meta?.production || "Plan").replace(/[^A-Za-z0-9]/g, "-").slice(0, 30)}`;
-      const maengel = [];
-      sorted2.forEach((inst) => {
-        const ir = getIR(inst.id);
-        if (ir.bemerkung) maengel.push({ inst, item: ir.bemerkung, type: ir.bemerkungSchwere || "bad" });
-      });
-      let totalPunkte = 0, totalMangel = 0, totalRCD = 0;
-      sorted2.forEach((inst) => {
-        const ir = getIR(inst.id);
-        const type = boxTypeById[inst.typeId];
-        const outlets = type ? sortOutlets(type.outlets) : [];
-        totalPunkte += (ir.sicht || []).filter((v) => v !== null).length;
-        if (ir.bemerkung) totalMangel++;
-        (type?.rcds || []).forEach((rcd) => {
-          if (getOR(inst.id, `rcd_${rcd.id}`).rcdT1 !== "") totalRCD++;
-        });
-        outlets.filter((o) => o.protection === "RCBO").forEach((o) => {
-          if (isMulticore(o.connector)) {
-            const sl = o.mcSlots || 6;
-            for (let s = 1; s <= sl; s++) {
-              if (getOR(inst.id, `${o.id}_s${s}`).rcdT1 !== "") totalRCD++;
+        let totalPunkte = 0, totalMangel = 0, totalRCD = 0;
+        sorted2.forEach((inst) => {
+          const ir = getIR(inst.id);
+          const type = boxTypeById[inst.typeId];
+          const outlets = type ? sortOutlets(type.outlets) : [];
+          totalPunkte += (ir.sicht || []).filter((v) => v !== null).length;
+          if (ir.bemerkung) totalMangel++;
+          (type?.rcds || []).forEach((rcd) => {
+            if (getOR(inst.id, `rcd_${rcd.id}`).rcdT1 !== "") totalRCD++;
+          });
+          outlets.filter((o) => o.protection === "RCBO").forEach((o) => {
+            if (isMulticore(o.connector)) {
+              const sl = o.mcSlots || 6;
+              for (let s = 1; s <= sl; s++) {
+                if (getOR(inst.id, `${o.id}_s${s}`).rcdT1 !== "") totalRCD++;
+              }
+            } else {
+              if (getOR(inst.id, o.id).rcdT1 !== "") totalRCD++;
             }
-          } else {
-            if (getOR(inst.id, o.id).rcdT1 !== "") totalRCD++;
-          }
+          });
         });
-      });
-      let pages = `<article class="page">
-  <header class="page-h"><span>${hdr}</span><span>${subR}</span></header>
+        let pages = `<article class="page">
+  ${pageH}
   <main class="page-body">
     <div class="page-title"><div class="kicker">Errichtungspr\xFCfung \xB7 DIN VDE 0100-600 \xB7 mobile Stromverteilung</div>
       <h1>${esc(meta?.production || "Planung")}<span class="muted"> \xB7 ${esc(inspMeta.address || inspMeta.location || "")}</span></h1></div>
@@ -46483,50 +46498,129 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       <div class="block-body">
         <div class="thead" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span>Bezeichnung</span><span>Typ</span><span>Eingang</span><span>H\xE4ngt an</span></div>
         ${sorted2.map((inst, i) => {
-        const type = boxTypeById[inst.typeId];
-        const parent = inst.parentId ? instById[inst.parentId] : null;
-        const feedLbl = parent ? esc(parent.name) : inst.mainConnectionId ? esc(mainConnById[inst.mainConnectionId]?.name || "\u2013") : "\u2014 Einspeisung \u2014";
-        return `<div class="trow${i === sorted2.length - 1 ? " row-last" : ""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name || "\u2013")}</span><span class="muted">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span><span class="muted">${feedLbl}</span></div>`;
-      }).join("")}
+          const type = boxTypeById[inst.typeId];
+          const parent = inst.parentId ? instById[inst.parentId] : null;
+          const feedLbl = parent ? esc(parent.name) : inst.mainConnectionId ? esc(mainConnById[inst.mainConnectionId]?.name || "\u2013") : "\u2014 Einspeisung \u2014";
+          return `<div class="trow${i === sorted2.length - 1 ? " row-last" : ""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name || "\u2013")}</span><span class="muted">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span><span class="muted">${feedLbl}</span></div>`;
+        }).join("")}
       </div></section>
     <div class="spacer-auto"></div>
   </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / ${total + 2}</span></footer>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / PTOT</span></footer>
 </article>`;
-      sorted2.forEach((inst, instIdx) => {
-        const type = boxTypeById[inst.typeId];
-        const outlets = type ? sortOutlets(type.outlets) : [];
-        const ir = getIR(inst.id);
-        const sicht = ir.sicht || Array(6).fill(null);
-        const pdfRcdRows = [];
-        (type?.rcds || []).forEach((rcd) => pdfRcdRows.push({ rowType: "rcd", rcd, outlet: null, oid: `rcd_${rcd.id}`, rowLabel: rcd.label, iAnLimit: rcd.mA, protLabel: `RCD ${rcd.mA} mA` }));
-        outlets.filter((o) => o.protection === "RCBO").forEach((o) => {
-          if (isMulticore(o.connector)) {
-            const slots = o.mcSlots || 6;
-            for (let s = 1; s <= slots; s++) pdfRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: `${o.id}_s${s}`, rowLabel: `${o.label} \u2013 SP ${s} (${PHASES[(s - 1) % 3]})`, iAnLimit: null, protLabel: `RCBO ${o.breaker} ${o.amp}A` });
-          } else pdfRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: o.id, rowLabel: o.label, iAnLimit: null, protLabel: `RCBO ${o.breaker} ${o.amp}A` });
-        });
-        const parent = inst.parentId ? instById[inst.parentId] : null;
-        const n = instIdx + 1;
-        const pageNum = String(n + 1).padStart(2, "0");
-        const totalPages = total + 2;
-        const hasMangel = !!(ir.bemerkung && (ir.bemerkungSchwere || "bad") === "bad");
-        const hasHinweis = !!(ir.bemerkung && ir.bemerkungSchwere === "warn");
-        const befundCls = hasMangel ? "bad" : hasHinweis ? "warn" : "ok";
-        const befundLbl = hasMangel ? "\u2715 Mangel" : hasHinweis ? "! Hinweis" : "\u2713 Bestanden";
-        const phaseR = ir.phaseRot === "rechts" ? "ok" : ir.phaseRot === "links" ? "bad" : "";
-        const ckVLN = pdfChkAll([ir.voltL1N, ir.voltL2N, ir.voltL3N], 207, 244);
-        const ckVLL = pdfChkAll([ir.voltL1L2, ir.voltL2L3, ir.voltL1L3], 360, 424);
-        const ckVNPE = pdfChk(ir.voltNPE, void 0, 1);
-        const ckVLPE = pdfChkAll([ir.voltL1PE, ir.voltL2PE, ir.voltL3PE], 207, 244);
-        let secIdx = 4;
-        const rcdSec = pdfRcdRows.length ? secIdx++ : 0;
-        const abgSec = secIdx++;
-        const cableRows = outlets.filter((o) => getOR(inst.id, o.id).cableLen !== "");
-        const cableSec = cableRows.length ? secIdx++ : 0;
-        const bemSec = ir.bemerkung ? secIdx : 0;
-        pages += `<article class="page">
-  <header class="page-h"><span>${hdr}</span><span>${subR}</span></header>
+        let pdfPC = 1;
+        sorted2.forEach((inst, instIdx) => {
+          const type = boxTypeById[inst.typeId];
+          const outlets = type ? sortOutlets(type.outlets) : [];
+          const ir = getIR(inst.id);
+          const sicht = ir.sicht || Array(6).fill(null);
+          const pdfRcdRows = [];
+          (type?.rcds || []).forEach((rcd) => pdfRcdRows.push({ rowType: "rcd", rcd, outlet: null, oid: `rcd_${rcd.id}`, rowLabel: rcd.label, iAnLimit: rcd.mA, protLabel: `RCD ${rcd.mA} mA` }));
+          outlets.filter((o) => o.protection === "RCBO").forEach((o) => {
+            if (isMulticore(o.connector)) {
+              const slots = o.mcSlots || 6;
+              for (let s = 1; s <= slots; s++) pdfRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: `${o.id}_s${s}`, rowLabel: `${o.label} \u2013 SP ${s} (${PHASES[(s - 1) % 3]})`, iAnLimit: null, protLabel: `RCBO ${o.breaker} ${o.amp}A` });
+            } else pdfRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: o.id, rowLabel: o.label, iAnLimit: null, protLabel: `RCBO ${o.breaker} ${o.amp}A` });
+          });
+          const parent = inst.parentId ? instById[inst.parentId] : null;
+          const n = instIdx + 1;
+          const hasMangel = !!(ir.bemerkung && (ir.bemerkungSchwere || "bad") === "bad");
+          const hasHinweis = !!(ir.bemerkung && ir.bemerkungSchwere === "warn");
+          const phaseR = ir.phaseRot === "rechts" ? "ok" : ir.phaseRot === "links" ? "bad" : "";
+          const ckVLN = pdfChkAll([ir.voltL1N, ir.voltL2N, ir.voltL3N], 207, 244);
+          const ckVLL = pdfChkAll([ir.voltL1L2, ir.voltL2L3, ir.voltL1L3], 360, 424);
+          const ckVNPE = pdfChk(ir.voltNPE, void 0, 1);
+          const ckVLPE = pdfChkAll([ir.voltL1PE, ir.voltL2PE, ir.voltL3PE], 207, 244);
+          let secIdx = 4;
+          const rcdSec = pdfRcdRows.length ? secIdx++ : 0;
+          const abgSec = secIdx++;
+          const cableRows = outlets.filter((o) => getOR(inst.id, o.id).cableLen !== "");
+          const cableSec = cableRows.length ? secIdx++ : 0;
+          const bemSec = ir.bemerkung ? secIdx : 0;
+          const abgRows = [];
+          outlets.forEach((o) => {
+            if (isMulticore(o.connector)) {
+              const slots = o.mcSlots || 6;
+              for (let s = 1; s <= slots; s++) {
+                const oid = `${o.id}_s${s}`;
+                const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id && p.mcSlot === s);
+                const lbl = pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
+                abgRows.push({ oid, label: `${o.label} SP${s}`, lbl, amp: o.amp || 16, is3p: false, hasChild: false, hasRcd: o.protection === "RCBO" || !!o.rcdId });
+              }
+            } else {
+              const childInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === o.id);
+              const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id);
+              const lbl = childInsts.length ? childInsts[0].name : pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
+              abgRows.push({ oid: o.id, label: o.label, lbl, amp: o.amp || type?.feedAmp || 16, is3p: is3ph(o.connector), hasChild: childInsts.length > 0, childInstIds: childInsts.map((ci) => ci.id), hasRcd: o.protection === "RCBO" || !!o.rcdId });
+            }
+          });
+          const _rcdH = pdfRcdRows.length ? 72 + pdfRcdRows.length * 30 : 0;
+          const _rowsFst = Math.max(4, Math.floor((1018 - 420 - _rcdH - 72) / 30));
+          const _rowsCnt = Math.max(4, Math.floor((1018 - 50 - 72) / 30));
+          const _chunks = [];
+          const _todo = [...abgRows];
+          _chunks.push(_todo.splice(0, _rowsFst));
+          while (_todo.length) _chunks.push(_todo.splice(0, _rowsCnt));
+          const pdfWorstZs = (...vs) => {
+            const v = vs.filter((x) => x !== "").map(Number);
+            return v.length ? Math.max(...v).toFixed(2) : "";
+          };
+          const pdfWorstIk = (...vs) => {
+            const v = vs.filter((x) => x !== "").map(Number);
+            return v.length ? Math.min(...v).toFixed(0) : "";
+          };
+          const renderChunk = (chunk, isLastChunk) => `<section class="block"><header class="bar"><span><strong>${n}.${abgSec} \xB7 Abg\xE4nge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (\u03A9)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">\u2265 In\xD710 A</span></span><span class="r">Befund</span></div>
+        ${chunk.map(({ oid, label, lbl, amp, is3p, hasChild, childInstIds, hasRcd }, i) => {
+            const or = getOR(inst.id, oid);
+            const ikLimO = amp * 10;
+            const zsLimO = hasRcd ? 2 : parseFloat((230 / (amp * 10)).toFixed(2));
+            const last = i === chunk.length - 1 && isLastChunk ? " row-last" : "";
+            if (or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
+            if (hasChild) {
+              const d = childDerived(childInstIds || []);
+              const hasOv = !!(or.zsOverride || or.ikOverride);
+              const zsVal2 = or.zsOverride || d.zs || "";
+              const ikVal2 = or.ikOverride || d.ik || "";
+              const ckZs = zsVal2 ? pdfChk(zsVal2, void 0, zsLimO) : "";
+              const ckIk = ikVal2 ? pdfChk(ikVal2, ikLimO, void 0) : "";
+              const ck = ckIk === "bad" || ckZs === "bad" ? "bad" : ckIk === "ok" || ckZs === "ok" ? "ok" : "";
+              const uvNote = `<span style="font-size:8px;color:#888"> (UV)</span>`;
+              const ovMark = hasOv ? `<span style="font-size:8px;color:#e67e22"> \u270E</span>` : "";
+              const lblTxt = hasOv ? `Separat gemessen am Eingang \u2013 abgel. Wert (${d.zs || "\u2013"} \u03A9 / ${d.ik || "\u2013"} A) \xFCberschritt Grenzwert (DIN VDE 0100-600 \xA7643)` : `Messung aus angeschlossener Unterverteilung (ung\xFCnstigster Punkt, DIN VDE 0100-600 \xA7643)`;
+              return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="muted" style="font-style:italic;min-width:0">${lblTxt}</span><span class="r">${zsVal2 ? esc(zsVal2) + " &Omega;" + (hasOv ? ovMark : uvNote) : "\u2013"}</span><span class="r"><strong>${ikVal2 ? esc(ikVal2) + " A" + (hasOv ? "" : uvNote) : "\u2013"}</strong>${ikVal2 ? `<br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span>` : ""}</span><span class="r">${ck ? badge(ck) : "\u2014"}</span></div>`;
+            }
+            const zsVal = is3p ? pdfWorstZs(or.zsL1, or.zsL2, or.zsL3) : or.zs || "";
+            const ikVal = is3p ? pdfWorstIk(or.ikL1, or.ikL2, or.ikL3) : or.ik || "";
+            const zsNote = is3p && zsVal ? `<br><span style="font-size:8px;color:#888">${[or.zsL1, or.zsL2, or.zsL3].filter((x) => x).join(" / ")} \u03A9</span>` : "";
+            const ikNote = is3p && ikVal ? `<br><span style="font-size:8px;color:#888">${[or.ikL1, or.ikL2, or.ikL3].filter((x) => x).join(" / ")} A</span>` : ``;
+            const ckZsO = pdfChk(zsVal, void 0, zsLimO);
+            const ckIkO = pdfChk(ikVal, ikLimO, void 0);
+            const ckO = ckIkO === "bad" || ckZsO === "bad" ? "bad" : ckIkO === "ok" || ckZsO === "ok" ? "ok" : "";
+            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span style="min-width:0">${esc(lbl)}</span><span class="r">${zsVal ? esc(zsVal) + " \u03A9" + zsNote : "\u2013"}</span><span class="r"><strong>${ikVal ? esc(ikVal) + " A" + ikNote : "\u2013"}</strong>${ikVal ? `<br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span>` : ""}</span><span class="r">${badge(ckO)}</span></div>`;
+          }).join("")}
+      </div></section>`;
+          const cableHTML = cableRows.length ? `<section class="block"><header class="bar"><span><strong>${n}.${cableSec} \xB7 Leitungen &amp; Spannungsfall</strong><span class="bar-sub">${cableRows.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span>Abgang</span><span class="r">I_N</span><span class="r">&ell; (m)</span><span class="r">A (mm&sup2;)</span><span class="r">&Delta;U (V)</span><span class="r">&Delta;U (%)</span><span class="r">Befund</span></div>
+        ${cableRows.map((o, i) => {
+            const or = getOR(inst.id, o.id);
+            const du = calcVoltDrop(o.amp, or.cableLen, or.cableA, or.cosPhi, is3ph(o.connector));
+            const befund = du ? du.pct <= 3 ? "ok" : du.pct <= 5 ? "warn" : "bad" : "";
+            return `<div class="trow${i === cableRows.length - 1 ? " row-last" : ""}" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span class="id">${esc(o.label)}</span><span class="r muted">${o.amp}A</span><span class="r">${esc(or.cableLen) || "\u2013"}&thinsp;m</span><span class="r">${esc(or.cableA) || "\u2013"}&thinsp;mm&sup2;</span><span class="r">${du ? du.V.toFixed(2) + "&thinsp;V" : "\u2013"}</span><span class="r${du && du.pct > 5 ? " bad" : du && du.pct > 3 ? " warn" : ""}"><strong>${du ? du.pct.toFixed(2) + "&thinsp;%" : "\u2013"}</strong></span><span class="r">${badge(befund)}</span></div>`;
+          }).join("")}
+      </div></section>` : "";
+          const bemHTML = ir.bemerkung ? `<section class="block"><header class="bar"><span><strong>${n}.${bemSec} \xB7 Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere || "bad") === "warn" ? `<span class="warn">! Hinweis</span>` : `<span class="bad">\u2715 Mangel</span>`}</span></header>
+      <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere || "bad") === "warn" ? "" : " row-bad"}">${esc(ir.bemerkung)}</div></div></section>` : "";
+          _chunks.forEach((chunk, ci) => {
+            pdfPC++;
+            const pNum = String(pdfPC).padStart(2, "0");
+            const isFirst = ci === 0;
+            const isLast = ci === _chunks.length - 1;
+            if (isFirst) {
+              pages += `<article class="page">
+  ${pageH}
   <main class="page-body">
     <div class="page-title"><div class="page-title-row">
       <div><div class="kicker">Kasten ${n} von ${total} \xB7 ${esc(type?.name || "")}</div>
@@ -46558,91 +46652,37 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       <div class="block-body">
         <div class="thead" style="grid-template-columns:1fr 80px 100px 90px 60px"><span>Anschluss / RCD</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">&le; Nennwert</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">&le; 300 ms</span></span><span class="r">OK</span></div>
         ${pdfRcdRows.map(({ rowType, rcd, outlet, oid, rowLabel, iAnLimit, protLabel }, i) => {
-          const or = getOR(inst.id, oid);
-          const okT = pdfChk(or.rcdT1, void 0, 300);
-          const okIan = iAnLimit ? pdfChk(or.rcdIan, void 0, iAnLimit) : "";
-          const bgStyle = rowType === "rcd" ? "background:rgba(245,166,35,0.04);" : "";
-          return `<div class="trow${i === pdfRcdRows.length - 1 ? " row-last" : ""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px 60px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan === "bad" ? " bad" : ""}"><strong>${esc(or.rcdIan) || "\u2013"}</strong>${iAnLimit ? `<br><span class="muted" style="font-size:8px">&le; ${iAnLimit}&thinsp;mA</span>` : ""}</span><span class="r${okT === "bad" ? " bad" : ""}"><strong>${esc(or.rcdT1) || "\u2013"}</strong></span><span class="r">${or.ok ? `<span class="ok">\u2713 ok</span>` : `<span class="muted">\u2013</span>`}</span></div>`;
-        }).join("")}
+                const or = getOR(inst.id, oid);
+                const okT = pdfChk(or.rcdT1, void 0, 300);
+                const okIan = iAnLimit ? pdfChk(or.rcdIan, void 0, iAnLimit) : "";
+                const bgStyle = rowType === "rcd" ? "background:rgba(245,166,35,0.04);" : "";
+                return `<div class="trow${i === pdfRcdRows.length - 1 ? " row-last" : ""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px 60px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan === "bad" ? " bad" : ""}"><strong>${esc(or.rcdIan) || "\u2013"}</strong>${iAnLimit ? `<br><span class="muted" style="font-size:8px">&le; ${iAnLimit}&thinsp;mA</span>` : ""}</span><span class="r${okT === "bad" ? " bad" : ""}"><strong>${esc(or.rcdT1) || "\u2013"}</strong></span><span class="r">${or.ok ? `<span class="ok">\u2713 ok</span>` : `<span class="muted">\u2013</span>`}</span></div>`;
+              }).join("")}
       </div></section>` : ""}
-    ${(() => {
-          const abgRows = [];
-          outlets.forEach((o) => {
-            if (isMulticore(o.connector)) {
-              const slots = o.mcSlots || 6;
-              for (let s = 1; s <= slots; s++) {
-                const oid = `${o.id}_s${s}`;
-                const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id && p.mcSlot === s);
-                const lbl = pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
-                abgRows.push({ oid, label: `${o.label} SP${s}`, lbl, amp: o.amp || 16, is3p: false, hasChild: false, hasRcd: o.protection === "RCBO" || !!o.rcdId });
-              }
+    ${renderChunk(chunk, isLast)}
+    ${isLast ? cableHTML : ""}
+    ${isLast ? bemHTML : ""}
+  </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pNum} / PTOT</span></footer>
+</article>`;
             } else {
-              const childInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === o.id);
-              const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id);
-              const lbl = childInsts.length ? childInsts[0].name : pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
-              abgRows.push({ oid: o.id, label: o.label, lbl, amp: o.amp || type?.feedAmp || 16, is3p: is3ph(o.connector), hasChild: childInsts.length > 0, childInstIds: childInsts.map((ci) => ci.id), hasRcd: o.protection === "RCBO" || !!o.rcdId });
+              pages += `<article class="page">
+  ${pageH}
+  <main class="page-body">
+    <div style="margin:4px 0 8px"><div class="kicker">${esc(inst.name)} \xB7 Kasten ${n} von ${total} \u2013 Fortsetzung</div></div>
+    ${renderChunk(chunk, isLast)}
+    ${isLast ? cableHTML : ""}
+    ${isLast ? bemHTML : ""}
+  </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pNum} / PTOT</span></footer>
+</article>`;
             }
           });
-          const pdfWorstZs = (...vs) => {
-            const v = vs.filter((x) => x !== "").map(Number);
-            return v.length ? Math.max(...v).toFixed(2) : "";
-          };
-          const pdfWorstIk = (...vs) => {
-            const v = vs.filter((x) => x !== "").map(Number);
-            return v.length ? Math.min(...v).toFixed(0) : "";
-          };
-          return `<section class="block"><header class="bar"><span><strong>${n}.${abgSec} \xB7 Abg\xE4nge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (\u03A9)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">\u2265 In\xD710 A</span></span><span class="r">Befund</span></div>
-        ${abgRows.map(({ oid, label, lbl, amp, is3p, hasChild, childInstIds, hasRcd }, i) => {
-            const or = getOR(inst.id, oid);
-            const ikLimO = amp * 10;
-            const zsLimO = hasRcd ? 2 : parseFloat((230 / (amp * 10)).toFixed(2));
-            const last = i === abgRows.length - 1 ? " row-last" : "";
-            if (or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
-            if (hasChild) {
-              const d = childDerived(childInstIds || []);
-              const hasOv = !!(or.zsOverride || or.ikOverride);
-              const zsVal2 = or.zsOverride || d.zs || "";
-              const ikVal2 = or.ikOverride || d.ik || "";
-              const ckZs = zsVal2 ? pdfChk(zsVal2, void 0, zsLimO) : "";
-              const ckIk = ikVal2 ? pdfChk(ikVal2, ikLimO, void 0) : "";
-              const ck = ckIk === "bad" || ckZs === "bad" ? "bad" : ckIk === "ok" || ckZs === "ok" ? "ok" : "";
-              const uvNote = `<span style="font-size:8px;color:#888"> (UV)</span>`;
-              const ovMark = hasOv ? `<span style="font-size:8px;color:#e67e22"> \u270E</span>` : "";
-              const lblTxt = hasOv ? `Separat gemessen am Eingang \u2013 abgel. Wert (${d.zs || "\u2013"} \u03A9 / ${d.ik || "\u2013"} A) \xFCberschritt Grenzwert (DIN VDE 0100-600 \xA7643)` : `Messung aus angeschlossener Unterverteilung (ung\xFCnstigster Punkt, DIN VDE 0100-600 \xA7643)`;
-              return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="muted" style="font-style:italic;min-width:0">${lblTxt}</span><span class="r">${zsVal2 ? esc(zsVal2) + " &Omega;" + (hasOv ? ovMark : uvNote) : "\u2013"}</span><span class="r"><strong>${ikVal2 ? esc(ikVal2) + " A" + (hasOv ? "" : uvNote) : "\u2013"}</strong>${ikVal2 ? `<br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span>` : ""}</span><span class="r">${ck ? badge(ck) : "\u2014"}</span></div>`;
-            }
-            const zsVal = is3p ? pdfWorstZs(or.zsL1, or.zsL2, or.zsL3) : or.zs || "";
-            const ikVal = is3p ? pdfWorstIk(or.ikL1, or.ikL2, or.ikL3) : or.ik || "";
-            const zsNote = is3p && zsVal ? `<br><span style="font-size:8px;color:#888">${[or.zsL1, or.zsL2, or.zsL3].filter((x) => x).join(" / ")} \u03A9</span>` : "";
-            const ikNote = is3p && ikVal ? `<br><span style="font-size:8px;color:#888">${[or.ikL1, or.ikL2, or.ikL3].filter((x) => x).join(" / ")} A</span>` : ``;
-            const ckZsO = pdfChk(zsVal, void 0, zsLimO);
-            const ckIkO = pdfChk(ikVal, ikLimO, void 0);
-            const ckO = ckIkO === "bad" || ckZsO === "bad" ? "bad" : ckIkO === "ok" || ckZsO === "ok" ? "ok" : "";
-            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span style="min-width:0">${esc(lbl)}</span><span class="r">${zsVal ? esc(zsVal) + " \u03A9" + zsNote : "\u2013"}</span><span class="r"><strong>${ikVal ? esc(ikVal) + " A" + ikNote : "\u2013"}</strong>${ikVal ? `<br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span>` : ""}</span><span class="r">${badge(ckO)}</span></div>`;
-          }).join("")}
-      </div></section>`;
-        })()}
-    ${cableRows.length ? `<section class="block"><header class="bar"><span><strong>${n}.${cableSec} \xB7 Leitungen &amp; Spannungsfall</strong><span class="bar-sub">${cableRows.length} Stk.</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span>Abgang</span><span class="r">I_N</span><span class="r">&ell; (m)</span><span class="r">A (mm&sup2;)</span><span class="r">&Delta;U (V)</span><span class="r">&Delta;U (%)</span><span class="r">Befund</span></div>
-        ${cableRows.map((o, i) => {
-          const or = getOR(inst.id, o.id);
-          const du = calcVoltDrop(o.amp, or.cableLen, or.cableA, or.cosPhi, is3ph(o.connector));
-          const befund = du ? du.pct <= 3 ? "ok" : du.pct <= 5 ? "warn" : "bad" : "";
-          return `<div class="trow${i === cableRows.length - 1 ? " row-last" : ""}" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span class="id">${esc(o.label)}</span><span class="r muted">${o.amp}A</span><span class="r">${esc(or.cableLen) || "\u2013"}&thinsp;m</span><span class="r">${esc(or.cableA) || "\u2013"}&thinsp;mm&sup2;</span><span class="r">${du ? du.V.toFixed(2) + "&thinsp;V" : "\u2013"}</span><span class="r${du && du.pct > 5 ? " bad" : du && du.pct > 3 ? " warn" : ""}"><strong>${du ? du.pct.toFixed(2) + "&thinsp;%" : "\u2013"}</strong></span><span class="r">${badge(befund)}</span></div>`;
-        }).join("")}
-      </div></section>` : ""}
-    ${ir.bemerkung ? `<section class="block"><header class="bar"><span><strong>${n}.${bemSec} \xB7 Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere || "bad") === "warn" ? `<span class="warn">! Hinweis</span>` : `<span class="bad">\u2715 Mangel</span>`}</span></header>
-      <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere || "bad") === "warn" ? "" : " row-bad"}">${esc(ir.bemerkung)}</div></div></section>` : ""}
-  </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pageNum} / ${totalPages}</span></footer>
-</article>`;
-      });
-      const lastNum = String(total + 2).padStart(2, "0");
-      pages += `<article class="page">
-  <header class="page-h"><span>${hdr}</span><span>${subR}</span></header>
+        });
+        pdfPC++;
+        const lastNum = String(pdfPC).padStart(2, "0");
+        pages += `<article class="page">
+  ${pageH}
   <main class="page-body">
     <div class="page-title"><div class="kicker">Abschluss \xB7 M\xE4ngelliste \xB7 Best\xE4tigung</div><h1>Befund &amp; Unterschrift</h1></div>
     <section class="block"><header class="bar"><span><strong>E \xB7 M\xE4ngel und Auflagen</strong><span class="bar-sub">${maengel.length} Eintr${maengel.length === 1 ? "ag" : "\xE4ge"}</span></span></header>
@@ -46658,14 +46698,19 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     <section class="block"><header class="bar"><span><strong>Hinweis</strong></span></header>
       <div class="block-body"><div class="bemerkung small">Dieses Protokoll ist im Zuge der Veranstaltung mitzuf\xFChren und bei der pr\xFCfenden Elektrofachkraft zu archivieren. Bei Erweiterung oder Umbau der Anlage ist eine erneute Pr\xFCfung der betroffenen Anlagenteile gem\xE4\xDF DIN VDE 0100-600 erforderlich.</div></div></section>
   </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${lastNum} / ${lastNum}</span></footer>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${lastNum} / PTOT</span></footer>
 </article>`;
-      pw.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspr\xFCfung \xB7 ${esc(meta?.production || "")} \xB7 ${esc(inspMeta.date || "")}</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`);
-      pw.document.close();
-      setTimeout(() => {
-        pw.focus();
-        pw.print();
-      }, 600);
+        pages = pages.replace(/PTOT/g, String(pdfPC));
+        if (!window.electronAPI?.exportInspectionPdf) {
+          alert("PDF-Export nicht verf\xFCgbar \u2013 bitte App neu starten.");
+          return;
+        }
+        window.electronAPI.exportInspectionPdf(
+          `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`
+        ).catch((err) => alert("PDF-Export Fehler: " + (err?.message || err)));
+      } catch (err) {
+        alert("PDF-Fehler: " + (err?.stack || err?.message || String(err)));
+      }
     };
     const sorted = (() => {
       const result = [];

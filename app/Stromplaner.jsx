@@ -348,6 +348,14 @@ export default function App() {
   const [activePlan,   setActivePlan]   = useState(null);
   const [inspMeta,     setInspMeta]     = useState({ inspector:"", date:new Date().toISOString().slice(0,10), time:"", equipment:"", address:"", location:"", netType:"" });
   const [inspResults,  setInspResults]  = useState({});
+  const [corpLogo,     setCorpLogo]     = useState(()=>localStorage.getItem('sp_corp_logo')||"");
+  const uploadLogo = e => {
+    const f=e.target.files?.[0]; if(!f) return;
+    const r=new FileReader();
+    r.onload=()=>{ setCorpLogo(r.result); localStorage.setItem('sp_corp_logo',r.result); };
+    r.readAsDataURL(f); e.target.value="";
+  };
+  const removeLogo = ()=>{ setCorpLogo(""); localStorage.removeItem('sp_corp_logo'); };
   const [cableCalcs,   setCableCalcs]   = useState([]);
   const [voltCalcs,    setVoltCalcs]    = useState([]);
   const [erweiterSubTab, setErweiterSubTab] = useState("dim");
@@ -665,7 +673,7 @@ export default function App() {
         <div style="height:5px;background:#eee;border-radius:3px;margin:3px 0"><div style="height:100%;width:${Math.min(pct,100)}%;background:${col};border-radius:3px"></div></div>
         <div style="font-size:9px;color:#666">${maxA?pct+"% von "+maxA+"A":""}</div></div>`;
     }).join("");
-    let body=`<h1 style="font-size:18px;margin:0 0 4px">⚡ STROMPLAN</h1>
+    let body=`${corpLogo?`<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g,'&quot;')}" style="max-height:40px;max-width:140px;object-fit:contain"></div>`:""}<h1 style="font-size:18px;margin:0 0 4px">⚡ STROMPLAN</h1>
       <div style="font-size:12px;color:#555;margin-bottom:16px">${meta.production} · ${meta.creator} · v${meta.version} · ${meta.date}</div>`;
     if(mainConns.length){
       body+=`<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Hauptanschlüsse</h2>`;
@@ -863,6 +871,11 @@ export default function App() {
     <div style={S.app}>
       <header style={S.header}>
         <div style={S.logo}>⚡ STROMPLANER</div>
+        {corpLogo&&<img src={corpLogo} alt="Logo" style={{height:26,maxWidth:100,objectFit:"contain",display:"block",marginLeft:6}}/>}
+        <label style={{...S.ghostBtn,padding:"3px 7px",fontSize:9,cursor:"pointer"}} title={corpLogo?"Logo ersetzen":"Firmenlogo hochladen"}>
+          {corpLogo?"✎ Logo":"+ Logo"}<input type="file" accept="image/*" style={{display:"none"}} onChange={uploadLogo}/>
+        </label>
+        {corpLogo&&<button style={{...S.ghostBtn,padding:"3px 6px",fontSize:9}} onClick={removeLogo} title="Logo entfernen">✕</button>}
         <div style={S.headerMeta}>{meta.production} · v{meta.version} · {meta.date}</div>
         <span style={{fontSize:10,color:"#555",marginLeft:4}} title="Automatisch gespeichert">💾 auto</span>
         <label style={S.ghostBtn}>↥ Laden<input type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/></label>
@@ -2771,9 +2784,8 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
   const inpBorder = (ok) => ok===true?{borderColor:"#2ecc71"}:ok===false?{borderColor:"#e74c3c"}:{};
   const cellBg    = (ok) => ({...S.td,background:ok===true?"rgba(46,204,113,0.12)":ok===false?"rgba(231,76,60,0.12)":"transparent"});
 
-  const exportInspectionPDF = () => {
-    const pw=window.open("","_blank","width=920,height=800");
-    if(!pw){alert("Popup-Blocker aktiv – bitte erlauben.");return;}
+  const exportInspectionPDF = () => { try {
+    const _cl=localStorage.getItem('sp_corp_logo')||"";
 
     const esc=(s)=>String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     const pdfChk=(val,lo,hi)=>{if(val===""||val===undefined||val===null)return"";const n=parseFloat(val);if(isNaN(n))return"";if(lo!==undefined&&n<lo)return"bad";if(hi!==undefined&&n>hi)return"bad";return"ok";};
@@ -2785,7 +2797,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
     const css=`:root{--ep-accent:#f5a623;--ep-dark:#1c2127;--ep-ink:#1c2127;--ep-ink2:#4a5159;--ep-ink3:#7a8290;--ep-rule:#c8ccd1;--ep-rule2:#e6e9ec;--ep-band:#f3f4f6;--ep-paper:#ffffff;--ep-ok:#1c7a3e;--ep-bad:#b91c1c;--ep-warn:#8a5500;--ep-badrow:#fcf2f2;--ep-warnrow:#fdf7e6;--ep-font:'Segoe UI',system-ui,-apple-system,sans-serif;--ep-pad-x:44px;--ep-row-pad:4px 10px;--ep-gap-y:10px}
 html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box-sizing:border-box}
 .ep-stage{min-height:100vh;padding:28px 0 80px;display:flex;flex-direction:column;align-items:center;gap:18px}
-.page{width:794px;height:1123px;background:var(--ep-paper);color:var(--ep-ink);font-size:9.5px;line-height:1.45;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,.05),0 18px 40px -22px rgba(0,0,0,.4)}
+.page{width:794px;min-height:1123px;background:var(--ep-paper);color:var(--ep-ink);font-size:9.5px;line-height:1.45;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(0,0,0,.05),0 18px 40px -22px rgba(0,0,0,.4)}
 .page-body{flex:1;padding:10px var(--ep-pad-x) 0;display:flex;flex-direction:column;min-height:0}.spacer-auto{flex:1;min-height:8px}
 .page-h,.page-f{display:flex;justify-content:space-between;align-items:center;padding:8px var(--ep-pad-x);font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase}
 .page-h{border-bottom:1px solid var(--ep-rule)}.page-f{border-top:1px solid var(--ep-rule);padding-bottom:10px;padding-top:6px;letter-spacing:.08em}.page-h strong{color:var(--ep-ink)}
@@ -2802,7 +2814,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 .num-row{display:grid;grid-template-columns:30px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2)}.num-row.row-last{border-bottom:none}
 .confirm{padding:8px 12px;color:var(--ep-ink2);line-height:1.55}.confirm strong{color:var(--ep-ink)}.bemerkung{padding:var(--ep-row-pad);background:var(--ep-warnrow)}.bemerkung.small{background:transparent;font-size:9px;color:var(--ep-ink2);line-height:1.5;padding:6px 10px}
 .sign-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--ep-rule2)}.sign{padding:8px 12px}.sign.sign-r{border-left:1px solid var(--ep-rule2)}.sign-role{font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:28px}.sign-line{border-bottom:1px solid var(--ep-ink);height:24px}.sign-name{margin-top:4px;font-weight:600}.sign .muted{font-size:9px}
-@media print{html,body,.ep-stage{background:#fff;padding:0;gap:0}.page{box-shadow:none;page-break-after:always}.page:last-child{page-break-after:auto}}@page{size:A4 portrait;margin:0}`;
+@media print{html,body,.ep-stage{background:#fff;padding:0;gap:0}.page{box-shadow:none;break-after:page;page-break-after:always}.page:last-child{break-after:auto;page-break-after:auto}}@page{size:A4 portrait;margin:0}`;
 
     // Topologische Sortierung: Einspeisepunkt → Kinder → Enkel (BFS, alphabetisch je Ebene)
     const sorted2=(() => {
@@ -2822,6 +2834,10 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     const subR=`${esc(meta?.production||"Planung")} · ${esc(inspMeta.date||"")}`;
     const ftrL=esc(inspMeta.inspector||"–");
     const ftrC=`EP-${(meta?.production||"Plan").replace(/[^A-Za-z0-9]/g,"-").slice(0,30)}`;
+    const _logoHtml=_cl?`<img src="${_cl}" style="height:20px;max-width:90px;object-fit:contain;vertical-align:middle">` : "";
+    const pageH=_logoHtml
+      ? `<header class="page-h"><span>${hdr}</span><span style="display:flex;align-items:center;gap:8px"><span>${subR}</span>${_logoHtml}</span></header>`
+      : `<header class="page-h"><span>${hdr}</span><span>${subR}</span></header>`;
 
     // Collect Mängel
     const maengel=[];
@@ -2844,7 +2860,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 
     // ── Deckblatt ──────────────────────────────────────────────────────────
     let pages=`<article class="page">
-  <header class="page-h"><span>${hdr}</span><span>${subR}</span></header>
+  ${pageH}
   <main class="page-body">
     <div class="page-title"><div class="kicker">Errichtungsprüfung · DIN VDE 0100-600 · mobile Stromverteilung</div>
       <h1>${esc(meta?.production||"Planung")}<span class="muted"> · ${esc(inspMeta.address||inspMeta.location||"")}</span></h1></div>
@@ -2871,16 +2887,18 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       </div></section>
     <div class="spacer-auto"></div>
   </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / ${total+2}</span></footer>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / PTOT</span></footer>
 </article>`;
 
     // ── Pro Kasten ────────────────────────────────────────────────────────
+    // Seitenzähler: Deckblatt = 1, Verteilerseiten ab 2, Abschluss zuletzt
+    let pdfPC=1;
     sorted2.forEach((inst,instIdx)=>{
       const type=boxTypeById[inst.typeId];
       const outlets=type?sortOutlets(type.outlets):[];
       const ir=getIR(inst.id);
       const sicht=ir.sicht||Array(6).fill(null);
-      // #16: RCD-Gruppen + RCBO im PDF
+      // RCD-Gruppen + RCBO im PDF
       const pdfRcdRows=[];
       (type?.rcds||[]).forEach(rcd=>pdfRcdRows.push({rowType:"rcd",rcd,outlet:null,oid:`rcd_${rcd.id}`,rowLabel:rcd.label,iAnLimit:rcd.mA,protLabel:`RCD ${rcd.mA} mA`}));
       outlets.filter(o=>o.protection==="RCBO").forEach(o=>{
@@ -2889,28 +2907,106 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       });
       const parent=inst.parentId?instById[inst.parentId]:null;
       const n=instIdx+1;
-      const pageNum=String(n+1).padStart(2,"0");
-      const totalPages=total+2;
       const hasMangel=!!(ir.bemerkung&&(ir.bemerkungSchwere||"bad")==="bad");
       const hasHinweis=!!(ir.bemerkung&&ir.bemerkungSchwere==="warn");
-      const befundCls=hasMangel?"bad":hasHinweis?"warn":"ok";
-      const befundLbl=hasMangel?"✕ Mangel":hasHinweis?"! Hinweis":"✓ Bestanden";
-
       const phaseR=ir.phaseRot==="rechts"?"ok":ir.phaseRot==="links"?"bad":"";
       const ckVLN=pdfChkAll([ir.voltL1N,ir.voltL2N,ir.voltL3N],207,244);
       const ckVLL=pdfChkAll([ir.voltL1L2,ir.voltL2L3,ir.voltL1L3],360,424);
       const ckVNPE=pdfChk(ir.voltNPE,undefined,1);
       const ckVLPE=pdfChkAll([ir.voltL1PE,ir.voltL2PE,ir.voltL3PE],207,244);
-
-      let secIdx=4; // starts after Stammdaten(1), Sicht(2), Mess(3)
+      let secIdx=4;
       const rcdSec=pdfRcdRows.length?secIdx++:0;
       const abgSec=secIdx++;
       const cableRows=outlets.filter(o=>getOR(inst.id,o.id).cableLen!=="");
       const cableSec=cableRows.length?secIdx++:0;
       const bemSec=ir.bemerkung?secIdx:0;
 
-      pages+=`<article class="page">
-  <header class="page-h"><span>${hdr}</span><span>${subR}</span></header>
+      // ── abgRows frühzeitig aufbauen (für Page-Split) ─────────────────────
+      const abgRows=[];
+      outlets.forEach(o=>{
+        if(isMulticore(o.connector)){
+          const slots=o.mcSlots||6;
+          for(let s=1;s<=slots;s++){
+            const oid=`${o.id}_s${s}`;
+            const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id&&p.mcSlot===s);
+            const lbl=pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–";
+            abgRows.push({oid,label:`${o.label} SP${s}`,lbl,amp:o.amp||16,is3p:false,hasChild:false,hasRcd:o.protection==="RCBO"||!!o.rcdId});
+          }
+        } else {
+          const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===o.id);
+          const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id);
+          const lbl=childInsts.length?childInsts[0].name:(pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–");
+          abgRows.push({oid:o.id,label:o.label,lbl,amp:o.amp||type?.feedAmp||16,is3p:is3ph(o.connector),hasChild:childInsts.length>0,childInstIds:childInsts.map(ci=>ci.id),hasRcd:o.protection==="RCBO"||!!o.rcdId});
+        }
+      });
+
+      // ── Page-Split: Zeilen schätzen die auf erste/Folge-Seite passen ─────
+      // Gemessene Konstanten (px): Fixsektionen (Titel+Stamm+Sicht+Mess)=420,
+      // Sektions-Overhead (Bar+Thead+Margin)=72, Zeile=30 (inkl. Phasen-Subzeile),
+      // Fortsetzungs-Titel=50
+      const _rcdH=pdfRcdRows.length?72+pdfRcdRows.length*30:0;
+      const _rowsFst=Math.max(4,Math.floor((1018-420-_rcdH-72)/30));
+      const _rowsCnt=Math.max(4,Math.floor((1018-50-72)/30));
+      const _chunks=[];const _todo=[...abgRows];
+      _chunks.push(_todo.splice(0,_rowsFst));
+      while(_todo.length)_chunks.push(_todo.splice(0,_rowsCnt));
+
+      // ── ABG-Chunk-Renderer ───────────────────────────────────────────────
+      const pdfWorstZs=(...vs)=>{const v=vs.filter(x=>x!=="").map(Number);return v.length?Math.max(...v).toFixed(2):"";};
+      const pdfWorstIk=(...vs)=>{const v=vs.filter(x=>x!=="").map(Number);return v.length?Math.min(...v).toFixed(0):"";};
+      const renderChunk=(chunk,isLastChunk)=>`<section class="block"><header class="bar"><span><strong>${n}.${abgSec} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
+        ${chunk.map(({oid,label,lbl,amp,is3p,hasChild,childInstIds,hasRcd},i)=>{
+          const or=getOR(inst.id,oid);
+          const ikLimO=amp*10;
+          const zsLimO=hasRcd?2.0:parseFloat((230/(amp*10)).toFixed(2));
+          const last=(i===chunk.length-1&&isLastChunk)?" row-last":"";
+          if(or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">–</span><span class="r muted">–</span><span class="r muted">—</span></div>`;
+          if(hasChild){
+            const d=childDerived(childInstIds||[]);
+            const hasOv=!!(or.zsOverride||or.ikOverride);
+            const zsVal=or.zsOverride||d.zs||"";
+            const ikVal=or.ikOverride||d.ik||"";
+            const ckZs=zsVal?pdfChk(zsVal,undefined,zsLimO):"";
+            const ckIk=ikVal?pdfChk(ikVal,ikLimO,undefined):"";
+            const ck=ckIk==="bad"||ckZs==="bad"?"bad":ckIk==="ok"||ckZs==="ok"?"ok":"";
+            const uvNote=`<span style="font-size:8px;color:#888"> (UV)</span>`;
+            const ovMark=hasOv?`<span style="font-size:8px;color:#e67e22"> ✎</span>`:"";
+            const lblTxt=hasOv
+              ? `Separat gemessen am Eingang – abgel. Wert (${d.zs||"–"} Ω / ${d.ik||"–"} A) überschritt Grenzwert (DIN VDE 0100-600 §643)`
+              : `Messung aus angeschlossener Unterverteilung (ungünstigster Punkt, DIN VDE 0100-600 §643)`;
+            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="muted" style="font-style:italic;min-width:0">${lblTxt}</span><span class="r">${zsVal?esc(zsVal)+" &Omega;"+(hasOv?ovMark:uvNote):"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+(hasOv?"":uvNote):"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
+          }
+          const zsVal=is3p?pdfWorstZs(or.zsL1,or.zsL2,or.zsL3):(or.zs||"");
+          const ikVal=is3p?pdfWorstIk(or.ikL1,or.ikL2,or.ikL3):(or.ik||"");
+          const zsNote=is3p&&zsVal?`<br><span style="font-size:8px;color:#888">${[or.zsL1,or.zsL2,or.zsL3].filter(x=>x).join(" / ")} Ω</span>`:"";
+          const ikNote=is3p&&ikVal?`<br><span style="font-size:8px;color:#888">${[or.ikL1,or.ikL2,or.ikL3].filter(x=>x).join(" / ")} A</span>`:``;
+          const ckZsO=pdfChk(zsVal,undefined,zsLimO);
+          const ckIkO=pdfChk(ikVal,ikLimO,undefined);
+          const ckO=ckIkO==="bad"||ckZsO==="bad"?"bad":ckIkO==="ok"||ckZsO==="ok"?"ok":"";
+          return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span style="min-width:0">${esc(lbl)}</span><span class="r">${zsVal?esc(zsVal)+" Ω"+zsNote:"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+ikNote:"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${badge(ckO)}</span></div>`;
+        }).join("")}
+      </div></section>`;
+
+      // ── Kabel + Bemerkung als HTML-Strings ───────────────────────────────
+      const cableHTML=cableRows.length?`<section class="block"><header class="bar"><span><strong>${n}.${cableSec} · Leitungen &amp; Spannungsfall</strong><span class="bar-sub">${cableRows.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span>Abgang</span><span class="r">I_N</span><span class="r">&ell; (m)</span><span class="r">A (mm&sup2;)</span><span class="r">&Delta;U (V)</span><span class="r">&Delta;U (%)</span><span class="r">Befund</span></div>
+        ${cableRows.map((o,i)=>{const or=getOR(inst.id,o.id);const du=calcVoltDrop(o.amp,or.cableLen,or.cableA,or.cosPhi,is3ph(o.connector));const befund=du?(du.pct<=3?"ok":du.pct<=5?"warn":"bad"):"";return`<div class="trow${i===cableRows.length-1?" row-last":""}" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span class="id">${esc(o.label)}</span><span class="r muted">${o.amp}A</span><span class="r">${esc(or.cableLen)||"–"}&thinsp;m</span><span class="r">${esc(or.cableA)||"–"}&thinsp;mm&sup2;</span><span class="r">${du?du.V.toFixed(2)+"&thinsp;V":"–"}</span><span class="r${du&&du.pct>5?" bad":du&&du.pct>3?" warn":""}"><strong>${du?du.pct.toFixed(2)+"&thinsp;%":"–"}</strong></span><span class="r">${badge(befund)}</span></div>`;}).join("")}
+      </div></section>`:"";
+      const bemHTML=ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${bemSec} · Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere||"bad")==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="bad">✕ Mangel</span>`}</span></header>
+      <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere||"bad")==="warn"?"":" row-bad"}">${esc(ir.bemerkung)}</div></div></section>`:"";
+
+      // ── Seiten rendern (eine pro Chunk) ──────────────────────────────────
+      _chunks.forEach((chunk,ci)=>{
+        pdfPC++;
+        const pNum=String(pdfPC).padStart(2,"0");
+        const isFirst=ci===0;
+        const isLast=ci===_chunks.length-1;
+        if(isFirst){
+          pages+=`<article class="page">
+  ${pageH}
   <main class="page-body">
     <div class="page-title"><div class="page-title-row">
       <div><div class="kicker">Kasten ${n} von ${total} · ${esc(type?.name||"")}</div>
@@ -2943,78 +3039,32 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="thead" style="grid-template-columns:1fr 80px 100px 90px 60px"><span>Anschluss / RCD</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">&le; Nennwert</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">&le; 300 ms</span></span><span class="r">OK</span></div>
         ${pdfRcdRows.map(({rowType,rcd,outlet,oid,rowLabel,iAnLimit,protLabel},i)=>{const or=getOR(inst.id,oid);const okT=pdfChk(or.rcdT1,undefined,300);const okIan=iAnLimit?pdfChk(or.rcdIan,undefined,iAnLimit):"";const bgStyle=rowType==="rcd"?"background:rgba(245,166,35,0.04);":"";return`<div class="trow${i===pdfRcdRows.length-1?" row-last":""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px 60px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan==="bad"?" bad":""}"><strong>${esc(or.rcdIan)||"–"}</strong>${iAnLimit?`<br><span class="muted" style="font-size:8px">&le; ${iAnLimit}&thinsp;mA</span>`:""}</span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
       </div></section>`:""}
-    ${(()=>{
-      // MC-Slots expandieren wie in der UI
-      const abgRows=[];
-      outlets.forEach(o=>{
-        if(isMulticore(o.connector)){
-          const slots=o.mcSlots||6;
-          for(let s=1;s<=slots;s++){
-            const oid=`${o.id}_s${s}`;
-            const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id&&p.mcSlot===s);
-            const lbl=pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–";
-            abgRows.push({oid,label:`${o.label} SP${s}`,lbl,amp:o.amp||16,is3p:false,hasChild:false,hasRcd:o.protection==="RCBO"||!!o.rcdId});
-          }
+    ${renderChunk(chunk,isLast)}
+    ${isLast?cableHTML:""}
+    ${isLast?bemHTML:""}
+  </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pNum} / PTOT</span></footer>
+</article>`;
         } else {
-          const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===o.id);
-          const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id);
-          const lbl=childInsts.length?childInsts[0].name:(pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–");
-          abgRows.push({oid:o.id,label:o.label,lbl,amp:o.amp||type?.feedAmp||16,is3p:is3ph(o.connector),hasChild:childInsts.length>0,childInstIds:childInsts.map(ci=>ci.id),hasRcd:o.protection==="RCBO"||!!o.rcdId});
+          pages+=`<article class="page">
+  ${pageH}
+  <main class="page-body">
+    <div style="margin:4px 0 8px"><div class="kicker">${esc(inst.name)} · Kasten ${n} von ${total} – Fortsetzung</div></div>
+    ${renderChunk(chunk,isLast)}
+    ${isLast?cableHTML:""}
+    ${isLast?bemHTML:""}
+  </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pNum} / PTOT</span></footer>
+</article>`;
         }
       });
-      const pdfWorstZs=(...vs)=>{const v=vs.filter(x=>x!=="").map(Number);return v.length?Math.max(...v).toFixed(2):"";};
-      const pdfWorstIk=(...vs)=>{const v=vs.filter(x=>x!=="").map(Number);return v.length?Math.min(...v).toFixed(0):"";};
-      return `<section class="block"><header class="bar"><span><strong>${n}.${abgSec} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
-        ${abgRows.map(({oid,label,lbl,amp,is3p,hasChild,childInstIds,hasRcd},i)=>{
-          const or=getOR(inst.id,oid);
-          const ikLimO=amp*10;
-          const zsLimO=hasRcd?2.0:parseFloat((230/(amp*10)).toFixed(2));
-          const last=i===abgRows.length-1?" row-last":"";
-          if(or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">–</span><span class="r muted">–</span><span class="r muted">—</span></div>`;
-          if(hasChild){
-            const d=childDerived(childInstIds||[]);
-            const hasOv=!!(or.zsOverride||or.ikOverride);
-            const zsVal=or.zsOverride||d.zs||"";
-            const ikVal=or.ikOverride||d.ik||"";
-            const ckZs=zsVal?pdfChk(zsVal,undefined,zsLimO):"";
-            const ckIk=ikVal?pdfChk(ikVal,ikLimO,undefined):"";
-            const ck=ckIk==="bad"||ckZs==="bad"?"bad":ckIk==="ok"||ckZs==="ok"?"ok":"";
-            const uvNote=`<span style="font-size:8px;color:#888"> (UV)</span>`;
-            const ovMark=hasOv?`<span style="font-size:8px;color:#e67e22"> ✎</span>`:"";
-            const lblTxt=hasOv
-              ? `Separat gemessen am Eingang – abgel. Wert (${d.zs||"–"} Ω / ${d.ik||"–"} A) überschritt Grenzwert (DIN VDE 0100-600 §643)`
-              : `Messung aus angeschlossener Unterverteilung (ungünstigster Punkt, DIN VDE 0100-600 §643)`;
-            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="muted" style="font-style:italic;min-width:0">${lblTxt}</span><span class="r">${zsVal?esc(zsVal)+" &Omega;"+(hasOv?ovMark:uvNote):"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+(hasOv?"":uvNote):"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${ck?badge(ck):"—"}</span></div>`;
-          }
-          const zsVal=is3p?pdfWorstZs(or.zsL1,or.zsL2,or.zsL3):(or.zs||"");
-          const ikVal=is3p?pdfWorstIk(or.ikL1,or.ikL2,or.ikL3):(or.ik||"");
-          const zsNote=is3p&&zsVal?`<br><span style="font-size:8px;color:#888">${[or.zsL1,or.zsL2,or.zsL3].filter(x=>x).join(" / ")} Ω</span>`:"";
-          const ikNote=is3p&&ikVal?`<br><span style="font-size:8px;color:#888">${[or.ikL1,or.ikL2,or.ikL3].filter(x=>x).join(" / ")} A</span>`:``;
-          const ckZsO=pdfChk(zsVal,undefined,zsLimO);
-          const ckIkO=pdfChk(ikVal,ikLimO,undefined);
-          const ckO=ckIkO==="bad"||ckZsO==="bad"?"bad":ckIkO==="ok"||ckZsO==="ok"?"ok":"";
-          return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span style="min-width:0">${esc(lbl)}</span><span class="r">${zsVal?esc(zsVal)+" Ω"+zsNote:"–"}</span><span class="r"><strong>${ikVal?esc(ikVal)+" A"+ikNote:"–"}</strong>${ikVal?`<br><span class="muted" style="font-size:8px">≥ ${ikLimO} A</span>`:""}</span><span class="r">${badge(ckO)}</span></div>`;
-        }).join("")}
-      </div></section>`;
-    })()}
-    ${cableRows.length?`<section class="block"><header class="bar"><span><strong>${n}.${cableSec} · Leitungen &amp; Spannungsfall</strong><span class="bar-sub">${cableRows.length} Stk.</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span>Abgang</span><span class="r">I_N</span><span class="r">&ell; (m)</span><span class="r">A (mm&sup2;)</span><span class="r">&Delta;U (V)</span><span class="r">&Delta;U (%)</span><span class="r">Befund</span></div>
-        ${cableRows.map((o,i)=>{const or=getOR(inst.id,o.id);const du=calcVoltDrop(o.amp,or.cableLen,or.cableA,or.cosPhi,is3ph(o.connector));const befund=du?(du.pct<=3?"ok":du.pct<=5?"warn":"bad"):"";return`<div class="trow${i===cableRows.length-1?" row-last":""}" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span class="id">${esc(o.label)}</span><span class="r muted">${o.amp}A</span><span class="r">${esc(or.cableLen)||"–"}&thinsp;m</span><span class="r">${esc(or.cableA)||"–"}&thinsp;mm&sup2;</span><span class="r">${du?du.V.toFixed(2)+"&thinsp;V":"–"}</span><span class="r${du&&du.pct>5?" bad":du&&du.pct>3?" warn":""}"><strong>${du?du.pct.toFixed(2)+"&thinsp;%":"–"}</strong></span><span class="r">${badge(befund)}</span></div>`;}).join("")}
-      </div></section>`:""}
-    ${ir.bemerkung?`<section class="block"><header class="bar"><span><strong>${n}.${bemSec} · Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere||"bad")==="warn"?`<span class="warn">! Hinweis</span>`:`<span class="bad">✕ Mangel</span>`}</span></header>
-      <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere||"bad")==="warn"?"":" row-bad"}">${esc(ir.bemerkung)}</div></div></section>`:""}
-  </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pageNum} / ${totalPages}</span></footer>
-</article>`;
     });
 
     // ── Abschluss ────────────────────────────────────────────────────────
-    const lastNum=String(total+2).padStart(2,"0");
+    pdfPC++;
+    const lastNum=String(pdfPC).padStart(2,"0");
     pages+=`<article class="page">
-  <header class="page-h"><span>${hdr}</span><span>${subR}</span></header>
+  ${pageH}
   <main class="page-body">
     <div class="page-title"><div class="kicker">Abschluss · Mängelliste · Bestätigung</div><h1>Befund &amp; Unterschrift</h1></div>
     <section class="block"><header class="bar"><span><strong>E · Mängel und Auflagen</strong><span class="bar-sub">${maengel.length} Eintr${maengel.length===1?"ag":"äge"}</span></span></header>
@@ -3030,13 +3080,19 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     <section class="block"><header class="bar"><span><strong>Hinweis</strong></span></header>
       <div class="block-body"><div class="bemerkung small">Dieses Protokoll ist im Zuge der Veranstaltung mitzuführen und bei der prüfenden Elektrofachkraft zu archivieren. Bei Erweiterung oder Umbau der Anlage ist eine erneute Prüfung der betroffenen Anlagenteile gemäß DIN VDE 0100-600 erforderlich.</div></div></section>
   </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${lastNum} / ${lastNum}</span></footer>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${lastNum} / PTOT</span></footer>
 </article>`;
+    // Platzhalter durch tatsächliche Gesamtseitenzahl ersetzen
+    pages=pages.replace(/PTOT/g,String(pdfPC));
 
-    pw.document.write(`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungsprüfung · ${esc(meta?.production||"")} · ${esc(inspMeta.date||"")}</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`);
-    pw.document.close();
-    setTimeout(()=>{pw.focus();pw.print();},600);
-  };
+    if(!window.electronAPI?.exportInspectionPdf){
+      alert("PDF-Export nicht verfügbar – bitte App neu starten.");
+      return;
+    }
+    window.electronAPI.exportInspectionPdf(
+      `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`
+    ).catch(err=>alert("PDF-Export Fehler: "+(err?.message||err)));
+  } catch(err){ alert("PDF-Fehler: "+(err?.stack||err?.message||String(err))); } };
 
   // Topologische Sortierung: Einspeisepunkt → Kinder → Enkel (BFS, alphabetisch je Ebene)
   const sorted = (()=>{

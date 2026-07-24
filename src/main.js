@@ -1,8 +1,9 @@
-const { app, BrowserWindow, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const root = app.getAppPath();
 
@@ -120,6 +121,41 @@ function setupAutoUpdater(win) {
 }
 
 ipcMain.handle('app-version', () => app.getVersion());
+
+ipcMain.handle('export-inspection-pdf', async (_event, html) => {
+  const tmpPath = path.join(os.tmpdir(), `ep-${Date.now()}.html`);
+  let win;
+  try {
+    const parent = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible());
+    const { filePath, canceled } = await dialog.showSaveDialog(parent, {
+      title: 'Prüfprotokoll speichern',
+      defaultPath: 'Errichtungspruefung.pdf',
+      filters: [{ name: 'PDF-Datei', extensions: ['pdf'] }],
+    });
+    if (canceled || !filePath) return null;
+
+    fs.writeFileSync(tmpPath, html, 'utf8');
+
+    win = new BrowserWindow({
+      show: false,
+      webPreferences: { contextIsolation: true, nodeIntegration: false },
+    });
+    await win.loadFile(tmpPath);
+
+    const pdfBuffer = await win.webContents.printToPDF({
+      pageSize: 'A4',
+      printBackground: true,
+      margins: { marginType: 'none' },
+    });
+
+    fs.writeFileSync(filePath, pdfBuffer);
+    shell.showItemInFolder(filePath);
+    return filePath;
+  } finally {
+    if (win && !win.isDestroyed()) win.destroy();
+    if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+  }
+});
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());
