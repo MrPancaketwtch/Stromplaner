@@ -10,7 +10,7 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Käste
 
 ## Schnellstart
 
-1. Installer aus `dist/` ausführen (einmalig)
+1. Neueste Version von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** herunterladen und installieren (einmalig)
 2. **Erster Start:** **Kästen und Verbraucher selber anlegen** oder **↥ Laden** → `app/Standard.json` auswählen, um NDR-Kasten-Typen und Verbraucher vorzuladen
 3. Planen, stecken, prüfen
 4. Mit **💾 Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
@@ -30,7 +30,7 @@ Stromplaner/
 │   ├── Stromplaner.html      ← Gebündelte App (Output von build.js)
 │   ├── Stromplaner.jsx       ← Quellcode (React 18)
 │   └── Standard.json         ← Vorgeladene Kasten-Typen & Verbraucher
-├── dist/                     ← NSIS-Installer (für Weitergabe)
+├── dist/                     ← NSIS-Installer (gitignoriert – wird via GitHub Releases verteilt)
 ├── Speicherstände/           ← Eigene Planungen (.json) ablegen
 ├── src/
 │   ├── main.js               ← Electron-Hauptprozess
