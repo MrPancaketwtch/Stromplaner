@@ -2449,30 +2449,80 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
 const HelpContext = React.createContext(()=>{});
 
 const HELP_SECTIONS = {
+  ersteschritte: {
+    title: 'Erste Schritte',
+    text: 'Der empfohlene Arbeitsablauf: zuerst im Tab "Verteiler-Typen" alle Verteilermodelle anlegen, die du verwendest (einmalig, wiederverwendbar). Dann im Tab "Verbraucher" deine Geräte-Bibliothek aufbauen. Anschließend in "Konfiguration" die Hauptanschlüsse und konkreten Verteiler für diese Produktion eintragen. Danach im "Steckplan" die Verbraucher auf die Abgänge stecken.',
+    extra: 'Die App speichert deinen Arbeitsstand automatisch im Browser (Autosave), sodass du jederzeit weitermachen kannst. Für eine dauerhafte Sicherung oder den Austausch mit Kollegen nutze "Speichern" im Header, um eine JSON-Datei zu exportieren.'
+  },
+  produktionsdaten: {
+    title: 'Produktionsdaten',
+    text: 'Ganz oben in der Konfiguration trägst du Produktionsname, Ersteller, Versionsnummer und Datum ein. Diese Metadaten erscheinen auf allen Exporten: im Stromplan-PDF als Kopfzeile, im Excel-Export als Tabellenblatt und im Errichtungsprüfungsprotokoll. Halte die Versionsnummer aktuell, damit ältere Ausdrucke eindeutig erkennbar bleiben.',
+    extra: ''
+  },
+  verteilertypen: {
+    title: 'Verteiler-Typen',
+    text: 'Ein Verteiler-Typ beschreibt den physischen Aufbau eines Verteilers: Eingangs-Steckertyp (z.B. CEE 63A), Eingangs-Absicherung sowie alle Abgänge. Für jeden Abgang legst du Steckertyp, Schutzcharakter (B/C/D/K), Nennstrom und Schutzart (LS, RCBO oder keine) fest. Bei Multicore-Abgängen konfigurierst du außerdem die Anzahl der Steckplätze – die Phase rotiert dann automatisch von L1 bis L3.',
+    extra: 'Verteiler-Typen sind produktionsübergreifend gespeichert – du legst jeden Typ einmal an und verwendest ihn in beliebig vielen Produktionen. Über "Exportieren" und "Importieren" im Tab kannst du deine Bibliothek als JSON-Datei sichern und auf anderen Geräten einspielen.'
+  },
+  verbraucher: {
+    title: 'Verbraucher',
+    text: 'Die Verbraucher-Bibliothek enthält alle Geräte und Lastgruppen, die du in Produktionen einsetzt. Jeder Eintrag hat einen Namen, eine Leistung in Watt, einen Steckertyp und eine Phasigkeit (einphasig oder dreiphasig). Die eingegebene Leistung wird später im Steckplan automatisch auf Ampere umgerechnet und in der Phasenlastanzeige summiert.',
+    extra: 'Auch die Verbraucher-Bibliothek ist produktionsübergreifend gespeichert und lässt sich als JSON exportieren und importieren. So kannst du eine einmal aufgebaute Geräte-Liste auf alle deine Geräte übertragen.'
+  },
   hauptanschluesse: {
-    title: '1 · Hauptanschlüsse',
+    title: 'Hauptanschlüsse',
     text: 'Hier definierst du die Einspeisepunkte deiner Anlage – also die Anschlüsse, aus denen deine Verteiler gespeist werden. Gib jedem Hauptanschluss einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung Bühne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
     extra: 'Verteiler können optional einem Hauptanschluss zugewiesen werden – so wird die summierte Last je Einspeisepunkt berechnet und im Übersichts-Tab angezeigt.'
   },
   verteiler: {
-    title: '2 · Verteiler hinzufügen',
+    title: 'Verteiler hinzufügen',
     text: 'Hier fügst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzufügen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben – dort definierst du Eingangs-Steckertyp, Absicherung und alle Abgänge.',
     extra: 'Nach dem Hinzufügen kannst du für jeden Verteiler festlegen, wo er in der Topologie hängt: entweder direkt an einem Hauptanschluss oder als Unterverteilung an einem Abgang eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird.'
   },
   steckplan: {
-    title: '3 · Steckplan',
+    title: 'Steckplan',
     text: 'Im Steckplan belegst du die einzelnen Abgänge deines Verteilers mit Verbrauchern. Wähle oben den Verteiler aus, den du bearbeiten möchtest. Über die Schnellerfassung kannst du gezielt einen Anschluss und einen Verbraucher auswählen und mit dem "Menge"-Kästchen gleich mehrere identische Verbraucher auf einmal stecken.',
     extra: 'Du kannst auch erst den Anschluss wählen und dann den Verbraucher – der Anschluss bleibt erhalten. Für jeden gesteckten Verbraucher werden Phase, Leistung und Ampere automatisch berechnet und in der Phasenlastanzeige summiert.'
   },
   rccb: {
-    title: '4 · RCCB-Gruppen',
+    title: 'RCCB-Gruppen',
     text: 'RCCBs (Fehlerstromschutzschalter) schützen mehrere Abgänge gemeinsam. Wenn dein Verteiler einen oder mehrere RCCBs verbaut hat, trägst du diese hier ein – mit Bezeichnung und Auslösestrom in mA. Anschließend kannst du im Steckplan für jeden Abgang angeben, welcher RCCB-Gruppe er zugehört.',
     extra: 'Hat ein Abgang stattdessen einen eigenen RCBO (kombinierten LS + FI), wird das direkt beim Anschluss im Verteiler-Typ konfiguriert, nicht hier.'
   },
+  uebersicht: {
+    title: 'Übersicht',
+    text: 'Der Übersichts-Tab zeigt für jeden aktiven Verteiler eine kompakte Zusammenfassung: Gesamtlast in Watt und Ampere, Aufschlüsselung nach Phase (L1/L2/L3) sowie den aktuellen Auslastungsgrad. Verteiler, deren summierte Last die Eingangsabsicherung überschreitet, werden rot markiert.',
+    extra: 'Sind Verteiler einem Hauptanschluss zugeordnet, erscheint darüber hinaus eine Summenzeile je Einspeisepunkt – so siehst du auf einen Blick, wie stark jede Einspeisung belastet ist.'
+  },
+  schaltbild: {
+    title: 'Schaltbild',
+    text: 'Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Hauptanschlüssen über die Verteiler bis zu den einzelnen Abgängen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.',
+    extra: 'Das Schaltbild eignet sich gut als Übergabedokument: über "Stromplan drucken" im Header lässt es sich zusammen mit der Laststabelle als PDF ausgeben.'
+  },
+  erweitert: {
+    title: 'Leitungsdimensionierung & Spannungsfall',
+    text: 'Der Tab "Erweitert" enthält zwei unabhängige Werkzeuge. Die Leitungsdimensionierung berechnet anhand von Strom, Leitungslänge und Verlegeart (frei in Luft, in Lagen, etc.) den erforderlichen Mindest-Querschnitt nach DIN VDE 0298-4 – inklusive Temperatur- und Häufelkorrekturfaktoren.',
+    extra: 'Der Spannungsfall-Rechner ermittelt für eine gegebene Leitung den prozentualen Spannungsabfall (Grenzwert nach DIN VDE 0100-520: 3 % für Stromversorgungsleitungen). Beide Rechner sind unabhängig vom Rest der Projektdaten und können jederzeit genutzt werden.'
+  },
   errichtungspruefung: {
-    title: '5 · Errichtungsprüfung',
-    text: 'Hier dokumentierst du die Prüfung deiner Anlage nach DIN VDE 0100-600. Wähle einen Verteiler aus der Liste und fülle die Felder der Reihe nach aus: zuerst Stammdaten des Prüfers, Datum und Prüfort, dann die sechs Punkte der Sichtprüfung, anschließend die elektrischen Messwerte – Drehfeld, Spannungen (U L–N, U L–L, U N–PE, U L–PE), RCD-Auslösezeiten und Schleifenimpedanzen je Abgang. Werte außerhalb der Norm-Grenzwerte werden direkt rot markiert und im Abschlussprotokoll als Mängel aufgeführt.',
+    title: 'Errichtungsprüfung',
+    text: 'Hier dokumentierst du die Prüfung deiner Anlage nach DIN VDE 0100-600. Wähle einen Verteiler aus der Liste und fülle die Felder der Reihe nach aus: zuerst Stammdaten des Prüfers, Datum und Prüfort, dann die sechs Punkte der Sichtprüfung, anschließend die elektrischen Messwerte – Drehfeld, Spannungen (U L-N, U L-L, U N-PE, U L-PE), RCD-Auslösezeiten und Schleifenimpedanzen je Abgang. Werte außerhalb der Norm-Grenzwerte werden direkt rot markiert und im Abschlussprotokoll als Mängel aufgeführt.',
     extra: 'Hast du kaskadierte Verteiler – also eine Unterverteilung die an einem Abgang eines übergeordneten Verteilers hängt – übernimmt das Tool den ungünstigsten Zs-Wert aus der Unterverteilung automatisch für den entsprechenden Abgang des Hauptverteilers. Wenn du die Impedanz dort zusätzlich separat gemessen hast, kannst du den Wert manuell überschreiben; er wird dann mit einem ✎ gekennzeichnet.'
+  },
+  speichern: {
+    title: 'Speichern, Laden & Exportieren',
+    text: 'Im Header findest du zwei Schaltflächen: "Laden" öffnet eine JSON-Datei, die du zuvor gespeichert hast, und stellt den kompletten Projektstand wieder her. "Speichern" exportiert den aktuellen Stand als JSON-Datei auf deinen Rechner – inklusive aller Verteiler, Steckungen, Messwerte und Einstellungen.',
+    extra: 'Außerdem kannst du den Stromplan als Excel-Datei (XLSX) exportieren – das Symbol befindet sich ebenfalls im Header. Die Excel-Datei enthält Tabellenblätter für Übersicht, Steckplan und Produktionsdaten. Verteiler-Typen und Verbraucher lassen sich separat im jeweiligen Tab im- und exportieren, um die Bibliotheken geräteübergreifend zu nutzen.'
+  },
+  logo: {
+    title: 'Firmenlogo',
+    text: 'Über den kleinen "+ Logo"-Button rechts neben dem App-Titel kannst du ein Unternehmens- oder Veranstaltungslogo hochladen (PNG, JPG oder SVG). Das Logo erscheint sofort im App-Header und wird automatisch in alle PDF-Exporte eingebunden: in die Kopfzeile des Errichtungsprüfdokuments sowie in den Stromplan-Ausdruck.',
+    extra: 'Das Logo wird lokal im Browser gespeichert (localStorage) und bleibt auch nach einem Neustart erhalten. Mit dem kleinen "x"-Button neben dem Logo kannst du es jederzeit wieder entfernen. Das Logo ist gerätespezifisch gespeichert und wird nicht mit der JSON-Projektdatei übertragen.'
+  },
+  updates: {
+    title: 'Software-Updates',
+    text: 'Der Stromplaner sucht beim Start automatisch nach neuen Versionen. Ist ein Update verfügbar, ändert sich der "Updates"-Button im Header zu "Update verfügbar". Ein Klick darauf öffnet den Update-Dialog, der den Changelog der neuen Version zeigt und den Download startet.',
+    extra: 'Nach dem Herunterladen wechselt der Button zu "Update bereit". Mit einem weiteren Klick wird die neue Version installiert und die App automatisch neu gestartet. Der Updateprozess läuft im Hintergrund und unterbricht deine Arbeit nicht – du kannst bis zur Installation normal weiterarbeiten.'
   },
 };
 function HelpModal({section,onClose,goToGuide}){
