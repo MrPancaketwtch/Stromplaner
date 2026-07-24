@@ -1,9 +1,9 @@
-﻿import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
 
 /* ============================================================================
    STROMPLANER v4
-   + Mehrere Hauptanschlüsse, Kästen optional zuweisbar
+   + Mehrere Hauptanschlüsse, Verteiler optional zuweisbar
    + Multicore: konfigurierbare Steckplatzanzahl, Phase rotiert automatisch
    + Verbraucher-Dropdown: Inline-Textsuche direkt im Trigger
    + Autosave via localStorage
@@ -86,9 +86,9 @@ const CHANGELOG = {
   "1.0.3": [
     "Intro-Animation mit Video und Sound beim Start",
     "Spendenbutton (☕) im Header – GitHub Sponsors",
-    "Bulk-Add für Ausgänge: Phasenrotation & RCD-Gruppe wählbar",
-    "Alle Kästen auf einmal löschen (Konfiguration)",
-    "Alle Kasten-Typen auf einmal löschen",
+    "Bulk-Add für Ausgänge: Phasenrotation & RCCB-Gruppe wählbar",
+    "Alle Verteiler auf einmal löschen (Konfiguration)",
+    "Alle Verteiler-Typen auf einmal löschen",
     "Leitungsberechnungen werden beim JSON-Import jetzt korrekt wiederhergestellt",
   ],
 };
@@ -142,7 +142,7 @@ const migrateBoxType = (bt) => {
 const migrateInstance = (i) => ({ mainConnectionId: null, ...i });
 
 /* ── Defaults ───────────────────────────────────────────────────────────── */
-const RAW_BOX_TYPES = [{"id":"1B","name":"Kasten 1B","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"16A-1","connector":"CEE16","amp":16},{"id":"o2","label":"32A-1","connector":"CEE32","amp":32},{"id":"o3","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"2","name":"Kasten 2","feedConnector":"CEE63","feedAmp":63,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"32A-2","connector":"CEE32","amp":32},{"id":"o3","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 3","connector":"SCHUKO","amp":16},{"id":"o6","label":"Schuko 4","connector":"SCHUKO","amp":16},{"id":"o7","label":"Schuko 5","connector":"SCHUKO","amp":16},{"id":"o8","label":"Schuko 6","connector":"SCHUKO","amp":16},{"id":"o9","label":"Schuko 7","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 8","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 9","connector":"SCHUKO","amp":16}]},{"id":"3","name":"Kasten 3","feedConnector":"CEE63","feedAmp":63,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"32A-2","connector":"CEE32","amp":32},{"id":"o3","label":"32A-3","connector":"CEE32","amp":32},{"id":"o4","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o6","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"4","name":"Kasten 4","feedConnector":"CEE63","feedAmp":63,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"63A-1","connector":"CEE63","amp":63},{"id":"o3","label":"63A-2","connector":"CEE63","amp":63},{"id":"o4","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o6","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"5","name":"Kasten 5","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o2","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o3","label":"Schuko 3","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 4","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 5","connector":"SCHUKO","amp":16},{"id":"o6","label":"Schuko 6","connector":"SCHUKO","amp":16},{"id":"o7","label":"Schuko 7","connector":"SCHUKO","amp":16},{"id":"o8","label":"Schuko 8","connector":"SCHUKO","amp":16},{"id":"o9","label":"Schuko 9","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 10","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 11","connector":"SCHUKO","amp":16},{"id":"o12","label":"Schuko 12","connector":"SCHUKO","amp":16}]},{"id":"5H","name":"Kasten 5H","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"Multicore 1","connector":"MC","amp":16},{"id":"o2","label":"Multicore 2","connector":"MC","amp":16}]},{"id":"6","name":"Kasten 6","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"16A 1ph-1","connector":"CEE16_1","amp":16},{"id":"o2","label":"16A 1ph-2","connector":"CEE16_1","amp":16},{"id":"o3","label":"16A 1ph-3","connector":"CEE16_1","amp":16},{"id":"o4","label":"32A 1ph-1","connector":"CEE32_1","amp":32},{"id":"o5","label":"32A 1ph-2","connector":"CEE32_1","amp":32},{"id":"o6","label":"32A 1ph-3","connector":"CEE32_1","amp":32},{"id":"rqq44ow","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"0u1pt1i","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"tv5n2sc","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"9","name":"Kasten 9","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"16A-1","connector":"CEE16","amp":16},{"id":"o2","label":"16A-2","connector":"CEE16","amp":16},{"id":"o3","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"11B","name":"Kasten 11B","feedConnector":"PL400","feedAmp":400,"outlets":[{"id":"o1","label":"63A-1","connector":"CEE63","amp":63},{"id":"o2","label":"63A-2","connector":"CEE63","amp":63},{"id":"o3","label":"63A-3","connector":"CEE63","amp":63},{"id":"o4","label":"63A-4","connector":"CEE63","amp":63},{"id":"o5","label":"63A-5","connector":"CEE63","amp":63},{"id":"o6","label":"63A-6","connector":"CEE63","amp":63}]},{"id":"11D","name":"Kasten 11D","feedConnector":"PL400","feedAmp":400,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"16A-1","connector":"CEE16","amp":16},{"id":"o3","label":"63A-1","connector":"CEE63","amp":63},{"id":"o4","label":"63A-2","connector":"CEE63","amp":63},{"id":"o5","label":"63A-3","connector":"CEE63","amp":63},{"id":"o6","label":"63A-4","connector":"CEE63","amp":63},{"id":"o7","label":"63A-5","connector":"CEE63","amp":63},{"id":"o8","label":"125A-1","connector":"CEE125","amp":125},{"id":"o9","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"12","name":"Kasten 12","feedConnector":"PL400","feedAmp":400,"outlets":[{"id":"o1","label":"Powerlock 1","connector":"PL400","amp":400},{"id":"o2","label":"Powerlock 2","connector":"PL400","amp":400},{"id":"o3","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"14","name":"Kasten 14","feedConnector":"CEE125","feedAmp":125,"outlets":[{"id":"o1","label":"16A-1","connector":"CEE16","amp":16},{"id":"o2","label":"16A-2","connector":"CEE16","amp":16},{"id":"o3","label":"16A-3","connector":"CEE16","amp":16},{"id":"o4","label":"32A-1","connector":"CEE32","amp":32},{"id":"o5","label":"32A-2","connector":"CEE32","amp":32},{"id":"o6","label":"32A-3","connector":"CEE32","amp":32},{"id":"o7","label":"63A-1","connector":"CEE63","amp":63},{"id":"o8","label":"63A-2","connector":"CEE63","amp":63},{"id":"o9","label":"125A-1","connector":"CEE125","amp":125},{"id":"o10","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o12","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"15","name":"Kasten 15","feedConnector":"PL400","feedAmp":400,"outlets":[{"id":"o1","label":"16A-1","connector":"CEE16","amp":16},{"id":"o2","label":"16A-2","connector":"CEE16","amp":16},{"id":"o3","label":"32A-1","connector":"CEE32","amp":32},{"id":"o4","label":"32A-2","connector":"CEE32","amp":32},{"id":"o5","label":"63A-1","connector":"CEE63","amp":63},{"id":"o6","label":"63A-2","connector":"CEE63","amp":63},{"id":"o7","label":"125A-1","connector":"CEE125","amp":125},{"id":"o8","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o9","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 3","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 4","connector":"SCHUKO","amp":16},{"id":"o12","label":"Schuko 5","connector":"SCHUKO","amp":16},{"id":"o13","label":"Schuko 6","connector":"SCHUKO","amp":16}]},{"id":"16","name":"Kasten 16","feedConnector":"CEE63","feedAmp":63,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"Multicore 1","connector":"MC","amp":16},{"id":"o3","label":"Multicore 2","connector":"MC","amp":16},{"id":"o4","label":"Multicore 3","connector":"MC","amp":16},{"id":"o5","label":"Multicore 4","connector":"MC","amp":16},{"id":"o6","label":"Multicore 5","connector":"MC","amp":16},{"id":"o7","label":"Multicore 6","connector":"MC","amp":16},{"id":"o8","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o9","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 3","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 4 ","connector":"SCHUKO","amp":16},{"id":"o12","label":"Schuko 5","connector":"SCHUKO","amp":16},{"id":"o13","label":"Schuko 6","connector":"SCHUKO","amp":16},{"id":"znxv8pz","label":"Schuko 7","connector":"SCHUKO","amp":16},{"id":"i1xlsle","label":"Schuko 8","connector":"SCHUKO","amp":16},{"id":"4fqlklc","label":"Schuko 9","connector":"SCHUKO","amp":16},{"id":"96fr8el","label":"Schuko 10","connector":"SCHUKO","amp":16},{"id":"cvcgqk1","label":"Schuko 11","connector":"SCHUKO","amp":16},{"id":"7d82nxe","label":"Schuko 12","connector":"SCHUKO","amp":16},{"id":"zswlgfj","label":"Schuko 13 ","connector":"SCHUKO","amp":16},{"id":"6w8byr8","label":"Schuko 14","connector":"SCHUKO","amp":16},{"id":"ou35m6j","label":"Schuko 15","connector":"SCHUKO","amp":16},{"id":"qu2ozpk","label":"Schuko 16","connector":"SCHUKO","amp":16},{"id":"ll7ccva","label":"Schuko 17","connector":"SCHUKO","amp":16},{"id":"2dqxvx7","label":"Schuko 18","connector":"SCHUKO","amp":16},{"id":"jl3qvov","label":"Schuko 19","connector":"SCHUKO","amp":16},{"id":"s8ad3ne","label":"Schuko 20","connector":"SCHUKO","amp":16},{"id":"2nn1tw1","label":"Schuko 21","connector":"SCHUKO","amp":16},{"id":"6dhn8ba","label":"Schuko 22","connector":"SCHUKO","amp":16},{"id":"jozunsr","label":"Schuko 23","connector":"SCHUKO","amp":16},{"id":"yl20d3y","label":"Schuko 24","connector":"SCHUKO","amp":16},{"id":"akei2m4","label":"Schuko 25","connector":"SCHUKO","amp":16},{"id":"4k5buks","label":"Schuko 26","connector":"SCHUKO","amp":16},{"id":"b7e5ybx","label":"Schuko 27","connector":"SCHUKO","amp":16}]}]
+const RAW_BOX_TYPES = [{"id":"1B","name":"Verteiler 1B","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"16A-1","connector":"CEE16","amp":16},{"id":"o2","label":"32A-1","connector":"CEE32","amp":32},{"id":"o3","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"2","name":"Verteiler 2","feedConnector":"CEE63","feedAmp":63,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"32A-2","connector":"CEE32","amp":32},{"id":"o3","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 3","connector":"SCHUKO","amp":16},{"id":"o6","label":"Schuko 4","connector":"SCHUKO","amp":16},{"id":"o7","label":"Schuko 5","connector":"SCHUKO","amp":16},{"id":"o8","label":"Schuko 6","connector":"SCHUKO","amp":16},{"id":"o9","label":"Schuko 7","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 8","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 9","connector":"SCHUKO","amp":16}]},{"id":"3","name":"Verteiler 3","feedConnector":"CEE63","feedAmp":63,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"32A-2","connector":"CEE32","amp":32},{"id":"o3","label":"32A-3","connector":"CEE32","amp":32},{"id":"o4","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o6","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"4","name":"Verteiler 4","feedConnector":"CEE63","feedAmp":63,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"63A-1","connector":"CEE63","amp":63},{"id":"o3","label":"63A-2","connector":"CEE63","amp":63},{"id":"o4","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o6","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"5","name":"Verteiler 5","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o2","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o3","label":"Schuko 3","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 4","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 5","connector":"SCHUKO","amp":16},{"id":"o6","label":"Schuko 6","connector":"SCHUKO","amp":16},{"id":"o7","label":"Schuko 7","connector":"SCHUKO","amp":16},{"id":"o8","label":"Schuko 8","connector":"SCHUKO","amp":16},{"id":"o9","label":"Schuko 9","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 10","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 11","connector":"SCHUKO","amp":16},{"id":"o12","label":"Schuko 12","connector":"SCHUKO","amp":16}]},{"id":"5H","name":"Verteiler 5H","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"Multicore 1","connector":"MC","amp":16},{"id":"o2","label":"Multicore 2","connector":"MC","amp":16}]},{"id":"6","name":"Verteiler 6","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"16A 1ph-1","connector":"CEE16_1","amp":16},{"id":"o2","label":"16A 1ph-2","connector":"CEE16_1","amp":16},{"id":"o3","label":"16A 1ph-3","connector":"CEE16_1","amp":16},{"id":"o4","label":"32A 1ph-1","connector":"CEE32_1","amp":32},{"id":"o5","label":"32A 1ph-2","connector":"CEE32_1","amp":32},{"id":"o6","label":"32A 1ph-3","connector":"CEE32_1","amp":32},{"id":"rqq44ow","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"0u1pt1i","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"tv5n2sc","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"9","name":"Verteiler 9","feedConnector":"CEE32","feedAmp":32,"outlets":[{"id":"o1","label":"16A-1","connector":"CEE16","amp":16},{"id":"o2","label":"16A-2","connector":"CEE16","amp":16},{"id":"o3","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"11B","name":"Verteiler 11B","feedConnector":"PL400","feedAmp":400,"outlets":[{"id":"o1","label":"63A-1","connector":"CEE63","amp":63},{"id":"o2","label":"63A-2","connector":"CEE63","amp":63},{"id":"o3","label":"63A-3","connector":"CEE63","amp":63},{"id":"o4","label":"63A-4","connector":"CEE63","amp":63},{"id":"o5","label":"63A-5","connector":"CEE63","amp":63},{"id":"o6","label":"63A-6","connector":"CEE63","amp":63}]},{"id":"11D","name":"Verteiler 11D","feedConnector":"PL400","feedAmp":400,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"16A-1","connector":"CEE16","amp":16},{"id":"o3","label":"63A-1","connector":"CEE63","amp":63},{"id":"o4","label":"63A-2","connector":"CEE63","amp":63},{"id":"o5","label":"63A-3","connector":"CEE63","amp":63},{"id":"o6","label":"63A-4","connector":"CEE63","amp":63},{"id":"o7","label":"63A-5","connector":"CEE63","amp":63},{"id":"o8","label":"125A-1","connector":"CEE125","amp":125},{"id":"o9","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"12","name":"Verteiler 12","feedConnector":"PL400","feedAmp":400,"outlets":[{"id":"o1","label":"Powerlock 1","connector":"PL400","amp":400},{"id":"o2","label":"Powerlock 2","connector":"PL400","amp":400},{"id":"o3","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o4","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o5","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"14","name":"Verteiler 14","feedConnector":"CEE125","feedAmp":125,"outlets":[{"id":"o1","label":"16A-1","connector":"CEE16","amp":16},{"id":"o2","label":"16A-2","connector":"CEE16","amp":16},{"id":"o3","label":"16A-3","connector":"CEE16","amp":16},{"id":"o4","label":"32A-1","connector":"CEE32","amp":32},{"id":"o5","label":"32A-2","connector":"CEE32","amp":32},{"id":"o6","label":"32A-3","connector":"CEE32","amp":32},{"id":"o7","label":"63A-1","connector":"CEE63","amp":63},{"id":"o8","label":"63A-2","connector":"CEE63","amp":63},{"id":"o9","label":"125A-1","connector":"CEE125","amp":125},{"id":"o10","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o12","label":"Schuko 3","connector":"SCHUKO","amp":16}]},{"id":"15","name":"Verteiler 15","feedConnector":"PL400","feedAmp":400,"outlets":[{"id":"o1","label":"16A-1","connector":"CEE16","amp":16},{"id":"o2","label":"16A-2","connector":"CEE16","amp":16},{"id":"o3","label":"32A-1","connector":"CEE32","amp":32},{"id":"o4","label":"32A-2","connector":"CEE32","amp":32},{"id":"o5","label":"63A-1","connector":"CEE63","amp":63},{"id":"o6","label":"63A-2","connector":"CEE63","amp":63},{"id":"o7","label":"125A-1","connector":"CEE125","amp":125},{"id":"o8","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o9","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 3","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 4","connector":"SCHUKO","amp":16},{"id":"o12","label":"Schuko 5","connector":"SCHUKO","amp":16},{"id":"o13","label":"Schuko 6","connector":"SCHUKO","amp":16}]},{"id":"16","name":"Verteiler 16","feedConnector":"CEE63","feedAmp":63,"outlets":[{"id":"o1","label":"32A-1","connector":"CEE32","amp":32},{"id":"o2","label":"Multicore 1","connector":"MC","amp":16},{"id":"o3","label":"Multicore 2","connector":"MC","amp":16},{"id":"o4","label":"Multicore 3","connector":"MC","amp":16},{"id":"o5","label":"Multicore 4","connector":"MC","amp":16},{"id":"o6","label":"Multicore 5","connector":"MC","amp":16},{"id":"o7","label":"Multicore 6","connector":"MC","amp":16},{"id":"o8","label":"Schuko 1","connector":"SCHUKO","amp":16},{"id":"o9","label":"Schuko 2","connector":"SCHUKO","amp":16},{"id":"o10","label":"Schuko 3","connector":"SCHUKO","amp":16},{"id":"o11","label":"Schuko 4 ","connector":"SCHUKO","amp":16},{"id":"o12","label":"Schuko 5","connector":"SCHUKO","amp":16},{"id":"o13","label":"Schuko 6","connector":"SCHUKO","amp":16},{"id":"znxv8pz","label":"Schuko 7","connector":"SCHUKO","amp":16},{"id":"i1xlsle","label":"Schuko 8","connector":"SCHUKO","amp":16},{"id":"4fqlklc","label":"Schuko 9","connector":"SCHUKO","amp":16},{"id":"96fr8el","label":"Schuko 10","connector":"SCHUKO","amp":16},{"id":"cvcgqk1","label":"Schuko 11","connector":"SCHUKO","amp":16},{"id":"7d82nxe","label":"Schuko 12","connector":"SCHUKO","amp":16},{"id":"zswlgfj","label":"Schuko 13 ","connector":"SCHUKO","amp":16},{"id":"6w8byr8","label":"Schuko 14","connector":"SCHUKO","amp":16},{"id":"ou35m6j","label":"Schuko 15","connector":"SCHUKO","amp":16},{"id":"qu2ozpk","label":"Schuko 16","connector":"SCHUKO","amp":16},{"id":"ll7ccva","label":"Schuko 17","connector":"SCHUKO","amp":16},{"id":"2dqxvx7","label":"Schuko 18","connector":"SCHUKO","amp":16},{"id":"jl3qvov","label":"Schuko 19","connector":"SCHUKO","amp":16},{"id":"s8ad3ne","label":"Schuko 20","connector":"SCHUKO","amp":16},{"id":"2nn1tw1","label":"Schuko 21","connector":"SCHUKO","amp":16},{"id":"6dhn8ba","label":"Schuko 22","connector":"SCHUKO","amp":16},{"id":"jozunsr","label":"Schuko 23","connector":"SCHUKO","amp":16},{"id":"yl20d3y","label":"Schuko 24","connector":"SCHUKO","amp":16},{"id":"akei2m4","label":"Schuko 25","connector":"SCHUKO","amp":16},{"id":"4k5buks","label":"Schuko 26","connector":"SCHUKO","amp":16},{"id":"b7e5ybx","label":"Schuko 27","connector":"SCHUKO","amp":16}]}]
 ;
 const DEFAULT_BOX_TYPES = RAW_BOX_TYPES.map(migrateBoxType);
 const DEFAULT_LOADS = [];
@@ -181,10 +181,10 @@ function InlineSelect({ options, value, onChange, placeholder, style }) {
     document.addEventListener("mousedown",h);
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
-  // Close on scroll (dropdown is fixed, trigger moves away)
+  // Close on scroll outside the dropdown
   useEffect(()=>{
     if(!open) return;
-    const onScroll=()=>close();
+    const onScroll=(e)=>{ if(wrapRef.current&&wrapRef.current.contains(e.target)) return; close(); };
     window.addEventListener("scroll",onScroll,true);
     return ()=>window.removeEventListener("scroll",onScroll,true);
   },[open]);
@@ -263,10 +263,10 @@ function FilterSelect({ options, value, onChange, placeholder, style }) {
     document.addEventListener("mousedown",h);
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
-  // Close on scroll (dropdown is fixed, trigger moves away)
+  // Close on scroll outside the dropdown
   useEffect(()=>{
     if(!open) return;
-    const onScroll=()=>close();
+    const onScroll=(e)=>{ if(wrapRef.current&&wrapRef.current.contains(e.target)) return; close(); };
     window.addEventListener("scroll",onScroll,true);
     return ()=>window.removeEventListener("scroll",onScroll,true);
   },[open]);
@@ -360,6 +360,7 @@ export default function App() {
   const [voltCalcs,    setVoltCalcs]    = useState([]);
   const [erweiterSubTab, setErweiterSubTab] = useState("dim");
   const [loaded,       setLoaded]       = useState(false); // prevent save before first load
+  const [helpSection,  setHelpSection]  = useState(null);
 
   /* ── Autosave ──────────────────────────────────────────────────────────── */
   // Load on mount
@@ -470,7 +471,7 @@ export default function App() {
     return r;
   },[ownLoad,instances]);
 
-  // Root instances = no parent kasten (may or may not have a mainConnectionId)
+  // Root instances = no parent Verteiler (may or may not have a mainConnectionId)
   const rootInstances = useMemo(()=>instances.filter(i=>!i.parentId),[instances]);
 
   const isOverloaded = useCallback((instanceId)=>{
@@ -553,7 +554,7 @@ export default function App() {
 
   /* ── Reset ─────────────────────────────────────────────────────────────── */
   const resetAll=()=>{
-    if(!confirm("Alles zurücksetzen? Alle Kästen, Steckungen und Produktionsdaten werden gelöscht. Kasten-Typen und Verbraucher bleiben erhalten.")) return;
+    if(!confirm("Alles zurücksetzen? Alle Verteiler, Steckungen und Produktionsdaten werden gelöscht. Verteiler-Typen und Verbraucher bleiben erhalten.")) return;
     setMeta(DEFAULT_META);
     setMainConns([]);
     setInstances([]);
@@ -561,7 +562,7 @@ export default function App() {
     setActivePlan(null);
   };
   const clearAllInstances=()=>{
-    if(!confirm("Alle Kästen und Steckungen löschen? Kasten-Typen, Verbraucher und Produktionsdaten bleiben erhalten.")) return;
+    if(!confirm("Alle Verteiler und Steckungen löschen? Verteiler-Typen, Verbraucher und Produktionsdaten bleiben erhalten.")) return;
     setInstances([]);
     setPlacements([]);
     setActivePlan(null);
@@ -604,7 +605,7 @@ export default function App() {
     const ovRows=[
       ["STROMPLAN – ÜBERSICHT"],
       ["Produktion",meta.production],["Ersteller",meta.creator],["Version",meta.version],["Datum",meta.date],[],
-      ["Kasten","Typ","Eingang","hängt an","Hauptanschluss","L1(A)","L2(A)","L3(A)","Max(A)","Status"],
+      ["Verteiler","Typ","Eingang","hängt an","Hauptanschluss","L1(A)","L2(A)","L3(A)","Max(A)","Status"],
     ];
     instances.forEach(inst=>{
       const t=totalLoad(inst.id); const type=boxTypeById[inst.typeId];
@@ -630,7 +631,7 @@ export default function App() {
     });
     const haWs=XLSX.utils.aoa_to_sheet(haRows);
     XLSX.utils.book_append_sheet(wb,haWs,"Hauptanschlüsse");
-    // Pro Kasten
+    // Pro Verteiler
     instances.forEach(inst=>{
       const type=boxTypeById[inst.typeId];
       const own=ownLoad(inst.id); const tot=totalLoad(inst.id);
@@ -863,11 +864,13 @@ export default function App() {
   const TABS=[
     ["config","1 · Konfiguration"],["plan","2 · Steckplan"],
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
-    ["boxtypes","Kasten-Typen"],["loads","Verbraucher"],["erweitert","Erweitert"],
+    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["erweitert","Erweitert"],
+    ["help","ℹ Anleitung"],
   ];
   const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById };
 
   return (
+    <HelpContext.Provider value={setHelpSection}>
     <div style={S.app}>
       <header style={S.header}>
         <div style={S.logo}>⚡ STROMPLANER</div>
@@ -937,11 +940,16 @@ export default function App() {
             voltCalcs={voltCalcs} setVoltCalcs={setVoltCalcs}
             subTab={erweiterSubTab}/>
         </div>
+        <div style={{display:tab==="help"?"block":"none"}}>
+          <AnleitungTab/>
+        </div>
       </main>
       {changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
       {showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
       {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus}/>}
+      {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);setTab("help");}}/>}
     </div>
+    </HelpContext.Provider>
   );
 }
 
@@ -1043,9 +1051,9 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
         </div>
       </Section>
 
-      <Section title="Hauptanschlüsse" subtitle="Definiere alle Einspeisepunkte dieser Produktion. Kästen können optional einem Hauptanschluss zugewiesen werden.">
+      <Section title="Hauptanschlüsse" subtitle="Definiere alle Einspeisepunkte dieser Produktion. Verteiler können optional einem Hauptanschluss zugewiesen werden." helpKey="hauptanschluesse">
         <button style={S.primaryBtn} onClick={addMainConn}>+ Hauptanschluss hinzufügen</button>
-        {mainConns.length===0 && <p style={S.hint}>Noch keine Hauptanschlüsse definiert. Kästen ohne Zuweisung erscheinen als freie Einspeisepunkte.</p>}
+        {mainConns.length===0 && <p style={S.hint}>Noch keine Hauptanschlüsse definiert. Verteiler ohne Zuweisung erscheinen als freie Einspeisepunkte.</p>}
         {mainConns.map(mc=>(
           <div key={mc.id} style={{display:"flex",gap:8,alignItems:"center",marginTop:8,flexWrap:"wrap"}}>
             <input style={{...S.inputSm,flex:2,minWidth:150}} placeholder="Bezeichnung z.B. NH03-Halle 1" value={mc.name} onChange={e=>updateMainConn(mc.id,{name:e.target.value})}/>
@@ -1056,19 +1064,19 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
         ))}
       </Section>
 
-      <Section title="Kästen aktivieren" subtitle="Jeder aktivierte Kasten bekommt im Steckplan ein eigenes Datenblatt.">
+      <Section title="Verteiler hinzufügen" subtitle="Jeder hinzugefügte Verteiler bekommt im Steckplan ein eigenes Datenblatt." helpKey="verteiler">
         <div style={S.row}>
           <select style={S.select} value={pick} onChange={e=>setPick(e.target.value)}>
             {boxTypes.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
-          <button style={S.primaryBtn} onClick={()=>addInstance(pick)}>+ Kasten hinzufügen</button>
+          <button style={S.primaryBtn} onClick={()=>addInstance(pick)}>+ Verteiler hinzufügen</button>
         </div>
-        {instances.length===0 ? <p style={S.empty}>Noch keine Kästen aktiviert.</p> : (
+        {instances.length===0 ? <p style={S.empty}>Noch keine Verteiler aktiviert.</p> : (
           <div style={{overflowX:"auto"}}>
           <table style={{...S.table,minWidth:860,width:"auto"}}>
             <thead><tr>
               <th style={S.th}></th><th style={S.th}>Name</th><th style={S.th}>Typ</th><th style={S.th}>Eingang</th>
-              <th style={S.th}>hängt an Kasten…</th><th style={S.th}>…Anschluss</th>
+              <th style={S.th}>hängt an Verteiler…</th><th style={S.th}>…Anschluss</th>
               <th style={S.th}>Hauptanschluss</th><th style={S.th}></th>
             </tr></thead>
             <tbody>
@@ -1079,8 +1087,8 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                 const ud=isUnderdimensioned(inst.id);
                 const sortedOther=alphaSort(instances.filter(o=>o.id!==inst.id),"name");
                 const parentOutlets=parentType?sortOutlets(parentType.outlets):[];
-                // Belegte Anschlüsse ausblenden (anderer Kasten hängt schon dort)
-                // Nur kompatible Steckertypen anzeigen (Eingangstyp des Kastens muss passen)
+                // Belegte Anschlüsse ausblenden (anderer Verteiler hängt schon dort)
+                // Nur kompatible Steckertypen anzeigen (Eingangstyp des Verteilers muss passen)
                 const takenOutletIds=new Set(instances.filter(i=>i.id!==inst.id&&i.parentId===inst.parentId&&i.parentId).map(i=>i.parentOutletId).filter(Boolean));
                 const availableOutlets=parentOutlets.filter(o=>{
                   if(takenOutletIds.has(o.id)&&o.id!==inst.parentOutletId) return false;
@@ -1100,8 +1108,8 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                   <tr key={inst.id}>
                     <td style={S.td}>
                       {ol&&<span title="Überlastet!" style={{color:"#e74c3c",fontWeight:800,fontSize:16}}>⚠</span>}
-                      {ud&&<span title={`Unterdimensioniert: Kasten-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) größer als Anschluss`} style={{color:"#f5a623",fontWeight:800,fontSize:15,marginLeft:ol?4:0}}>⚡</span>}
-                      {isAdapted(inst.id)&&<span title="Adapter: Steckertyp des Kastens stimmt nicht mit Anschluss überein" style={{color:"#a78bfa",fontWeight:800,fontSize:14,marginLeft:(ol||ud)?4:0}}>🔌</span>}
+                      {ud&&<span title={`Unterdimensioniert: Verteiler-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) größer als Anschluss`} style={{color:"#f5a623",fontWeight:800,fontSize:15,marginLeft:ol?4:0}}>⚡</span>}
+                      {isAdapted(inst.id)&&<span title="Adapter: Steckertyp des Verteilers stimmt nicht mit Anschluss überein" style={{color:"#a78bfa",fontWeight:800,fontSize:14,marginLeft:(ol||ud)?4:0}}>🔌</span>}
                     </td>
                     <td style={S.td}><input style={S.inputSm} value={inst.name} onChange={e=>updateInstance(inst.id,{name:e.target.value})}/></td>
                     <td style={S.td}>{type?.name}</td>
@@ -1127,7 +1135,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                         </select>
                       ) : <span style={{color:"#555",fontSize:11}}>via Parent</span>}
                     </td>
-                    <td style={S.td}><button style={S.dangerBtn} onClick={()=>{if(confirm(`Kasten „${inst.name}" wirklich löschen? Alle Steckungen dieses Kastens gehen verloren.`))removeInstance(inst.id);}}>✕</button></td>
+                    <td style={S.td}><button style={S.dangerBtn} onClick={()=>{if(confirm(`Verteiler „${inst.name}" wirklich löschen? Alle Steckungen dieses Verteilers gehen verloren.`))removeInstance(inst.id);}}>✕</button></td>
                   </tr>
                 );
               })}
@@ -1136,7 +1144,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
           </div>
         )}
         {instances.length>0&&<div style={{marginTop:8,display:"flex",justifyContent:"flex-end"}}>
-          <button style={S.dangerBtn} onClick={clearAllInstances}>Alle Kästen löschen</button>
+          <button style={S.dangerBtn} onClick={clearAllInstances}>Alle Verteiler löschen</button>
         </div>}
         <p style={S.hint}>💡 Phasen bleiben beim Aufstecken erhalten (L1→L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.</p>
       </Section>
@@ -1148,10 +1156,11 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
    TAB: Steckplan
 ══════════════════════════════════════════════════════════════════════════ */
 function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addPlacement,addPlacementsFilled,updatePlacement,removePlacement,activePlan,setActivePlan,ownLoad,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById,meta }) {
+  const openHelp=useContext(HelpContext);
   const [bulkLoadId,  setBulkLoadId]  = useState("");
   const [bulkOutletId,setBulkOutletId]= useState("");
   const [bulkCount,   setBulkCount]   = useState(1);
-  // Nur Kästen anzeigen, die an einem Hauptanschluss oder an einem anderen Kasten hängen
+  // Nur Verteiler anzeigen, die an einem Hauptanschluss oder an einem anderen Verteiler hängen
   const activeInstances = instances.filter(i=>i.mainConnectionId||i.parentId);
 
   useEffect(()=>{
@@ -1160,10 +1169,10 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
   },[activeInstances,activePlan,setActivePlan]);
 
   if(instances.length===0)
-    return <Section title="Steckplan"><p style={S.empty}>Aktiviere zuerst Kästen unter „1 · Konfiguration".</p></Section>;
+    return <Section title="Steckplan"><p style={S.empty}>Aktiviere zuerst Verteiler unter „1 · Konfiguration".</p></Section>;
 
   if(activeInstances.length===0)
-    return <Section title="Steckplan"><p style={S.empty}>Keine Kästen angeschlossen. Bitte unter „1 · Konfiguration" Kästen an einen Hauptanschluss oder anderen Kasten anschließen.</p></Section>;
+    return <Section title="Steckplan"><p style={S.empty}>Keine Verteiler angeschlossen. Bitte unter „1 · Konfiguration" Verteiler an einen Hauptanschluss oder anderen Verteiler anschließen.</p></Section>;
 
   const inst   = activeInstances.find(i=>i.id===activePlan)||activeInstances[0];
   const type   = boxTypeById[inst.typeId];
@@ -1173,7 +1182,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
   const maxA   = type?.feedAmp||0;
   const connLabel = type?(CONN[type.feedConnector]?.label||""):"";
 
-  // Sorted outlet list for this kasten (schuko first)
+  // Sorted outlet list for this Verteiler (schuko first)
   const sortedOutlets = type ? sortOutlets(type.outlets) : [];
 
   const getAvailableOutlets=(loadId)=>{
@@ -1243,7 +1252,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
         </Section>
       )}
 
-      {/* Kasten tabs */}
+      {/* Verteiler tabs */}
       <div style={S.boxTabs}>
         {activeInstances.map(i=>{
           const ol=isOverloaded(i.id);
@@ -1297,14 +1306,14 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
           };
           return (
             <div style={{display:"flex",alignItems:"flex-end",gap:8,marginTop:14,padding:"10px 12px",background:"#1b2026",borderRadius:7,border:`1px solid ${LINE}`,flexWrap:"wrap"}}>
-              <span style={{fontSize:11,color:"#9aa4af",fontWeight:600,width:"100%",marginBottom:2}}>Schnellerfassung</span>
+              <div style={{display:"flex",alignItems:"center",gap:6,width:"100%",marginBottom:2}}><span style={{fontSize:11,color:"#9aa4af",fontWeight:600}}>Schnellerfassung</span><button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:18,height:18,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp("steckplan")} title="Hilfe">?</button></div>
               <div style={{flex:"2 1 200px"}}>
                 <div style={S.fieldLabel}>Anschluss</div>
                 <FilterSelect options={bulkOutletOpts} value={bulkOutletId} onChange={v=>{setBulkOutletId(v);}} placeholder="Wählen…"/>
               </div>
               <div style={{flex:"2 1 180px"}}>
                 <div style={S.fieldLabel}>Verbraucher</div>
-                <InlineSelect options={loadOptions} value={bulkLoadId} onChange={v=>{setBulkLoadId(v);setBulkOutletId("");}} placeholder="Wählen…"/>
+                <InlineSelect options={loadOptions} value={bulkLoadId} onChange={v=>{setBulkLoadId(v);}} placeholder="Wählen…"/>
               </div>
               <div style={{width:70}}>
                 <div style={S.fieldLabel}>Menge</div>
@@ -1362,7 +1371,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
                       ) : <span style={{color:"#555",fontSize:11}}>—</span>}
                     </td>
                     <td style={S.td}>
-                      <InlineSelect options={loadOptions} value={p.loadId} onChange={v=>updatePlacement(p.id,{loadId:v,outletId:"",mcSlot:null})} placeholder="Verbraucher…" style={{minWidth:180}}/>
+                      <InlineSelect options={loadOptions} value={p.loadId} onChange={v=>updatePlacement(p.id,{loadId:v})} placeholder="Verbraucher…" style={{minWidth:180}}/>
                     </td>
                     <td style={S.td}><span style={{fontSize:12,color:phDisplay==="—"?"#555":"#fff"}}>{phDisplay}</span></td>
                     <td style={S.td}>{l?l.watt:"-"}</td>
@@ -1381,7 +1390,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   TAB: Kasten-Typen
+   TAB: Verteiler-Typen
 ══════════════════════════════════════════════════════════════════════════ */
 function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   const [openId,setOpenId]=useState(null);
@@ -1412,15 +1421,15 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   };
   const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Anschluss ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdId:null}]}));
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
-  const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Kasten",feedConnector:"CEE32",feedAmp:32,rcds:[],outlets:[]},...s]); setOpenId(id); };
-  const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Kasten-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Kasten-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
+  const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Verteiler",feedConnector:"CEE32",feedAmp:32,rcds:[],outlets:[]},...s]); setOpenId(id); };
+  const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Verteiler-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Verteiler-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
   const removeAllTypes=()=>{
     const inUse=boxTypes.filter(b=>instances.some(i=>i.typeId===b.id));
     const free=boxTypes.filter(b=>!instances.some(i=>i.typeId===b.id));
     if(free.length===0){alert("Alle Typen sind in Benutzung und können nicht gelöscht werden.");return;}
     const msg=inUse.length>0
       ?`${free.length} Typen löschen? (${inUse.length} in Benutzung werden übersprungen)`
-      :`Alle ${free.length} Kasten-Typen löschen?`;
+      :`Alle ${free.length} Verteiler-Typen löschen?`;
     if(!confirm(msg))return;
     setBoxTypes(s=>s.filter(b=>instances.some(i=>i.typeId===b.id)));
     setOpenId(null);
@@ -1428,30 +1437,30 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   const addRcd=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:[...(b.rcds||[]),{id:uid(),label:"RCD",mA:30}]}));
   const updateRcd=(boxId,rcdId,patch)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:(b.rcds||[]).map(r=>r.id===rcdId?{...r,...patch}:r)}));
   const removeRcd=(boxId,rcdId)=>{
-    if(!confirm("RCD-Gruppe loeschen? Zugeordnete Anschluesse verlieren ihre RCD-Zuordnung."))return;
+    if(!confirm("RCCB-Gruppe loeschen? Zugeordnete Anschluesse verlieren ihre RCD-Zuordnung."))return;
     setBoxTypes(s=>s.map(b=>{
       if(b.id!==boxId) return b;
       return {...b,rcds:(b.rcds||[]).filter(r=>r.id!==rcdId),outlets:b.outlets.map(o=>o.rcdId===rcdId?{...o,rcdId:null}:o)};
     }));
   };
 
-  const exportBoxTypes=()=>downloadJSON({_format:"stromplaner-boxtypes",boxTypes},"Kasten-Typen.json");
+  const exportBoxTypes=()=>downloadJSON({_format:"stromplaner-boxtypes",boxTypes},"Verteiler-Typen.json");
   const importBoxTypes=(e)=>{
     const file=e.target.files?.[0]; if(!file) return;
     const r=new FileReader(); r.onload=(ev)=>{
       try {
         const d=JSON.parse(ev.target.result);
-        if(d._format!=="stromplaner-boxtypes"&&d._format!=="stromplaner"){ alert("Kein gültiger Kasten-Typen-Export."); return; }
+        if(d._format!=="stromplaner-boxtypes"&&d._format!=="stromplaner"){ alert("Kein gültiger Verteiler-Typen-Export."); return; }
         const imported=(d.boxTypes||[]).map(migrateBoxType);
-        setBoxTypes(s=>{ const ids=new Set(s.map(b=>b.id)); const neu=imported.filter(b=>!ids.has(b.id)); alert(`${neu.length} Kasten-Typen hinzugefügt.`); return alphaSort([...neu,...s],"name"); });
+        setBoxTypes(s=>{ const ids=new Set(s.map(b=>b.id)); const neu=imported.filter(b=>!ids.has(b.id)); alert(`${neu.length} Verteiler-Typen hinzugefügt.`); return alphaSort([...neu,...s],"name"); });
       } catch(err){ alert("Fehler: "+err.message); }
     }; r.readAsText(file); e.target.value="";
   };
 
   return (
-    <Section title="Kasten-Typen" subtitle="Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
+    <Section title="Verteiler-Typen" subtitle="Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
-        <button style={S.primaryBtn} onClick={addType}>+ Neuen Kasten-Typ</button>
+        <button style={S.primaryBtn} onClick={addType}>+ Neuen Verteiler-Typ</button>
         <button style={S.ghostBtn} onClick={exportBoxTypes}>⬇ Exportieren</button>
         <label style={S.ghostBtn}>↥ Importieren<input type="file" accept=".json" onChange={importBoxTypes} style={{display:"none"}}/></label>
         {boxTypes.length>0&&<button style={S.dangerBtn} onClick={removeAllTypes}>Alle löschen</button>}
@@ -1478,11 +1487,11 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                   <button style={S.dangerBtnWide} onClick={()=>removeType(b.id)}>Löschen</button>
                 </div>
 
-                {/* RCD-Gruppen */}
+                {/* RCCB-Gruppen */}
                 <div style={{marginTop:12,marginBottom:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
-                  <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 8px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCD-Gruppen</p>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><p style={{fontSize:11,color:"#9aa4af",margin:0,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCCB-Gruppen</p><button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:18,height:18,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp("rccb")} title="Hilfe">?</button></div>
                   {(b.rcds||[]).length===0
-                    ? <p style={{...S.hint,margin:"0 0 6px"}}>Keine RCD-Gruppen — Anschlüsse werden nur per LS / RCBO geschützt.</p>
+                    ? <p style={{...S.hint,margin:"0 0 6px"}}>Keine RCCB-Gruppen — Anschlüsse werden nur per LS / RCBO geschützt.</p>
                     : <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
                         {(b.rcds||[]).map(rcd=>(
                           <div key={rcd.id} style={{display:"flex",gap:4,alignItems:"center",background:"#252b33",border:"1px solid #3a424c",borderRadius:5,padding:"4px 6px"}}>
@@ -1501,7 +1510,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                 <table style={S.table}>
                   <thead><tr>
                     <th style={S.th}>Name / Steckplatz</th><th style={S.th}>Stecker</th><th style={S.th}>A</th>
-                    <th style={S.th}>Phase</th><th style={S.th}>Steckpl.*</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}>RCD-Gruppe</th><th style={S.th}></th>
+                    <th style={S.th}>Phase</th><th style={S.th}>Steckpl.*</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}>RCCB-Gruppe</th><th style={S.th}></th>
                   </tr></thead>
                   <tbody>
                     {b.outlets.map(o=>(
@@ -1567,7 +1576,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                     {PROTECTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
                   </select>
                   {(b.rcds||[]).length>0&&(
-                    <select style={{...S.selectSm,width:100}} value={bulk.rcdId||""} onChange={e=>updBulk({rcdId:e.target.value||null})} title="RCD-Gruppe">
+                    <select style={{...S.selectSm,width:100}} value={bulk.rcdId||""} onChange={e=>updBulk({rcdId:e.target.value||null})} title="RCCB-Gruppe">
                       <option value="">— kein RCD —</option>
                       {(b.rcds||[]).map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
                     </select>
@@ -1654,10 +1663,10 @@ function LoadsTab({ loads,setLoads }) {
    TAB: Übersicht
 ══════════════════════════════════════════════════════════════════════════ */
 function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,mainConns,mainConnById,meta,isOverloaded,isUnderdimensioned,isAdapted,placements,loads,loadById }) {
-  if(instances.length===0) return <Section title="Übersicht"><p style={S.empty}>Noch keine Kästen aktiviert.</p></Section>;
+  if(instances.length===0) return <Section title="Übersicht"><p style={S.empty}>Noch keine Verteiler aktiviert.</p></Section>;
   return (
     <div>
-      <Section title="Hauptanschlüsse" subtitle="Summenlast aller zugewiesenen Kästen je Hauptanschluss.">
+      <Section title="Hauptanschlüsse" subtitle="Summenlast aller zugewiesenen Verteiler je Hauptanschluss.">
         {mainConns.map(mc=>{
           const connInsts=rootInstances.filter(i=>i.mainConnectionId===mc.id);
           const tot={L1:0,L2:0,L3:0};
@@ -1665,7 +1674,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
           return (
             <div key={mc.id} style={S.rootCard}>
               <div style={S.rootTitle}>{mc.name}{mc.amp&&<span style={S.rootSub}> (max {mc.amp}A)</span>}</div>
-              <div style={{fontSize:12,color:"#9aa4af",marginBottom:8}}>Kästen: {connInsts.map(i=>i.name).join(", ")||"—"}</div>
+              <div style={{fontSize:12,color:"#9aa4af",marginBottom:8}}>Verteiler: {connInsts.map(i=>i.name).join(", ")||"—"}</div>
               <div style={S.phaseBar}>
                 {PHASES.map(ph=>{
                   const a=tot[ph]; const pct=mc.amp?(a/mc.amp)*100:0;
@@ -1696,10 +1705,10 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
           );
         })}
       </Section>
-      <Section title="Alle Kästen">
+      <Section title="Alle Verteiler">
         <table style={S.table}>
           <thead><tr>
-            <th style={S.th}></th><th style={S.th}>Kasten</th><th style={S.th}>Eingang</th>
+            <th style={S.th}></th><th style={S.th}>Verteiler</th><th style={S.th}>Eingang</th>
             <th style={S.th}>hängt an</th><th style={S.th}>L1(A)</th><th style={S.th}>L2(A)</th><th style={S.th}>L3(A)</th>
             <th style={S.th}>Max(A)</th><th style={S.th}>Status</th>
           </tr></thead>
@@ -1777,7 +1786,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
         );
       })()}
 
-      {/* ── Verbraucher nach Kasten ───────────────────────────────────────── */}
+      {/* ── Verbraucher nach Verteiler ───────────────────────────────────────── */}
       {(() => {
         const boxRows=instances.map(inst=>{
           const pl=placements.filter(p=>p.instanceId===inst.id&&p.loadId);
@@ -1790,7 +1799,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
         }).filter(Boolean);
         if(!boxRows.length) return null;
         return (
-          <Section title="Verbraucher nach Kasten" subtitle="Für jede Unterverteilung: platzierte Verbraucher mit Menge und Leistung.">
+          <Section title="Verbraucher nach Verteiler" subtitle="Für jede Unterverteilung: platzierte Verbraucher mit Menge und Leistung.">
             {boxRows.map(({inst,rows,totalW})=>(
               <div key={inst.id} style={{marginBottom:16}}>
                 <div style={{fontWeight:700,fontSize:13,color:"#e8eaed",marginBottom:6}}>
@@ -1829,7 +1838,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
    TAB: Schaltbild – Blockschaltbild mit IEC-Symbolen
 ══════════════════════════════════════════════════════════════════════════ */
 function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,mainConnById,isAdapted,svgRef,placements,loadById }) {
-  if(instances.length===0) return <Section title="Blockschaltbild"><p style={S.empty}>Aktiviere zuerst Kästen im Konfiguration-Tab.</p></Section>;
+  if(instances.length===0) return <Section title="Blockschaltbild"><p style={S.empty}>Aktiviere zuerst Verteiler im Konfiguration-Tab.</p></Section>;
 
   /* ── Connector-Labels (sketchartig: Spannung + Phasigkeit) ───────────── */
   const connMid = (type) => ({
@@ -1918,7 +1927,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
       `H${x2}`].join(" ");
   };
 
-  /* ── MCB/RCD-Footer für einen Kasten berechnen ───────────────────────── */
+  /* ── MCB/RCD-Footer für einen Verteiler berechnen ───────────────────────── */
   const footerLines = (inst) => {
     const type = boxTypeById[inst?.typeId];
     if(!type) return [];
@@ -1950,7 +1959,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
   const OUT_H  = 20;  // Höhe je Outlet-Zeile
   const FOOT_PER= 11; // Höhe je Footer-Zeile (MCB/RCD)
   const INST_H = 14;  // Instanz-Name unten
-  const NODE_W = 264; // Kasten-Breite
+  const NODE_W = 264; // Verteiler-Breite
   const COL_W  = 326; // Spalten-Abstand
   const LEAF_W = 162;
   const LEAF_H = 38;
@@ -2012,7 +2021,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     return Math.max(0, idx);
   };
 
-  // Y-Offset der ersten Outlet-Zeile innerhalb eines Kastens
+  // Y-Offset der ersten Outlet-Zeile innerhalb eines Verteilers
   const outY_base = HDR_H + FEED_H + SEP_H + SECT_H; // 28+17+1+14 = 60
 
   // Subtree-Höhe: berücksichtigt Outlet-Positionen der Kinder
@@ -2098,7 +2107,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     return (t?.outlets||[]).some(o=>(outletToPlacs[`${i.id}__${o.id}`]||[]).length>0);
   });
   // Kollisions-freie Stack-Positionen für alle Verbraucher vorberechnen
-  // (greedy: Push-Down wenn Überschneidung mit Kind-Kasten oder bereits platziertem Stack)
+  // (greedy: Push-Down wenn Überschneidung mit Kind-Verteiler oder bereits platziertem Stack)
   const consumerStackPositions = {}; // `instId__outId` → stackTop Y
   instances.forEach(inst => {
     const type = boxTypeById[inst.typeId];
@@ -2106,7 +2115,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     const pos = positions[inst.id]; if(!pos) return;
     const leafX = pos.x + NODE_W + Math.round((COL_W-NODE_W)/2);
 
-    // Y-Bereiche ALLER Kästen ermitteln die sich mit der Consumer-Spalte überschneiden
+    // Y-Bereiche ALLER Verteiler ermitteln die sich mit der Consumer-Spalte überschneiden
     const blockedRanges = instances
       .filter(other => other.id !== inst.id)
       .flatMap(other => {
@@ -2169,7 +2178,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
       const outlet=parentOutlets[resolveOutletIdx(inst, parentOutlets)];
       const y1=childOutletAbsY(inst.parentId, inst);
       const toPos=positions[inst.id];
-      // y2 = Mitte der Einspeisungs-Zeile des Kind-Kastens
+      // y2 = Mitte der Einspeisungs-Zeile des Kind-Verteilers
       const feedMidY = toPos.y + HDR_H + FEED_H/2;
       return { x1:positions[inst.parentId].x+NODE_W, y1,
                x2:toPos.x, y2:feedMidY,
@@ -2241,7 +2250,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
             );
           })}
 
-          {/* ── Kasten-Knoten ────────────────────────────────────────────── */}
+          {/* ── Verteiler-Knoten ────────────────────────────────────────────── */}
           {instances.map(inst=>{
             const pos=positions[inst.id]; if(!pos) return null;
             const type=boxTypeById[inst.typeId];
@@ -2285,7 +2294,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
                   </circle>
                 )}
 
-                {/* ── Socket-Symbol am linken Eingang (wenn Kind-Kasten) ─────── */}
+                {/* ── Socket-Symbol am linken Eingang (wenn Kind-Verteiler) ─────── */}
                 {inst.parentId&&(
                   <g transform={`translate(0,${HDR_H+FEED_H/2})`}>
                     {/* Buchsen-Gehäuse links, ragt leicht aus dem Rahmen heraus */}
@@ -2436,7 +2445,73 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
   );
 }
 
-function Section({title,subtitle,children}){ return <section style={S.section}><h2 style={S.h2}>{title}</h2>{subtitle&&<p style={S.subtitle}>{subtitle}</p>}{children}</section>; }
+
+const HelpContext = React.createContext(()=>{});
+
+const HELP_SECTIONS = {
+  hauptanschluesse: {
+    title: '1 · Hauptanschlüsse',
+    text: 'Hier definierst du die Einspeisepunkte deiner Anlage – also die Anschlüsse, aus denen deine Verteiler gespeist werden. Gib jedem Hauptanschluss einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung Bühne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
+    extra: 'Verteiler können optional einem Hauptanschluss zugewiesen werden – so wird die summierte Last je Einspeisepunkt berechnet und im Übersichts-Tab angezeigt.'
+  },
+  verteiler: {
+    title: '2 · Verteiler hinzufügen',
+    text: 'Hier fügst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzufügen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben – dort definierst du Eingangs-Steckertyp, Absicherung und alle Abgänge.',
+    extra: 'Nach dem Hinzufügen kannst du für jeden Verteiler festlegen, wo er in der Topologie hängt: entweder direkt an einem Hauptanschluss oder als Unterverteilung an einem Abgang eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird.'
+  },
+  steckplan: {
+    title: '3 · Steckplan',
+    text: 'Im Steckplan belegst du die einzelnen Abgänge deines Verteilers mit Verbrauchern. Wähle oben den Verteiler aus, den du bearbeiten möchtest. Über die Schnellerfassung kannst du gezielt einen Anschluss und einen Verbraucher auswählen und mit dem "Menge"-Kästchen gleich mehrere identische Verbraucher auf einmal stecken.',
+    extra: 'Du kannst auch erst den Anschluss wählen und dann den Verbraucher – der Anschluss bleibt erhalten. Für jeden gesteckten Verbraucher werden Phase, Leistung und Ampere automatisch berechnet und in der Phasenlastanzeige summiert.'
+  },
+  rccb: {
+    title: '4 · RCCB-Gruppen',
+    text: 'RCCBs (Fehlerstromschutzschalter) schützen mehrere Abgänge gemeinsam. Wenn dein Verteiler einen oder mehrere RCCBs verbaut hat, trägst du diese hier ein – mit Bezeichnung und Auslösestrom in mA. Anschließend kannst du im Steckplan für jeden Abgang angeben, welcher RCCB-Gruppe er zugehört.',
+    extra: 'Hat ein Abgang stattdessen einen eigenen RCBO (kombinierten LS + FI), wird das direkt beim Anschluss im Verteiler-Typ konfiguriert, nicht hier.'
+  },
+  errichtungspruefung: {
+    title: '5 · Errichtungsprüfung',
+    text: 'Hier dokumentierst du die Prüfung deiner Anlage nach DIN VDE 0100-600. Wähle einen Verteiler aus der Liste und fülle die Felder der Reihe nach aus: zuerst Stammdaten des Prüfers, Datum und Prüfort, dann die sechs Punkte der Sichtprüfung, anschließend die elektrischen Messwerte – Drehfeld, Spannungen (U L–N, U L–L, U N–PE, U L–PE), RCD-Auslösezeiten und Schleifenimpedanzen je Abgang. Werte außerhalb der Norm-Grenzwerte werden direkt rot markiert und im Abschlussprotokoll als Mängel aufgeführt.',
+    extra: 'Hast du kaskadierte Verteiler – also eine Unterverteilung die an einem Abgang eines übergeordneten Verteilers hängt – übernimmt das Tool den ungünstigsten Zs-Wert aus der Unterverteilung automatisch für den entsprechenden Abgang des Hauptverteilers. Wenn du die Impedanz dort zusätzlich separat gemessen hast, kannst du den Wert manuell überschreiben; er wird dann mit einem ✎ gekennzeichnet.'
+  },
+};
+function HelpModal({section,onClose,goToGuide}){
+  const s=HELP_SECTIONS[section];
+  if(!s) return null;
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+      <div style={{background:"#1b2026",border:"1px solid #3a424c",borderRadius:10,padding:24,maxWidth:500,width:"90%",boxShadow:"0 8px 40px rgba(0,0,0,.8)"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+          <h3 style={{margin:0,fontSize:15,color:"#f5a623",lineHeight:1.3}}>{s.title.replace(/^\d+\s*·\s*/,"")}</h3>
+          <button style={{background:"transparent",border:"none",color:"#9aa4af",fontSize:18,cursor:"pointer",padding:"0 0 0 14px",lineHeight:1}} onClick={onClose}>✕</button>
+        </div>
+        <p style={{margin:s.extra?"0 0 10px":"0 0 16px",fontSize:13,color:"#c8ccd4",lineHeight:1.75}}>{s.text}</p>
+        {s.extra&&<p style={{margin:"0 0 16px",fontSize:13,color:"#c8ccd4",lineHeight:1.75}}>{s.extra}</p>}
+        <button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:6,padding:"6px 12px",color:"#f5a623",cursor:"pointer",fontSize:12}} onClick={goToGuide}>Vollständige Anleitung öffnen →</button>
+      </div>
+    </div>
+  );
+}
+
+function AnleitungTab(){
+  return (
+    <div style={{maxWidth:680}}>
+      <h1 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 20px"}}>Anleitung</h1>
+      {Object.values(HELP_SECTIONS).map(s=>(
+        <section key={s.title} style={{background:"#252b33",borderRadius:10,padding:20,marginBottom:16,border:"1px solid #3a424c"}}>
+          <h2 style={{margin:"0 0 10px",fontSize:16,color:"#f5a623",fontWeight:700}}>{s.title}</h2>
+          <p style={{margin:s.extra?"0 0 10px":"0",fontSize:14,color:"#c8ccd4",lineHeight:1.8}}>{s.text}</p>
+          {s.extra&&<p style={{margin:0,fontSize:14,color:"#c8ccd4",lineHeight:1.8}}>{s.extra}</p>}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function Section({title,subtitle,helpKey,children}){
+  const openHelp=useContext(HelpContext);
+  return <section style={S.section}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><h2 style={{...S.h2,margin:0}}>{title}</h2>{helpKey&&<button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:20,height:20,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp(helpKey)} title="Hilfe">?</button>}</div>{subtitle&&<p style={S.subtitle}>{subtitle}</p>}{children}</section>;
+}
 function Field({label,children}){ return <label style={S.field}><span style={S.fieldLabel}>{label}</span>{children}</label>; }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -2721,6 +2796,7 @@ function ErweitertTab({ cableCalcs, setCableCalcs, voltCalcs, setVoltCalcs, subT
 }
 
 function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnById, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults }) {
+  const openHelp=useContext(HelpContext);
   const updMeta = (patch) => setInspMeta(s=>({...s,...patch}));
 
   const IR_DEF = { voltL1N:"",voltL2N:"",voltL3N:"",voltL1L2:"",voltL2L3:"",voltL1L3:"",voltNPE:"",voltL1PE:"",voltL2PE:"",voltL3PE:"",phaseRot:"",rPE:"",rIso:"",zs:"",ik:"",sicht:[null,null,null,null,null,null],bemerkung:"",bemerkungSchwere:"bad",outlets:{} };
@@ -2880,7 +2956,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       </div></div></section>
     ${inspMeta.equipment?`<section class="block"><header class="bar"><span><strong>Prüfmittel</strong></span></header>
       <div class="block-body"><div class="num-row row-last"><span class="muted">01</span><span>${esc(inspMeta.equipment)}</span></div></div></section>`:""}
-    <section class="block"><header class="bar"><span><strong>Umfang</strong><span class="bar-sub">${total} Kasten${total!==1?"":"en"}</span></span></header>
+    <section class="block"><header class="bar"><span><strong>Umfang</strong><span class="bar-sub">${total} Verteiler</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span>Bezeichnung</span><span>Typ</span><span>Eingang</span><span>Hängt an</span></div>
         ${sorted2.map((inst,i)=>{const type=boxTypeById[inst.typeId];const parent=inst.parentId?instById[inst.parentId]:null;const feedLbl=parent?esc(parent.name):inst.mainConnectionId?esc(mainConnById[inst.mainConnectionId]?.name||"–"):"— Einspeisung —";return`<div class="trow${i===sorted2.length-1?" row-last":""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name||"–")}</span><span class="muted">${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A</span><span class="muted">${feedLbl}</span></div>`;}).join("")}
@@ -2890,7 +2966,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
   <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / PTOT</span></footer>
 </article>`;
 
-    // ── Pro Kasten ────────────────────────────────────────────────────────
+    // ── Pro Verteiler ────────────────────────────────────────────────────────
     // Seitenzähler: Deckblatt = 1, Verteilerseiten ab 2, Abschluss zuletzt
     let pdfPC=1;
     sorted2.forEach((inst,instIdx)=>{
@@ -2898,7 +2974,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const outlets=type?sortOutlets(type.outlets):[];
       const ir=getIR(inst.id);
       const sicht=ir.sicht||Array(6).fill(null);
-      // RCD-Gruppen + RCBO im PDF
+      // RCCB-Gruppen + RCBO im PDF
       const pdfRcdRows=[];
       (type?.rcds||[]).forEach(rcd=>pdfRcdRows.push({rowType:"rcd",rcd,outlet:null,oid:`rcd_${rcd.id}`,rowLabel:rcd.label,iAnLimit:rcd.mA,protLabel:`RCD ${rcd.mA} mA`}));
       outlets.filter(o=>o.protection==="RCBO").forEach(o=>{
@@ -2956,7 +3032,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const pdfWorstIk=(...vs)=>{const v=vs.filter(x=>x!=="").map(Number);return v.length?Math.min(...v).toFixed(0):"";};
       const renderChunk=(chunk,isLastChunk)=>`<section class="block"><header class="bar"><span><strong>${n}.${abgSec} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
       <div class="block-body">
-        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Kasten</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
+        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Verteiler</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
         ${chunk.map(({oid,label,lbl,amp,is3p,hasChild,childInstIds,hasRcd},i)=>{
           const or=getOR(inst.id,oid);
           const ikLimO=amp*10;
@@ -3009,7 +3085,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
   ${pageH}
   <main class="page-body">
     <div class="page-title"><div class="page-title-row">
-      <div><div class="kicker">Kasten ${n} von ${total} · ${esc(type?.name||"")}</div>
+      <div><div class="kicker">Verteiler ${n} von ${total} · ${esc(type?.name||"")}</div>
         <h1><span class="id-h1">${esc(inst.name)}</span><span class="muted muted-h1"> · ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A · ${esc(type?.name||"")}</span></h1></div>
       ${hasMangel?`<span class="befund-label bad">✕ Mangel</span>`:hasHinweis?`<span class="befund-label warn">! Hinweis</span>`:""}
     </div></div>
@@ -3049,7 +3125,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           pages+=`<article class="page">
   ${pageH}
   <main class="page-body">
-    <div style="margin:4px 0 8px"><div class="kicker">${esc(inst.name)} · Kasten ${n} von ${total} – Fortsetzung</div></div>
+    <div style="margin:4px 0 8px"><div class="kicker">${esc(inst.name)} · Verteiler ${n} von ${total} – Fortsetzung</div></div>
     ${renderChunk(chunk,isLast)}
     ${isLast?cableHTML:""}
     ${isLast?bemHTML:""}
@@ -3069,7 +3145,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     <div class="page-title"><div class="kicker">Abschluss · Mängelliste · Bestätigung</div><h1>Befund &amp; Unterschrift</h1></div>
     <section class="block"><header class="bar"><span><strong>E · Mängel und Auflagen</strong><span class="bar-sub">${maengel.length} Eintr${maengel.length===1?"ag":"äge"}</span></span></header>
       <div class="block-body">${maengel.length===0?`<div style="padding:6px 10px;color:#7a8290;font-size:9.5px">Keine Mängel protokolliert.</div>`:`
-        <div class="thead" style="grid-template-columns:40px 200px 1fr 80px"><span>Nr.</span><span>Kasten</span><span>Beschreibung</span><span class="r">Schwere</span></div>
+        <div class="thead" style="grid-template-columns:40px 200px 1fr 80px"><span>Nr.</span><span>Verteiler</span><span>Beschreibung</span><span class="r">Schwere</span></div>
         ${maengel.map((m,i)=>`<div class="trow${i===maengel.length-1?" row-last":""}" style="grid-template-columns:40px 200px 1fr 80px"><span class="muted">M${String(i+1).padStart(2,"0")}</span><span>${esc(m.inst.name)}</span><span>${esc(m.item)}</span><span class="r">${m.type==="bad"?`<span class="bad">✕ Mangel</span>`:`<span class="warn">! Hinweis</span>`}</span></div>`).join("")}`}
       </div></section>
     <section class="block"><header class="bar"><span><strong>F · Unterschrift</strong><span class="bar-sub">Prüfende Elektrofachkraft</span></span></header>
@@ -3140,19 +3216,20 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             </select>
           </Field>
         </div>
-        <div style={{textAlign:"right",marginTop:14}}>
+        <div style={{textAlign:"right",marginTop:14,display:"flex",justifyContent:"flex-end",alignItems:"center",gap:6}}>
           <button style={S.exportBtn} onClick={exportInspectionPDF}>🖨 Prüfprotokoll PDF</button>
+          <button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:22,height:22,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",justifyContent:"center"}} onClick={()=>openHelp("errichtungspruefung")} title="Hilfe zur Errichtungsprüfung">?</button>
         </div>
       </Section>
 
       {sorted.length===0
-        ? <p style={S.empty}>Keine Kästen aktiviert. Bitte zuerst im Tab „Konfiguration" Kästen hinzufügen.</p>
+        ? <p style={S.empty}>Keine Verteiler aktiviert. Bitte zuerst im Tab „Konfiguration" Verteiler hinzufügen.</p>
         : sorted.map(inst=>{
           const type      = boxTypeById[inst.typeId];
           const outlets   = type ? sortOutlets(type.outlets) : [];
           const ir        = getIR(inst.id);
           const sicht     = ir.sicht || Array(6).fill(null);
-          // #16: RCD-Gruppen als eigene Zeilen, danach RCBO-Anschlüsse (Multicore expandiert)
+          // #16: RCCB-Gruppen als eigene Zeilen, danach RCBO-Anschlüsse (Multicore expandiert)
           const rcdGroups = type?.rcds || [];
           const rcboOutlets = outlets.filter(o=>o.protection==="RCBO");
           const expandedRcdRows = [];
