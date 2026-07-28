@@ -10,7 +10,12 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Vertei
 
 ## Schnellstart
 
-1. Neueste Version von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** herunterladen und installieren (einmalig)
+1. Neueste Version von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** herunterladen und installieren (einmalig):
+   - **Windows:** `Stromplaner Setup x.x.x.exe`
+   - **macOS (Apple Silicon / M-Series):** `Stromplaner-x.x.x-arm64.dmg`
+   - **macOS (Intel):** `Stromplaner-x.x.x.dmg`
+   
+   > **macOS-Hinweis:** Beim ersten Öffnen erscheint eine Warnung „Entwickler nicht verifiziert". Rechtsklick auf die App → **Öffnen** → **Öffnen** umgeht diese Meldung einmalig.
 2. **Erster Start:** **Verteiler-Typen und Verbraucher selber anlegen** oder **↥ Laden** → `app/Standard.json` auswählen, um Verteiler-Typen und Verbraucher vorzuladen
 3. Planen, stecken, prüfen
 4. Mit **💾 Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
