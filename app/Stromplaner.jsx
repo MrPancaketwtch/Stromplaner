@@ -1,14 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
 
-/* ============================================================================
-   STROMPLANER v4
-   + Mehrere Hauptanschlüsse, Verteiler optional zuweisbar
-   + Multicore: konfigurierbare Steckplatzanzahl, Phase rotiert automatisch
-   + Verbraucher-Dropdown: Inline-Textsuche direkt im Trigger
-   + Autosave via localStorage
-   ============================================================================ */
-
 const PHASES = ["L1","L2","L3"];
 const VOLT   = 230;
 const LS_KEY = "stromplaner_autosave";
@@ -81,8 +73,9 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 
 const CHANGELOG = {
   "1.0.6": [
-    "Das Hochladen einer digitalen Unterschrift im Prüfprotokoll ist jetzt möglich"
+    "Das Hochladen einer digitalen Unterschrift im Prüfprotokoll ist jetzt möglich",
     "Spendenlink wurde aktualisiert (GitHub Sponsors → Buymeacoffee)",
+    "App kann jetzt auch auf MacOS installiert werden",
   ],
   "1.0.5": [
     "Errichtungsprüfung wurde überarbeitet: Zusätzliche Felder bei Schleifenimpedanz und Kurzschlussstrom für Drehstromanschlüsse & Kaskadierungslogik mit Möglichkeit zum Nachtragen von Prüfergebnissen",
