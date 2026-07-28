@@ -1,6 +1,6 @@
 {
   "name": "stromplaner",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "main": "src/main.js",
   "scripts": {
@@ -35,6 +35,18 @@
         }
       ],
       "signAndEditExecutable": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "category": "public.app-category.utilities"
     },
     "nsis": {
       "oneClick": true,
