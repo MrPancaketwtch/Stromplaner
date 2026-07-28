@@ -1,28 +1,47 @@
 @echo off
 cd /d "%~dp0.."
-echo Stromplaner Release bauen und auf GitHub veroeffentlichen...
+
+echo ==============================
+echo  Stromplaner Release
+echo ==============================
 echo.
 
-if "%GH_TOKEN%"=="" (
-    echo FEHLER: GH_TOKEN ist nicht gesetzt.
-    echo.
-    echo Bitte als Umgebungsvariable setzen:
-    echo   Systemsteuerung ^> Umgebungsvariablen ^> GH_TOKEN
-    echo.
-    echo Token erstellen: GitHub ^> Settings ^> Developer settings ^> Personal access tokens
-    echo Benoetigt: Scope "repo"
-    echo.
+set /p VERSION="Neue Version (z.B. 1.0.6): "
+
+if "%VERSION%"=="" (
+    echo Keine Version angegeben.
     pause
     exit /b 1
 )
 
-npm run release
-if %errorlevel% equ 0 (
-    echo.
-    echo Fertig! Release auf GitHub veroeffentlicht.
-    echo https://github.com/MrPancaketwtch/Stromplaner/releases
-) else (
-    echo.
-    echo Fehler beim Veroeffentlichen.
-)
+echo.
+echo [1/5] package.json auf v%VERSION% setzen...
+node -e "const fs=require('fs');const p='package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.version='%VERSION%';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n','utf8');"
+if %errorlevel% neq 0 ( echo Fehler. & pause & exit /b 1 )
+
+echo [2/5] App bauen...
+npm run build
+if %errorlevel% neq 0 ( echo Build fehlgeschlagen. & pause & exit /b 1 )
+
+echo [3/5] Commit...
+git add package.json app/Stromplaner.html app/Stromplaner.jsx
+git commit -m "chore: release v%VERSION%"
+if %errorlevel% neq 0 ( echo Commit fehlgeschlagen. & pause & exit /b 1 )
+
+echo [4/5] Tag v%VERSION% erstellen und pushen...
+git tag v%VERSION%
+git push
+git push origin v%VERSION%
+if %errorlevel% neq 0 ( echo Push fehlgeschlagen. & pause & exit /b 1 )
+
+echo.
+echo ==============================
+echo  Fertig!
+echo  GitHub Actions baut jetzt
+echo  Windows + macOS automatisch.
+echo.
+echo  Actions:  https://github.com/MrPancaketwtch/Stromplaner/actions
+echo  Releases: https://github.com/MrPancaketwtch/Stromplaner/releases
+echo ==============================
+echo.
 pause
