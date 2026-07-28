@@ -222,10 +222,11 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | UI | React 18 (JSX) |
 | Build | esbuild → standalone IIFE |
 | Output | Einzelne HTML-Datei (keine externen Abhängigkeiten) |
-| Desktop-Wrapper | Electron 33 (NSIS-Installer für Windows) |
+| Desktop-Wrapper | Electron 33 (NSIS für Windows, DMG für macOS) |
 | Auto-Update | electron-updater via GitHub Releases |
 | Persistenz | localStorage (Autosave, 600 ms debounce) |
 | Diagramm | SVG (manuelles Layout, kein D3 o. ä.) |
+| CI/CD | GitHub Actions (baut Windows + macOS parallel bei Tag-Push) |
 
 ### Build & Release
 
@@ -245,19 +246,18 @@ Das Skript bündelt JSX + React mit esbuild zu `app/Stromplaner.html`.
 npm start
 ```
 
-**Lokalen Installer bauen (ohne GitHub-Release):**
+**Neue Version veröffentlichen:**
+1. CHANGELOG in `app/Stromplaner.jsx` aktualisieren
+2. `scripts\release.bat` ausführen und neue Versionsnummer eingeben
+3. Das Skript setzt die Version, baut, committet und pusht einen Git-Tag
+4. GitHub Actions baut automatisch Windows (`.exe`) und macOS (`.dmg`) und lädt beide als GitHub Release hoch
+5. Installierte Apps erkennen das Update beim nächsten Start automatisch
+
+**Lokalen Installer bauen (nur Windows, ohne GitHub-Release):**
 ```bash
 npm run dist
 # → dist/Stromplaner Setup x.x.x.exe
 ```
-
-**Neue Version veröffentlichen:**
-1. Version in `package.json` erhöhen (z. B. `1.0.7` → `1.0.8`)
-2. `scripts\release.bat` ausführen (oder `npm run release`)
-3. Das Skript baut, signiert und lädt den Installer + Metadaten als GitHub Release hoch
-4. Installierte Apps erkennen das Update beim nächsten Start automatisch
-
-> Für den Release wird ein GitHub-Token mit `repo`-Berechtigung als Windows-Umgebungsvariable `GH_TOKEN` benötigt.
 
 ### Dateiformat (Autosave / JSON-Export)
 ```json
