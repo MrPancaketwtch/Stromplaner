@@ -334,6 +334,7 @@ function FilterSelect({ options, value, onChange, placeholder, style }) {
 ══════════════════════════════════════════════════════════════════════════ */
 export default function App() {
   const [tab,  setTab]  = useState("config");
+  const [tabDir,setTabDir]=useState(1);
   const [meta, setMeta] = useState(DEFAULT_META);
   const [showUpdateModal,   setShowUpdateModal]   = useState(false);
   const [updateStatus,      setUpdateStatus]      = useState({ type: 'idle' });
@@ -877,14 +878,20 @@ export default function App() {
   const TABS=[
     ["config","1 · Konfiguration"],["plan","2 · Steckplan"],
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
-    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["erweitert","Erweitert"],
-    ["help","ℹ Anleitung"],
+    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["help","ℹ Anleitung"],["erweitert","Erweitert"],
   ];
+  const goTab=(k)=>{
+    const keys=TABS.map(([id])=>id);
+    setTabDir(keys.indexOf(k)>=keys.indexOf(tab)?1:-1);
+    setTab(k);
+  };
+  const panelStyle=(k)=>({display:tab===k?"block":"none",...(tab===k?{animation:`tabSlide${tabDir>0?'R':'L'} 0.18s ease both`}:{})});
   const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById };
 
   return (
     <HelpContext.Provider value={setHelpSection}>
     <div style={S.app}>
+      <style>{`@keyframes tabSlideR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}@keyframes tabSlideL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}`}</style>
       <header style={S.header}>
         <div style={S.logo}>⚡ STROMPLANER</div>
         {corpLogo&&<img src={corpLogo} alt="Logo" style={{height:26,maxWidth:100,objectFit:"contain",display:"block",marginLeft:6}}/>}
@@ -908,7 +915,7 @@ export default function App() {
         {TABS.map(([k,label])=>(
           <button key={k}
             style={{...S.navBtn,...(tab===k?S.navBtnActive:{}),...(k==="erweitert"?{color:tab===k?"#f5a623":"#c08030",borderColor:tab===k?"#f5a623":"transparent"}:{})}}
-            onClick={()=>{ if(k==="erweitert"){ setErweitertOpen(o=>!o); setTab("erweitert"); } else { setTab(k); } }}>{label}</button>
+            onClick={()=>{ if(k==="erweitert"){ setErweitertOpen(o=>!o); goTab("erweitert"); } else { goTab(k); } }}>{label}</button>
         ))}
         {erweitertOpen && <>
           <span style={{color:"#3a424c",alignSelf:"center",margin:"0 2px",fontSize:16}}>&rsaquo;</span>
@@ -917,51 +924,51 @@ export default function App() {
               ...S.navBtn,
               ...(erweiterSubTab===k && tab==="erweitert" ? S.navBtnActive : {}),
               ...(erweiterSubTab===k && tab==="erweitert" ? {color:"#f5a623",borderColor:"#f5a623"} : {color:"#c08030"})
-            }} onClick={()=>{ setErweiterSubTab(k); setTab("erweitert"); }}>{lbl}</button>
+            }} onClick={()=>{ setErweiterSubTab(k); goTab("erweitert"); }}>{lbl}</button>
           ))}
         </>}
       </nav>
       <main style={S.main}>
         {/* Alle Tabs bleiben gemountet – nur CSS display:none beim Verstecken */}
-        <div style={{display:tab==="config"?"block":"none"}}>
+        <div style={panelStyle("config")}>
           <ConfigTab {...sharedProps} meta={meta} setMeta={setMeta} boxTypes={boxTypes}
             addInstance={addInstance} removeInstance={removeInstance} updateInstance={updateInstance}
             setParentWithValidation={setParentWithValidation} clearAllInstances={clearAllInstances}
             mainConns={mainConns} addMainConn={addMainConn} updateMainConn={updateMainConn} removeMainConn={removeMainConn} />
         </div>
-        <div style={{display:tab==="plan"?"block":"none"}}>
+        <div style={panelStyle("plan")}>
           <PlanTab {...sharedProps} loads={loads} loadById={loadById}
             placements={placements} addPlacement={addPlacement} addPlacementsFilled={addPlacementsFilled} updatePlacement={updatePlacement} removePlacement={removePlacement}
             activePlan={activePlan} setActivePlan={setActivePlan} ownLoad={ownLoad} meta={meta} />
         </div>
-        <div style={{display:tab==="overview"?"block":"none"}}>
+        <div style={panelStyle("overview")}>
           <OverviewTab {...sharedProps} meta={meta} placements={placements} loads={loads} loadById={loadById} />
         </div>
-        <div style={{display:tab==="schematic"?"block":"none"}}>
+        <div style={panelStyle("schematic")}>
           <SchematicTab {...sharedProps} meta={meta} svgRef={schematicSvgRef} placements={placements} loadById={loadById}/>
         </div>
-        <div style={{display:tab==="boxtypes"?"block":"none"}}>
+        <div style={panelStyle("boxtypes")}>
           <BoxTypesTab boxTypes={boxTypes} setBoxTypes={setBoxTypes} instances={instances} />
         </div>
-        <div style={{display:tab==="loads"?"block":"none"}}>
+        <div style={panelStyle("loads")}>
           <LoadsTab loads={loads} setLoads={setLoads} />
         </div>
-        <div style={{display:tab==="inspection"?"block":"none"}}>
+        <div style={panelStyle("inspection")}>
           <InspectionTab {...sharedProps} meta={meta} placements={placements} loadById={loadById} inspMeta={inspMeta} setInspMeta={setInspMeta} inspResults={inspResults} setInspResults={setInspResults} inspSign={inspSign} uploadInspSign={uploadInspSign} removeInspSign={removeInspSign} />
         </div>
-        <div style={{display:tab==="erweitert"?"block":"none"}}>
+        <div style={panelStyle("erweitert")}>
           <ErweitertTab cableCalcs={cableCalcs} setCableCalcs={setCableCalcs}
             voltCalcs={voltCalcs} setVoltCalcs={setVoltCalcs}
             subTab={erweiterSubTab}/>
         </div>
-        <div style={{display:tab==="help"?"block":"none"}}>
+        <div style={panelStyle("help")}>
           <AnleitungTab/>
         </div>
       </main>
       {changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
       {showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
       {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus}/>}
-      {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);setTab("help");}}/>}
+      {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);goTab("help");}}/>}
     </div>
     </HelpContext.Provider>
   );
@@ -2452,46 +2459,61 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
             const outlets=type?.outlets||[];
             const pos=positions[inst.id]; if(!pos) return [];
             const leafX=pos.x+NODE_W+Math.round((COL_W-NODE_W)/2);
+            // Jeder Steckplatz bekommt eine eigene Lane-X für sein Kabel, damit sich die Leitungen nicht überlagen
+            const activeOutlets=outlets.filter(out=>(outletToPlacs[`${inst.id}__${out.id}`]||[]).length>0);
+            const avail=leafX-pos.x-NODE_W-6; // usable px between node edge and consumer box
+            const laneGap=activeOutlets.length>1?Math.min(8,Math.floor(avail/activeOutlets.length)):0;
             return outlets.flatMap(out=>{
               const placs=outletToPlacs[`${inst.id}__${out.id}`]||[];
               if(!placs.length) return [];
               const oY=outletAbsY(inst.id, out.id);
-              // Kollisions-freie Position (ggf. nach unten verschoben)
               const stackTop=consumerStackPositions[`${inst.id}__${out.id}`]??oY-LEAF_H/2;
-              const isMC = isMulticore(out.connector);
-              return placs.map((plac,pi)=>{
-                const load=loadById?.[plac.loadId]; if(!load) return null;
-                const leafY=stackTop+pi*(LEAF_H+LEAF_GAP);
-                const midY=leafY+LEAF_H/2;
-                const wattStr=load.watt?`${load.watt} W`:"";
-                const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
-                // Bei MC: Name etwas kürzer lassen, damit das Slot-Badge Platz hat
-                const maxName = isMC&&plac.mcSlot!=null ? 14 : 18;
-                const nameDisp=load.name&&load.name.length>maxName?load.name.slice(0,maxName-1)+"…":(load.name||"?");
-                return (
-                  <g key={plac.id}>
-                    <path d={orthoPath(pos.x+NODE_W,oY,leafX,midY)}
-                          fill="none" stroke="#3a5060" strokeWidth={1.2}/>
-                    <g transform={`translate(${leafX},${leafY})`}>
-                      <rect width={LEAF_W} height={LEAF_H} rx={4}
-                            fill="#1a2530" stroke="#3a5060" strokeWidth={1}/>
-                      <text x={8} y={14} fill="#6aaabf" fontSize={9} fontWeight="600">{nameDisp}</text>
-                      <text x={8} y={27} fill="#3a6070" fontSize={8}>{wattStr}{ampStr}</text>
-                      {/* Multicore-Slot-Badge oben rechts */}
-                      {isMC&&plac.mcSlot!=null&&(
-                        <g>
-                          <rect x={LEAF_W-30} y={4} width={26} height={13} rx={3}
-                                fill="#1e3a4a" stroke="#3a7a9a" strokeWidth={0.8}/>
-                          <text x={LEAF_W-17} y={14} textAnchor="middle"
-                                fill="#b8ecff" fontSize={8} fontWeight="700">
-                            Ch.{plac.mcSlot}
-                          </text>
-                        </g>
-                      )}
+              const isMC=isMulticore(out.connector);
+              const activeIdx=activeOutlets.findIndex(o=>o.id===out.id);
+              const laneX=pos.x+NODE_W+4+activeIdx*laneGap;
+              const midYs=placs.map((_,pi)=>stackTop+pi*(LEAF_H+LEAF_GAP)+LEAF_H/2);
+              const trunkTop=Math.min(oY,...midYs);
+              const trunkBottom=Math.max(oY,...midYs);
+              return [
+                // Kurzer Stub vom Steckplatz zur Lane
+                <line key={`stub_${out.id}`} x1={pos.x+NODE_W} y1={oY} x2={laneX} y2={oY}
+                      stroke="#3a5060" strokeWidth={1.2}/>,
+                // Vertikaler Stamm in der Lane (verbindet Outlet mit allen Verbrauchern)
+                <line key={`trunk_${out.id}`} x1={laneX} y1={trunkTop} x2={laneX} y2={trunkBottom}
+                      stroke="#3a5060" strokeWidth={1.2}/>,
+                // Einzelne Äste + Verbraucher-Boxen
+                ...placs.map((plac,pi)=>{
+                  const load=loadById?.[plac.loadId]; if(!load) return null;
+                  const leafY=stackTop+pi*(LEAF_H+LEAF_GAP);
+                  const midY=midYs[pi];
+                  const wattStr=load.watt?`${load.watt} W`:"";
+                  const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
+                  const maxName=isMC&&plac.mcSlot!=null?14:18;
+                  const nameDisp=load.name&&load.name.length>maxName?load.name.slice(0,maxName-1)+"…":(load.name||"?");
+                  return (
+                    <g key={plac.id}>
+                      <line x1={laneX} y1={midY} x2={leafX} y2={midY}
+                            stroke="#3a5060" strokeWidth={1.2}/>
+                      <g transform={`translate(${leafX},${leafY})`}>
+                        <rect width={LEAF_W} height={LEAF_H} rx={4}
+                              fill="#1a2530" stroke="#3a5060" strokeWidth={1}/>
+                        <text x={8} y={14} fill="#6aaabf" fontSize={9} fontWeight="600">{nameDisp}</text>
+                        <text x={8} y={27} fill="#3a6070" fontSize={8}>{wattStr}{ampStr}</text>
+                        {isMC&&plac.mcSlot!=null&&(
+                          <g>
+                            <rect x={LEAF_W-30} y={4} width={26} height={13} rx={3}
+                                  fill="#1e3a4a" stroke="#3a7a9a" strokeWidth={0.8}/>
+                            <text x={LEAF_W-17} y={14} textAnchor="middle"
+                                  fill="#b8ecff" fontSize={8} fontWeight="700">
+                              Ch.{plac.mcSlot}
+                            </text>
+                          </g>
+                        )}
+                      </g>
                     </g>
-                  </g>
-                );
-              }).filter(Boolean);
+                  );
+                }).filter(Boolean),
+              ];
             });
           })}
 
@@ -3643,8 +3665,8 @@ const S={
   exportBtn:        {background:ACCENT,color:"#1c2127",border:"none",borderRadius:6,padding:"8px 14px",fontWeight:700,cursor:"pointer",fontSize:13},
   ghostBtn:         {background:"transparent",color:"#e8eaed",border:`1px solid ${LINE}`,borderRadius:6,padding:"7px 11px",fontWeight:600,cursor:"pointer",fontSize:12,display:"inline-flex",alignItems:"center",gap:4},
   nav:              {display:"flex",gap:4,padding:"0 18px",background:DARK,borderBottom:`1px solid ${LINE}`,flexWrap:"wrap",position:"sticky",top:48,zIndex:9},
-  navBtn:           {background:"transparent",border:"none",color:"#9aa4af",padding:"11px 13px",cursor:"pointer",fontSize:13,borderBottom:"3px solid transparent"},
-  navBtnActive:     {color:"#fff",borderBottom:`3px solid ${ACCENT}`,fontWeight:600},
+  navBtn:           {background:"transparent",border:"none",color:"#9aa4af",padding:"11px 13px",cursor:"pointer",fontSize:13,borderBottom:"3px solid transparent",fontWeight:600,transition:"color 0.14s,border-color 0.14s"},
+  navBtnActive:     {color:"#fff",borderBottom:`3px solid ${ACCENT}`},
   main:             {padding:20,maxWidth:1200,margin:"0 auto"},
   section:          {background:PANEL,borderRadius:10,padding:20,marginBottom:20,border:`1px solid ${LINE}`},
   h2:               {margin:"0 0 4px",fontSize:17,color:"#fff"},
