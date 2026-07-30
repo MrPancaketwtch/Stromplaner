@@ -6,10 +6,46 @@ echo  Stromplaner Release
 echo ==============================
 echo.
 
-set /p VERSION="Neue Version (z.B. 1.0.7): "
+echo Pruefe auf uncommitted Aenderungen...
+git diff --quiet
+if %errorlevel% neq 0 (
+    echo FEHLER: Es gibt uncommitted Aenderungen im Working Tree.
+    echo Bitte zuerst alles committen oder zuruecksetzen, dann neu starten.
+    git diff --stat
+    pause
+    exit /b 1
+)
+git diff --cached --quiet
+if %errorlevel% neq 0 (
+    echo FEHLER: Es gibt staged aber nicht committete Aenderungen.
+    echo Bitte zuerst committen, dann neu starten.
+    git diff --cached --stat
+    pause
+    exit /b 1
+)
+
+echo.
+set /p VERSION="Neue Version (z.B. 1.0.8): "
 
 if "%VERSION%"=="" (
     echo Keine Version angegeben.
+    pause
+    exit /b 1
+)
+
+git tag v%VERSION% 2>nul
+if %errorlevel% equ 0 (
+    git tag -d v%VERSION%
+) else (
+    echo FEHLER: Tag v%VERSION% existiert bereits lokal oder auf dem Remote.
+    echo Bitte eine hoehere Versionsnummer waehlen.
+    pause
+    exit /b 1
+)
+git ls-remote --exit-code --tags origin v%VERSION% >nul 2>&1
+if %errorlevel% equ 0 (
+    echo FEHLER: Tag v%VERSION% existiert bereits auf dem Remote.
+    echo Bitte eine hoehere Versionsnummer waehlen.
     pause
     exit /b 1
 )
@@ -34,7 +70,7 @@ if %errorlevel% neq 0 ( echo Branch-Push fehlgeschlagen. & pause & exit /b 1 )
 
 echo [5/5] Tag v%VERSION% erstellen und pushen...
 git tag v%VERSION%
-if %errorlevel% neq 0 ( echo Tag erstellen fehlgeschlagen ^(existiert der Tag bereits?^). & pause & exit /b 1 )
+if %errorlevel% neq 0 ( echo Tag erstellen fehlgeschlagen. & pause & exit /b 1 )
 git push origin v%VERSION%
 if %errorlevel% neq 0 ( echo Tag-Push fehlgeschlagen. & pause & exit /b 1 )
 
