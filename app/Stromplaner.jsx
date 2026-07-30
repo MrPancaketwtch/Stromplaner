@@ -2478,7 +2478,19 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
               const midYs=placs.map((_,pi)=>stackTop+pi*(LEAF_H+LEAF_GAP)+LEAF_H/2);
               const trunkTop=Math.min(oY,...midYs);
               const trunkBottom=Math.max(oY,...midYs);
+              const totalH=placs.length*(LEAF_H+LEAF_GAP)-LEAF_GAP;
+              const grpPad=5;
+              const outLabel=out.label||(activeIdx>=0?`Steckplatz ${activeIdx+1}`:'');
               return [
+                // Hintergrund-Gruppe für alle Verbraucher dieses Steckplatzes
+                <rect key={`grp_${out.id}`}
+                      x={leafX-grpPad} y={stackTop-grpPad}
+                      width={LEAF_W+grpPad*2} height={totalH+grpPad*2}
+                      rx={7} fill="#182430" stroke="#2a4558" strokeWidth={1}/>,
+                // Steckplatz-Label über der Gruppe
+                <text key={`grplbl_${out.id}`}
+                      x={leafX+4} y={stackTop-grpPad-3}
+                      fill="#4a7a96" fontSize={8} fontWeight="700">{outLabel}</text>,
                 // Kurzer Stub vom Steckplatz zur Lane
                 <line key={`stub_${out.id}`} x1={pos.x+NODE_W} y1={oY} x2={laneX} y2={oY}
                       stroke="#3a5060" strokeWidth={1.2}/>,
