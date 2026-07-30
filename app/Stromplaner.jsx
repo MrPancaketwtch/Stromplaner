@@ -915,7 +915,9 @@ export default function App() {
         {TABS.map(([k,label])=>(
           <button key={k}
             style={{...S.navBtn,...(tab===k?S.navBtnActive:{}),...(k==="erweitert"?{color:tab===k?"#f5a623":"#c08030",borderColor:tab===k?"#f5a623":"transparent"}:{})}}
-            onClick={()=>{ if(k==="erweitert"){ setErweitertOpen(o=>!o); goTab("erweitert"); } else { goTab(k); } }}>{label}</button>
+            onClick={()=>{ if(k==="erweitert"){ setErweitertOpen(o=>!o); goTab("erweitert"); } else { goTab(k); } }}>
+            <span style={{display:'block',height:0,fontWeight:600,overflow:'hidden',visibility:'hidden',pointerEvents:'none'}} aria-hidden="true">{label}</span>
+            {label}</button>
         ))}
         {erweitertOpen && <>
           <span style={{color:"#3a424c",alignSelf:"center",margin:"0 2px",fontSize:16}}>&rsaquo;</span>
@@ -924,7 +926,9 @@ export default function App() {
               ...S.navBtn,
               ...(erweiterSubTab===k && tab==="erweitert" ? S.navBtnActive : {}),
               ...(erweiterSubTab===k && tab==="erweitert" ? {color:"#f5a623",borderColor:"#f5a623"} : {color:"#c08030"})
-            }} onClick={()=>{ setErweiterSubTab(k); goTab("erweitert"); }}>{lbl}</button>
+            }} onClick={()=>{ setErweiterSubTab(k); goTab("erweitert"); }}>
+            <span style={{display:'block',height:0,fontWeight:600,overflow:'hidden',visibility:'hidden',pointerEvents:'none'}} aria-hidden="true">{lbl}</span>
+            {lbl}</button>
           ))}
         </>}
       </nav>
@@ -3665,8 +3669,8 @@ const S={
   exportBtn:        {background:ACCENT,color:"#1c2127",border:"none",borderRadius:6,padding:"8px 14px",fontWeight:700,cursor:"pointer",fontSize:13},
   ghostBtn:         {background:"transparent",color:"#e8eaed",border:`1px solid ${LINE}`,borderRadius:6,padding:"7px 11px",fontWeight:600,cursor:"pointer",fontSize:12,display:"inline-flex",alignItems:"center",gap:4},
   nav:              {display:"flex",gap:4,padding:"0 18px",background:DARK,borderBottom:`1px solid ${LINE}`,flexWrap:"wrap",position:"sticky",top:48,zIndex:9},
-  navBtn:           {background:"transparent",border:"none",color:"#9aa4af",padding:"11px 13px",cursor:"pointer",fontSize:13,borderBottom:"3px solid transparent",fontWeight:600,transition:"color 0.14s,border-color 0.14s"},
-  navBtnActive:     {color:"#fff",borderBottom:`3px solid ${ACCENT}`},
+  navBtn:           {background:"transparent",border:"none",color:"#9aa4af",padding:"11px 13px",cursor:"pointer",fontSize:13,borderBottom:"3px solid transparent",transition:"color 0.14s,border-color 0.14s"},
+  navBtnActive:     {color:"#fff",borderBottom:`3px solid ${ACCENT}`,fontWeight:600},
   main:             {padding:20,maxWidth:1200,margin:"0 auto"},
   section:          {background:PANEL,borderRadius:10,padding:20,marginBottom:20,border:`1px solid ${LINE}`},
   h2:               {margin:"0 0 4px",fontSize:17,color:"#fff"},
