@@ -44204,6 +44204,12 @@ button:active { filter: brightness(0.95); }
   };
   var CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
   var CHANGELOG = {
+    "1.0.7": [
+      "Button zum Anzeigen des Changelogs hinzugef\xFCgt",
+      "Blockschaltbild wird jetzt richtig angezeigt",
+      "Kleine UI/UX Verbesserungen",
+      "Kleine Bugfixes und Verbesserungen"
+    ],
     "1.0.6": [
       "Das Hochladen einer digitalen Unterschrift im Pr\xFCfprotokoll ist jetzt m\xF6glich",
       "Spendenlink wurde aktualisiert (GitHub Sponsors \u2192 Buymeacoffee)",
@@ -44696,7 +44702,7 @@ Fortfahren?`);
     const addPlacementsFilled = (instanceId, loadId, outletId, count, startMcSlot = null) => setPlacements((s) => [...s, ...Array.from({ length: count }, (_, i) => ({ id: uid(), instanceId, outletId: outletId || "", mcSlot: startMcSlot !== null ? startMcSlot + i : null, loadId: loadId || "" }))]);
     const updatePlacement = (id, patch) => setPlacements((s) => s.map((p) => p.id === id ? { ...p, ...patch } : p));
     const removePlacement = (id) => setPlacements((s) => s.filter((p) => p.id !== id));
-    const addMainConn = () => setMainConns((s) => [...s, { id: uid(), name: "Hauptanschluss " + (s.length + 1), amp: "" }]);
+    const addMainConn = () => setMainConns((s) => [...s, { id: uid(), name: "Einspeisepunkt " + (s.length + 1), amp: "" }]);
     const updateMainConn = (id, patch) => setMainConns((s) => s.map((c) => c.id === id ? { ...c, ...patch } : c));
     const removeMainConn = (id) => {
       setMainConns((s) => s.filter((c) => c.id !== id));
@@ -44759,7 +44765,7 @@ Fortfahren?`);
         ["Version", meta.version],
         ["Datum", meta.date],
         [],
-        ["Verteiler", "Typ", "Eingang", "h\xE4ngt an", "Hauptanschluss", "L1(A)", "L2(A)", "L3(A)", "Max(A)", "Status"]
+        ["Verteiler", "Typ", "Eingang", "h\xE4ngt an", "Einspeisepunkt", "L1(A)", "L2(A)", "L3(A)", "Max(A)", "Status"]
       ];
       instances.forEach((inst) => {
         const t = totalLoad(inst.id);
@@ -44775,7 +44781,7 @@ Fortfahren?`);
       });
       const ovWs = utils.aoa_to_sheet(ovRows);
       utils.book_append_sheet(wb, ovWs, "\xDCbersicht");
-      const haRows = [["HAUPTANSCHL\xDCSSE"], [], ["Name", "Max(A)", "L1(A)", "L2(A)", "L3(A)", "Auslastung"]];
+      const haRows = [["EINSPEISEPUNKTE"], [], ["Name", "Max(A)", "L1(A)", "L2(A)", "L3(A)", "Auslastung"]];
       mainConns.forEach((mc) => {
         const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
         const tot = { L1: 0, L2: 0, L3: 0 };
@@ -44790,7 +44796,7 @@ Fortfahren?`);
         haRows.push([mc.name, mc.amp || "\u2013", round2(tot.L1), round2(tot.L2), round2(tot.L3), mc.amp ? `${pct}%` : "\u2013"]);
       });
       const haWs = utils.aoa_to_sheet(haRows);
-      utils.book_append_sheet(wb, haWs, "Hauptanschl\xFCsse");
+      utils.book_append_sheet(wb, haWs, "Einspeisepunkte");
       instances.forEach((inst) => {
         const type = boxTypeById[inst.typeId];
         const own = ownLoad(inst.id);
@@ -44851,7 +44857,7 @@ Fortfahren?`);
       let body = `${corpLogo ? `<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g, "&quot;")}" style="max-height:40px;max-width:140px;object-fit:contain"></div>` : ""}<h1 style="font-size:18px;margin:0 0 4px">\u26A1 STROMPLAN</h1>
       <div style="font-size:12px;color:#555;margin-bottom:16px">${meta.production} \xB7 ${meta.creator} \xB7 v${meta.version} \xB7 ${meta.date}</div>`;
       if (mainConns.length) {
-        body += `<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Hauptanschl\xFCsse</h2>`;
+        body += `<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Einspeisepunkte</h2>`;
         mainConns.forEach((mc) => {
           const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
           const tot = { L1: 0, L2: 0, L3: 0 };
@@ -45199,7 +45205,7 @@ Fortfahren?`);
   }
   function ConfigTab({ meta, setMeta, boxTypes, instances, instById, boxTypeById, addInstance, removeInstance, updateInstance, setParentWithValidation, clearAllInstances, isOverloaded, isUnderdimensioned, isAdapted, mainConns, addMainConn, updateMainConn, removeMainConn }) {
     const [pick, setPick] = (0, import_react.useState)(boxTypes[0]?.id || "");
-    return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Produktionsdaten" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Produktion" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.production, onChange: (e) => setMeta({ ...meta, production: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Ersteller" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.creator, onChange: (e) => setMeta({ ...meta, creator: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Version" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.version, onChange: (e) => setMeta({ ...meta, version: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "date", style: S.input, value: meta.date, onChange: (e) => setMeta({ ...meta, date: e.target.value }) })))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "Hauptanschl\xFCsse", subtitle: "Definiere alle Einspeisepunkte dieser Produktion. Verteiler k\xF6nnen optional einem Hauptanschluss zugewiesen werden.", helpKey: "hauptanschluesse" }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addMainConn }, "+ Hauptanschluss hinzuf\xFCgen"), mainConns.length === 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: S.hint }, "Noch keine Hauptanschl\xFCsse definiert. Verteiler ohne Zuweisung erscheinen als freie Einspeisepunkte."), mainConns.map((mc) => /* @__PURE__ */ import_react.default.createElement("div", { key: mc.id, style: { display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, flex: 2, minWidth: 150 }, placeholder: "Bezeichnung z.B. NH03-Halle 1", value: mc.name, onChange: (e) => updateMainConn(mc.id, { name: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, placeholder: "Max A", value: mc.amp, onChange: (e) => updateMainConn(mc.id, { amp: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "A"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeMainConn(mc.id) }, "\u2715")))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "Verteiler hinzuf\xFCgen", subtitle: "Jeder hinzugef\xFCgte Verteiler bekommt im Steckplan ein eigenes Datenblatt.", helpKey: "verteiler" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.row }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.select, value: pick, onChange: (e) => setPick(e.target.value) }, boxTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("option", { key: b.id, value: b.id }, b.name))), /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: () => addInstance(pick) }, "+ Verteiler hinzuf\xFCgen")), instances.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch keine Verteiler aktiviert.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, minWidth: 860, width: "auto" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Typ"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Eingang"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "h\xE4ngt an Verteiler\u2026"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "\u2026Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Hauptanschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, instances.map((inst) => {
+    return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Produktionsdaten" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react.default.createElement(Field, { label: "Produktion" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.production, onChange: (e) => setMeta({ ...meta, production: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Ersteller" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.creator, onChange: (e) => setMeta({ ...meta, creator: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Version" }, /* @__PURE__ */ import_react.default.createElement("input", { style: S.input, value: meta.version, onChange: (e) => setMeta({ ...meta, version: e.target.value }) })), /* @__PURE__ */ import_react.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react.default.createElement("input", { type: "date", style: S.input, value: meta.date, onChange: (e) => setMeta({ ...meta, date: e.target.value }) })))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "Einspeisepunkte", subtitle: "Definiere alle Einspeisepunkte dieser Produktion. Verteiler k\xF6nnen optional einem Einspeisepunkt zugewiesen werden.", helpKey: "hauptanschluesse" }, /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: addMainConn }, "+ Einspeisepunkt hinzuf\xFCgen"), mainConns.length === 0 && /* @__PURE__ */ import_react.default.createElement("p", { style: S.hint }, "Noch keine Einspeisepunkte definiert. Verteiler ohne Zuweisung erscheinen als freie Einspeisepunkte."), mainConns.map((mc) => /* @__PURE__ */ import_react.default.createElement("div", { key: mc.id, style: { display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("input", { style: { ...S.inputSm, flex: 2, minWidth: 150 }, placeholder: "Bezeichnung z.B. NH03-Halle 1", value: mc.name, onChange: (e) => updateMainConn(mc.id, { name: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, placeholder: "Max A", value: mc.amp, onChange: (e) => updateMainConn(mc.id, { amp: e.target.value }) }), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 12, color: "#9aa4af" } }, "A"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.dangerBtn, onClick: () => removeMainConn(mc.id) }, "\u2715")))), /* @__PURE__ */ import_react.default.createElement(Section, { title: "Verteiler hinzuf\xFCgen", subtitle: "Jeder hinzugef\xFCgte Verteiler bekommt im Steckplan ein eigenes Datenblatt.", helpKey: "verteiler" }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.row }, /* @__PURE__ */ import_react.default.createElement("select", { style: S.select, value: pick, onChange: (e) => setPick(e.target.value) }, boxTypes.map((b) => /* @__PURE__ */ import_react.default.createElement("option", { key: b.id, value: b.id }, b.name))), /* @__PURE__ */ import_react.default.createElement("button", { style: S.primaryBtn, onClick: () => addInstance(pick) }, "+ Verteiler hinzuf\xFCgen")), instances.length === 0 ? /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch keine Verteiler aktiviert.") : /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, minWidth: 860, width: "auto" } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Typ"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Eingang"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "h\xE4ngt an Verteiler\u2026"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "\u2026Anschluss"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Einspeisepunkt"), /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react.default.createElement("tbody", null, instances.map((inst) => {
       const type = boxTypeById[inst.typeId];
       const parentType = inst.parentId ? boxTypeById[instById[inst.parentId]?.typeId] : null;
       const ol = isOverloaded(inst.id);
@@ -45249,7 +45255,7 @@ Fortfahren?`);
     if (instances.length === 0)
       return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Steckplan" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, 'Aktiviere zuerst Verteiler unter \u201E1 \xB7 Konfiguration".'));
     if (activeInstances.length === 0)
-      return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Steckplan" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, 'Keine Verteiler angeschlossen. Bitte unter \u201E1 \xB7 Konfiguration" Verteiler an einen Hauptanschluss oder anderen Verteiler anschlie\xDFen.'));
+      return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Steckplan" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, 'Keine Verteiler angeschlossen. Bitte unter \u201E1 \xB7 Konfiguration" Verteiler an einen Einspeisepunkt oder anderen Verteiler anschlie\xDFen.'));
     const inst = activeInstances.find((i) => i.id === activePlan) || activeInstances[0];
     const type = boxTypeById[inst.typeId];
     const rows = placements.filter((p) => p.instanceId === inst.id);
@@ -45276,7 +45282,7 @@ Fortfahren?`);
       });
       return { mc, tot: tot2 };
     });
-    return /* @__PURE__ */ import_react.default.createElement("div", null, (mainConns.length > 0 || rootInstances.length > 0) && /* @__PURE__ */ import_react.default.createElement(Section, { title: "Hauptanschl\xFCsse \u2013 Gesamtlast" }, mainConnTotals.map(({ mc, tot: t }) => /* @__PURE__ */ import_react.default.createElement("div", { key: mc.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6 } }, mc.name, mc.amp ? /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, color: "#9aa4af", fontSize: 12 } }, " (max ", mc.amp, "A)") : ""), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
+    return /* @__PURE__ */ import_react.default.createElement("div", null, (mainConns.length > 0 || rootInstances.length > 0) && /* @__PURE__ */ import_react.default.createElement(Section, { title: "Einspeisepunkte \u2013 Gesamtlast" }, mainConnTotals.map(({ mc, tot: t }) => /* @__PURE__ */ import_react.default.createElement("div", { key: mc.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6 } }, mc.name, mc.amp ? /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, color: "#9aa4af", fontSize: 12 } }, " (max ", mc.amp, "A)") : ""), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
       const a = t[ph];
       const pct = mc.amp ? a / mc.amp * 100 : 0;
       const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
@@ -45285,7 +45291,7 @@ Fortfahren?`);
       const rt = totalLoad(ri.id);
       const rType = boxTypeById[ri.typeId];
       const rMax = rType?.feedAmp || 0;
-      return /* @__PURE__ */ import_react.default.createElement("div", { key: ri.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, fontSize: 11 } }, "(kein Hauptanschluss zugewiesen)")), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
+      return /* @__PURE__ */ import_react.default.createElement("div", { key: ri.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, fontSize: 11 } }, "(kein Einspeisepunkt zugewiesen)")), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
         const a = rt[ph];
         const pct = rMax ? a / rMax * 100 : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
@@ -45500,7 +45506,7 @@ Fortfahren?`);
   }
   function OverviewTab({ instances, instById, boxTypeById, totalLoad, rootInstances, mainConns, mainConnById, meta, isOverloaded, isUnderdimensioned, isAdapted, placements, loads, loadById }) {
     if (instances.length === 0) return /* @__PURE__ */ import_react.default.createElement(Section, { title: "\xDCbersicht" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Noch keine Verteiler aktiviert."));
-    return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Hauptanschl\xFCsse", subtitle: "Summenlast aller zugewiesenen Verteiler je Hauptanschluss." }, mainConns.map((mc) => {
+    return /* @__PURE__ */ import_react.default.createElement("div", null, /* @__PURE__ */ import_react.default.createElement(Section, { title: "Einspeisepunkte", subtitle: "Summenlast aller zugewiesenen Verteiler je Einspeisepunkt." }, mainConns.map((mc) => {
       const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
       const tot = { L1: 0, L2: 0, L3: 0 };
       connInsts.forEach((i) => {
@@ -45519,7 +45525,7 @@ Fortfahren?`);
       const t = totalLoad(ri.id);
       const type = boxTypeById[ri.typeId];
       const maxA = type?.feedAmp || 0;
-      return /* @__PURE__ */ import_react.default.createElement("div", { key: ri.id, style: { ...S.rootCard, borderColor: LINE } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.rootTitle, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react.default.createElement("span", { style: S.rootSub }, "(kein Hauptanschluss)")), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
+      return /* @__PURE__ */ import_react.default.createElement("div", { key: ri.id, style: { ...S.rootCard, borderColor: LINE } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { ...S.rootTitle, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react.default.createElement("span", { style: S.rootSub }, "(kein Einspeisepunkt)")), /* @__PURE__ */ import_react.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
         const a = t[ph];
         const pct = maxA ? a / maxA * 100 : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
@@ -46267,7 +46273,7 @@ Fortfahren?`);
   var HELP_SECTIONS = {
     ersteschritte: {
       title: "Erste Schritte",
-      text: 'Der empfohlene Arbeitsablauf: zuerst im Tab "Verteiler-Typen" alle Verteilermodelle anlegen, die du verwendest (einmalig, wiederverwendbar). Dann im Tab "Verbraucher" deine Ger\xE4te-Bibliothek aufbauen. Anschlie\xDFend in "Konfiguration" die Hauptanschl\xFCsse und konkreten Verteiler f\xFCr diese Produktion eintragen. Danach im "Steckplan" die Verbraucher auf die Abg\xE4nge stecken.',
+      text: 'Der empfohlene Arbeitsablauf: zuerst im Tab "Verteiler-Typen" alle Verteilermodelle anlegen, die du verwendest (einmalig, wiederverwendbar). Dann im Tab "Verbraucher" deine Ger\xE4te-Bibliothek aufbauen. Anschlie\xDFend in "Konfiguration" die Einspeisepunkte und konkreten Verteiler f\xFCr diese Produktion eintragen. Danach im "Steckplan" die Verbraucher auf die Abg\xE4nge stecken.',
       extra: 'Die App speichert deinen Arbeitsstand automatisch im Browser (Autosave), sodass du jederzeit weitermachen kannst. F\xFCr eine dauerhafte Sicherung oder den Austausch mit Kollegen nutze "Speichern" im Header, um eine JSON-Datei zu exportieren.'
     },
     produktionsdaten: {
@@ -46286,14 +46292,14 @@ Fortfahren?`);
       extra: "Auch die Verbraucher-Bibliothek ist produktions\xFCbergreifend gespeichert und l\xE4sst sich als JSON exportieren und importieren. So kannst du eine einmal aufgebaute Ger\xE4te-Liste auf alle deine Ger\xE4te \xFCbertragen."
     },
     hauptanschluesse: {
-      title: "Hauptanschl\xFCsse",
-      text: 'Hier definierst du die Einspeisepunkte deiner Anlage \u2013 also die Anschl\xFCsse, aus denen deine Verteiler gespeist werden. Gib jedem Hauptanschluss einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung B\xFChne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
+      title: "Einspeisepunkte",
+      text: 'Hier definierst du die Einspeisepunkte deiner Anlage \u2013 also die Anschl\xFCsse, aus denen deine Verteiler gespeist werden. Gib jedem Einspeisepunkt einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung B\xFChne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
       extra: ""
     },
     verteiler: {
       title: "Verteiler hinzuf\xFCgen",
       text: 'Hier f\xFCgst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzuf\xFCgen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben \u2013 dort definierst du Eingangs-Steckertyp und alle Steckpl\xE4tze.',
-      extra: "Nach dem Hinzuf\xFCgen kannst du f\xFCr jeden Verteiler festlegen, wo er in der Topologie h\xE4ngt: entweder direkt an einem Hauptanschluss oder als Unterverteilung an einem Steckplatz eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird."
+      extra: "Nach dem Hinzuf\xFCgen kannst du f\xFCr jeden Verteiler festlegen, wo er in der Topologie h\xE4ngt: entweder direkt an einem Einspeisepunkt oder als Unterverteilung an einem Steckplatz eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird."
     },
     steckplan: {
       title: "Steckplan",
@@ -46308,11 +46314,11 @@ Fortfahren?`);
     uebersicht: {
       title: "\xDCbersicht",
       text: "Der \xDCbersichts-Tab zeigt f\xFCr jeden aktiven Verteiler eine kompakte Zusammenfassung: Gesamtlast in Watt und Ampere, Aufschl\xFCsselung nach Phase (L1/L2/L3) sowie den aktuellen Auslastungsgrad. Verteiler, deren summierte Last die Eingangsabsicherung \xFCberschreitet, werden rot markiert.",
-      extra: "Sind Verteiler einem Hauptanschluss zugeordnet, erscheint dar\xFCber hinaus eine Summenzeile je Einspeisepunkt \u2013 so siehst du auf einen Blick, wie stark jede Einspeisung belastet ist."
+      extra: "Sind Verteiler einem Einspeisepunkt zugeordnet, erscheint dar\xFCber hinaus eine Summenzeile je Einspeisepunkt \u2013 so siehst du auf einen Blick, wie stark jede Einspeisung belastet ist."
     },
     schaltbild: {
       title: "Schaltbild",
-      text: "Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Hauptanschl\xFCssen \xFCber die Verteiler bis zu den einzelnen Steckpl\xE4tzen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.",
+      text: "Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Einspeisepunkten \xFCber die Verteiler bis zu den einzelnen Steckpl\xE4tzen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.",
       extra: 'Das Schaltbild eignet sich gut als \xDCbergabedokument: \xFCber "Stromplan drucken" im Header l\xE4sst es sich zusammen mit der Laststabelle als PDF ausgeben.'
     },
     erweitert: {

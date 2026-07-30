@@ -59,9 +59,9 @@ Stromplaner/
 Grundlegende Produktionsdaten und Aufbau der Verteilerstruktur.
 
 - Produktionsname, Ersteller, Version, Datum eintragen
-- **Hauptanschlüsse** definieren: Bezeichnung und Maximalstrom (erscheinen links im Schaltbild)
+- **Einspeisepunkte** definieren: Bezeichnung und Maximalstrom (erscheinen links im Schaltbild)
 - **Verteiler hinzufügen:** Typ wählen → Name vergeben → **+ Verteiler hinzufügen**
-- Pro Verteiler: übergeordneten Verteiler und Steckplatz wählen (oder einem Hauptanschluss zuweisen)
+- Pro Verteiler: übergeordneten Verteiler und Steckplatz wählen (oder einem Einspeisepunkt zuweisen)
 - Adapter-Verbindungen sind möglich, werden farblich hervorgehoben
 - Überlastete Verteiler werden mit ⚠ markiert; unterdimensionierte Anschlüsse ebenso
 
@@ -79,7 +79,7 @@ Verbraucher auf Steckplätze der Verteiler verteilen.
 ### 3 · Übersicht
 Kompakte Gesamtschau der Anlage.
 
-- Alle Hauptanschlüsse mit Summenlast je Phase
+- Alle Einspeisepunkte mit Summenlast je Phase
 - Tabelle aller Verteiler mit Typ, Einspeisung, Last und Status
 
 ### Schaltbild
@@ -182,6 +182,7 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 | **↥ Laden** | Gespeicherten Stand (`.json`) laden |
 | **💾 Speichern** | Aktuellen Stand als `.json` exportieren |
 | **↺ Neu** | Planung zurücksetzen (Verteiler-Typen und Verbraucher bleiben erhalten) |
+| **📋 Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
 | **🖨 PDF** | Druckbaren Stromplan als PDF öffnen |
 | **↓ Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
 

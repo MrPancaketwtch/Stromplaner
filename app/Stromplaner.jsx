@@ -72,6 +72,12 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.0.7": [
+    "Button zum Anzeigen des Changelogs hinzugefügt",
+    "Blockschaltbild wird jetzt richtig angezeigt",
+    "Kleine UI/UX Verbesserungen",
+    "Kleine Bugfixes und Verbesserungen",
+  ],
   "1.0.6": [
     "Das Hochladen einer digitalen Unterschrift im Prüfprotokoll ist jetzt möglich",
     "Spendenlink wurde aktualisiert (GitHub Sponsors → Buymeacoffee)",
@@ -341,7 +347,7 @@ export default function App() {
   const [showDonateModal,   setShowDonateModal]   = useState(false);
   const [changelogVersion,  setChangelogVersion]  = useState(null);
 
-  // Hauptanschlüsse: [{id, name, amp}]
+  // Einspeisepunkte: [{id, name, amp}]
   const [mainConns, setMainConns] = useState([]);
 
   const [boxTypes,   setBoxTypes]   = useState(alphaSort(clone(DEFAULT_BOX_TYPES),"name"));
@@ -558,8 +564,8 @@ export default function App() {
   const updatePlacement=(id,patch)=>setPlacements(s=>s.map(p=>p.id===id?{...p,...patch}:p));
   const removePlacement=(id)=>setPlacements(s=>s.filter(p=>p.id!==id));
 
-  /* ── Hauptanschluss actions ─────────────────────────────────────────────── */
-  const addMainConn=()=>setMainConns(s=>[...s,{id:uid(),name:"Hauptanschluss "+(s.length+1),amp:""}]);
+  /* ── Einspeisepunkt actions ─────────────────────────────────────────────── */
+  const addMainConn=()=>setMainConns(s=>[...s,{id:uid(),name:"Einspeisepunkt "+(s.length+1),amp:""}]);
   const updateMainConn=(id,patch)=>setMainConns(s=>s.map(c=>c.id===id?{...c,...patch}:c));
   const removeMainConn=(id)=>{
     setMainConns(s=>s.filter(c=>c.id!==id));
@@ -619,7 +625,7 @@ export default function App() {
     const ovRows=[
       ["STROMPLAN – ÜBERSICHT"],
       ["Produktion",meta.production],["Ersteller",meta.creator],["Version",meta.version],["Datum",meta.date],[],
-      ["Verteiler","Typ","Eingang","hängt an","Hauptanschluss","L1(A)","L2(A)","L3(A)","Max(A)","Status"],
+      ["Verteiler","Typ","Eingang","hängt an","Einspeisepunkt","L1(A)","L2(A)","L3(A)","Max(A)","Status"],
     ];
     instances.forEach(inst=>{
       const t=totalLoad(inst.id); const type=boxTypeById[inst.typeId];
@@ -633,8 +639,8 @@ export default function App() {
     });
     const ovWs=XLSX.utils.aoa_to_sheet(ovRows);
     XLSX.utils.book_append_sheet(wb,ovWs,"Übersicht");
-    // Hauptanschlüsse
-    const haRows=[["HAUPTANSCHLÜSSE"],[],["Name","Max(A)","L1(A)","L2(A)","L3(A)","Auslastung"]];
+    // Einspeisepunkte
+    const haRows=[["EINSPEISEPUNKTE"],[],["Name","Max(A)","L1(A)","L2(A)","L3(A)","Auslastung"]];
     mainConns.forEach(mc=>{
       const connInsts=rootInstances.filter(i=>i.mainConnectionId===mc.id);
       const tot={L1:0,L2:0,L3:0};
@@ -644,7 +650,7 @@ export default function App() {
       haRows.push([mc.name,mc.amp||"–",round2(tot.L1),round2(tot.L2),round2(tot.L3),mc.amp?`${pct}%`:"–"]);
     });
     const haWs=XLSX.utils.aoa_to_sheet(haRows);
-    XLSX.utils.book_append_sheet(wb,haWs,"Hauptanschlüsse");
+    XLSX.utils.book_append_sheet(wb,haWs,"Einspeisepunkte");
     // Pro Verteiler
     instances.forEach(inst=>{
       const type=boxTypeById[inst.typeId];
@@ -691,7 +697,7 @@ export default function App() {
     let body=`${corpLogo?`<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g,'&quot;')}" style="max-height:40px;max-width:140px;object-fit:contain"></div>`:""}<h1 style="font-size:18px;margin:0 0 4px">⚡ STROMPLAN</h1>
       <div style="font-size:12px;color:#555;margin-bottom:16px">${meta.production} · ${meta.creator} · v${meta.version} · ${meta.date}</div>`;
     if(mainConns.length){
-      body+=`<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Hauptanschlüsse</h2>`;
+      body+=`<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Einspeisepunkte</h2>`;
       mainConns.forEach(mc=>{
         const connInsts=rootInstances.filter(i=>i.mainConnectionId===mc.id);
         const tot={L1:0,L2:0,L3:0};
@@ -1078,9 +1084,9 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
         </div>
       </Section>
 
-      <Section title="Hauptanschlüsse" subtitle="Definiere alle Einspeisepunkte dieser Produktion. Verteiler können optional einem Hauptanschluss zugewiesen werden." helpKey="hauptanschluesse">
-        <button style={S.primaryBtn} onClick={addMainConn}>+ Hauptanschluss hinzufügen</button>
-        {mainConns.length===0 && <p style={S.hint}>Noch keine Hauptanschlüsse definiert. Verteiler ohne Zuweisung erscheinen als freie Einspeisepunkte.</p>}
+      <Section title="Einspeisepunkte" subtitle="Definiere alle Einspeisepunkte dieser Produktion. Verteiler können optional einem Einspeisepunkt zugewiesen werden." helpKey="hauptanschluesse">
+        <button style={S.primaryBtn} onClick={addMainConn}>+ Einspeisepunkt hinzufügen</button>
+        {mainConns.length===0 && <p style={S.hint}>Noch keine Einspeisepunkte definiert. Verteiler ohne Zuweisung erscheinen als freie Einspeisepunkte.</p>}
         {mainConns.map(mc=>(
           <div key={mc.id} style={{display:"flex",gap:8,alignItems:"center",marginTop:8,flexWrap:"wrap"}}>
             <input style={{...S.inputSm,flex:2,minWidth:150}} placeholder="Bezeichnung z.B. NH03-Halle 1" value={mc.name} onChange={e=>updateMainConn(mc.id,{name:e.target.value})}/>
@@ -1104,7 +1110,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
             <thead><tr>
               <th style={S.th}></th><th style={S.th}>Name</th><th style={S.th}>Typ</th><th style={S.th}>Eingang</th>
               <th style={S.th}>hängt an Verteiler…</th><th style={S.th}>…Anschluss</th>
-              <th style={S.th}>Hauptanschluss</th><th style={S.th}></th>
+              <th style={S.th}>Einspeisepunkt</th><th style={S.th}></th>
             </tr></thead>
             <tbody>
               {instances.map(inst=>{
@@ -1129,7 +1135,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                   if(aExact!==bExact) return aExact-bExact;
                   return a.label.localeCompare(b.label,"de",{numeric:true});
                 });
-                // Only show Hauptanschluss picker for root instances
+                // Only show Einspeisepunkt picker for root instances
                 const isRoot=!inst.parentId;
                 return (
                   <tr key={inst.id}>
@@ -1187,7 +1193,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
   const [bulkLoadId,  setBulkLoadId]  = useState("");
   const [bulkOutletId,setBulkOutletId]= useState("");
   const [bulkCount,   setBulkCount]   = useState(1);
-  // Nur Verteiler anzeigen, die an einem Hauptanschluss oder an einem anderen Verteiler hängen
+  // Nur Verteiler anzeigen, die an einem Einspeisepunkt oder an einem anderen Verteiler hängen
   const activeInstances = instances.filter(i=>i.mainConnectionId||i.parentId);
 
   useEffect(()=>{
@@ -1199,7 +1205,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
     return <Section title="Steckplan"><p style={S.empty}>Aktiviere zuerst Verteiler unter „1 · Konfiguration".</p></Section>;
 
   if(activeInstances.length===0)
-    return <Section title="Steckplan"><p style={S.empty}>Keine Verteiler angeschlossen. Bitte unter „1 · Konfiguration" Verteiler an einen Hauptanschluss oder anderen Verteiler anschließen.</p></Section>;
+    return <Section title="Steckplan"><p style={S.empty}>Keine Verteiler angeschlossen. Bitte unter „1 · Konfiguration" Verteiler an einen Einspeisepunkt oder anderen Verteiler anschließen.</p></Section>;
 
   const inst   = activeInstances.find(i=>i.id===activePlan)||activeInstances[0];
   const type   = boxTypeById[inst.typeId];
@@ -1231,9 +1237,9 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
 
   return (
     <div>
-      {/* Header: Hauptanschlüsse */}
+      {/* Header: Einspeisepunkte */}
       {(mainConns.length>0||rootInstances.length>0) && (
-        <Section title="Hauptanschlüsse – Gesamtlast">
+        <Section title="Einspeisepunkte – Gesamtlast">
           {mainConnTotals.map(({mc,tot:t})=>(
             <div key={mc.id} style={{marginBottom:12}}>
               <div style={{fontWeight:700,fontSize:14,marginBottom:6}}>{mc.name}{mc.amp?<span style={{fontWeight:400,color:"#9aa4af",fontSize:12}}> (max {mc.amp}A)</span>:""}</div>
@@ -1258,7 +1264,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
             const rt=totalLoad(ri.id); const rType=boxTypeById[ri.typeId]; const rMax=rType?.feedAmp||0;
             return (
               <div key={ri.id} style={{marginBottom:12}}>
-                <div style={{fontWeight:700,fontSize:14,marginBottom:6,color:"#9aa4af"}}>{ri.name} <span style={{fontWeight:400,fontSize:11}}>(kein Hauptanschluss zugewiesen)</span></div>
+                <div style={{fontWeight:700,fontSize:14,marginBottom:6,color:"#9aa4af"}}>{ri.name} <span style={{fontWeight:400,fontSize:11}}>(kein Einspeisepunkt zugewiesen)</span></div>
                 <div style={S.phaseBar}>
                   {PHASES.map(ph=>{
                     const a=rt[ph]; const pct=rMax?(a/rMax)*100:0;
@@ -1693,7 +1699,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
   if(instances.length===0) return <Section title="Übersicht"><p style={S.empty}>Noch keine Verteiler aktiviert.</p></Section>;
   return (
     <div>
-      <Section title="Hauptanschlüsse" subtitle="Summenlast aller zugewiesenen Verteiler je Hauptanschluss.">
+      <Section title="Einspeisepunkte" subtitle="Summenlast aller zugewiesenen Verteiler je Einspeisepunkt.">
         {mainConns.map(mc=>{
           const connInsts=rootInstances.filter(i=>i.mainConnectionId===mc.id);
           const tot={L1:0,L2:0,L3:0};
@@ -1723,7 +1729,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
           const t=totalLoad(ri.id); const type=boxTypeById[ri.typeId]; const maxA=type?.feedAmp||0;
           return (
             <div key={ri.id} style={{...S.rootCard,borderColor:LINE}}>
-              <div style={{...S.rootTitle,color:"#9aa4af"}}>{ri.name} <span style={S.rootSub}>(kein Hauptanschluss)</span></div>
+              <div style={{...S.rootTitle,color:"#9aa4af"}}>{ri.name} <span style={S.rootSub}>(kein Einspeisepunkt)</span></div>
               <div style={S.phaseBar}>
                 {PHASES.map(ph=>{ const a=t[ph]; const pct=maxA?(a/maxA)*100:0; const col=pct>100?"#c0392b":pct>80?"#e67e22":"#27ae60";
                   return <div key={ph} style={S.phaseBox}><div style={S.phaseLabel}>{ph}</div><div style={{...S.phaseVal,color:col}}>{round2(a)} A</div><div style={S.phaseTrack}><div style={{...S.phaseFill,width:`${Math.min(pct,100)}%`,background:col}}/></div></div>; })}
@@ -1882,7 +1888,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     MC:"MC",SCHUKO:"Schuko",
   }[type] || type || "–");
 
-  /* ── IEC 60309 Symbole (für Hauptanschluss-Visualisierung) ──────────── */
+  /* ── IEC 60309 Symbole (für Einspeisepunkt-Visualisierung) ──────────── */
   // CEE 5-Pin (3L+N+PE): Stiftanordnung Pentagon gem. IEC 60309, Pin 1 (PE) oben
   const SymCEE3ph = ({x,y,s=1,col="#9aa4af"}) => (
     <g transform={`translate(${x},${y}) scale(${s})`}>
@@ -1996,7 +2002,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
   const PAD    = 46;
   const ROW_GAP = 20;
 
-  // Dynamisches linkes Padding: genug Raum für die längste Hauptanschluss-Bezeichnung
+  // Dynamisches linkes Padding: genug Raum für die längste Einspeisepunkt-Bezeichnung
   const mcMaxLabelPx = mainConns.reduce((mx, mc) => {
     const nW = (mc.name||'').length * 8;        // ~8px pro Zeichen, 10px bold
     const aW = mc.amp ? (String(mc.amp)+' A').length * 7 : 0;
@@ -2269,7 +2275,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
       <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"78vh",background:"#1b2026",borderRadius:8,padding:12}}>
         <svg ref={svgRef} width={svgW} height={svgH} style={{display:"block",minWidth:svgW}}>
 
-          {/* ── Hauptanschlüsse ─────────────────────────────────────────── */}
+          {/* ── Einspeisepunkte ─────────────────────────────────────────── */}
           {mainConns.map(mc=>{
             const cy=mcCenterY(mc); if(cy===null) return null;
             const connInsts=rootInstances.filter(i=>i.mainConnectionId===mc.id);
@@ -2549,7 +2555,7 @@ const HelpContext = React.createContext(()=>{});
 const HELP_SECTIONS = {
   ersteschritte: {
     title: 'Erste Schritte',
-    text: 'Der empfohlene Arbeitsablauf: zuerst im Tab "Verteiler-Typen" alle Verteilermodelle anlegen, die du verwendest (einmalig, wiederverwendbar). Dann im Tab "Verbraucher" deine Geräte-Bibliothek aufbauen. Anschließend in "Konfiguration" die Hauptanschlüsse und konkreten Verteiler für diese Produktion eintragen. Danach im "Steckplan" die Verbraucher auf die Abgänge stecken.',
+    text: 'Der empfohlene Arbeitsablauf: zuerst im Tab "Verteiler-Typen" alle Verteilermodelle anlegen, die du verwendest (einmalig, wiederverwendbar). Dann im Tab "Verbraucher" deine Geräte-Bibliothek aufbauen. Anschließend in "Konfiguration" die Einspeisepunkte und konkreten Verteiler für diese Produktion eintragen. Danach im "Steckplan" die Verbraucher auf die Abgänge stecken.',
     extra: 'Die App speichert deinen Arbeitsstand automatisch im Browser (Autosave), sodass du jederzeit weitermachen kannst. Für eine dauerhafte Sicherung oder den Austausch mit Kollegen nutze "Speichern" im Header, um eine JSON-Datei zu exportieren.'
   },
   produktionsdaten: {
@@ -2568,14 +2574,14 @@ const HELP_SECTIONS = {
     extra: 'Auch die Verbraucher-Bibliothek ist produktionsübergreifend gespeichert und lässt sich als JSON exportieren und importieren. So kannst du eine einmal aufgebaute Geräte-Liste auf alle deine Geräte übertragen.'
   },
   hauptanschluesse: {
-    title: 'Hauptanschlüsse',
-    text: 'Hier definierst du die Einspeisepunkte deiner Anlage – also die Anschlüsse, aus denen deine Verteiler gespeist werden. Gib jedem Hauptanschluss einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung Bühne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
+    title: 'Einspeisepunkte',
+    text: 'Hier definierst du die Einspeisepunkte deiner Anlage – also die Anschlüsse, aus denen deine Verteiler gespeist werden. Gib jedem Einspeisepunkt einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung Bühne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
     extra: ''
   },
   verteiler: {
     title: 'Verteiler hinzufügen',
     text: 'Hier fügst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzufügen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben – dort definierst du Eingangs-Steckertyp und alle Steckplätze.',
-    extra: 'Nach dem Hinzufügen kannst du für jeden Verteiler festlegen, wo er in der Topologie hängt: entweder direkt an einem Hauptanschluss oder als Unterverteilung an einem Steckplatz eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird.'
+    extra: 'Nach dem Hinzufügen kannst du für jeden Verteiler festlegen, wo er in der Topologie hängt: entweder direkt an einem Einspeisepunkt oder als Unterverteilung an einem Steckplatz eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird.'
   },
   steckplan: {
     title: 'Steckplan',
@@ -2590,11 +2596,11 @@ const HELP_SECTIONS = {
   uebersicht: {
     title: 'Übersicht',
     text: 'Der Übersichts-Tab zeigt für jeden aktiven Verteiler eine kompakte Zusammenfassung: Gesamtlast in Watt und Ampere, Aufschlüsselung nach Phase (L1/L2/L3) sowie den aktuellen Auslastungsgrad. Verteiler, deren summierte Last die Eingangsabsicherung überschreitet, werden rot markiert.',
-    extra: 'Sind Verteiler einem Hauptanschluss zugeordnet, erscheint darüber hinaus eine Summenzeile je Einspeisepunkt – so siehst du auf einen Blick, wie stark jede Einspeisung belastet ist.'
+    extra: 'Sind Verteiler einem Einspeisepunkt zugeordnet, erscheint darüber hinaus eine Summenzeile je Einspeisepunkt – so siehst du auf einen Blick, wie stark jede Einspeisung belastet ist.'
   },
   schaltbild: {
     title: 'Schaltbild',
-    text: 'Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Hauptanschlüssen über die Verteiler bis zu den einzelnen Steckplätzen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.',
+    text: 'Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Einspeisepunkten über die Verteiler bis zu den einzelnen Steckplätzen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.',
     extra: 'Das Schaltbild eignet sich gut als Übergabedokument: über "Stromplan drucken" im Header lässt es sich zusammen mit der Laststabelle als PDF ausgeben.'
   },
   erweitert: {
