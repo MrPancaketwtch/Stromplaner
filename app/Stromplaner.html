@@ -44204,6 +44204,11 @@ button:active { filter: brightness(0.95); }
   };
   var CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
   var CHANGELOG = {
+    "1.0.7": [
+      "Changelog-Popup kann ohne Update ge\xF6ffnet werden",
+      "Bugfix: Blockshaltbild wird jetzt korrekt angezeigt",
+      "Kleine UI/UX Verbesserungen"
+    ],
     "1.0.6": [
       "Das Hochladen einer digitalen Unterschrift im Pr\xFCfprotokoll ist jetzt m\xF6glich",
       "Spendenlink wurde aktualisiert (GitHub Sponsors \u2192 Buymeacoffee)",
@@ -44450,7 +44455,6 @@ button:active { filter: brightness(0.95); }
   }
   function App() {
     const [tab, setTab] = (0, import_react.useState)("config");
-    const [tabDir, setTabDir] = (0, import_react.useState)(1);
     const [meta, setMeta] = (0, import_react.useState)(DEFAULT_META);
     const [showUpdateModal, setShowUpdateModal] = (0, import_react.useState)(false);
     const [updateStatus, setUpdateStatus] = (0, import_react.useState)({ type: "idle" });
@@ -44499,7 +44503,6 @@ button:active { filter: brightness(0.95); }
     const [cableCalcs, setCableCalcs] = (0, import_react.useState)([]);
     const [voltCalcs, setVoltCalcs] = (0, import_react.useState)([]);
     const [erweiterSubTab, setErweiterSubTab] = (0, import_react.useState)("dim");
-    const [erweitertOpen, setErweitertOpen] = (0, import_react.useState)(false);
     const [loaded, setLoaded] = (0, import_react.useState)(false);
     const [helpSection, setHelpSection] = (0, import_react.useState)(null);
     (0, import_react.useEffect)(() => {
@@ -45075,40 +45078,23 @@ Fortfahren?`);
       ["inspection", "Errichtungspr\xFCfung"],
       ["boxtypes", "Verteiler-Typen"],
       ["loads", "Verbraucher"],
-      ["help", "\u2139 Anleitung"],
-      ["erweitert", "Erweitert"]
+      ["erweitert", "Erweitert"],
+      ["help", "\u2139 Anleitung"]
     ];
-    const goTab = (k) => {
-      const keys2 = TABS.map(([id]) => id);
-      setTabDir(keys2.indexOf(k) >= keys2.indexOf(tab) ? 1 : -1);
-      setTab(k);
-    };
-    const panelStyle = (k) => ({ display: tab === k ? "block" : "none", ...tab === k ? { animation: `tabSlide${tabDir > 0 ? "R" : "L"} 0.18s ease both` } : {} });
     const sharedProps = { instances, instById, boxTypeById, totalLoad, isOverloaded, isUnderdimensioned, isAdapted, rootInstances, mainConns, mainConnById };
-    return /* @__PURE__ */ import_react.default.createElement(HelpContext.Provider, { value: setHelpSection }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("style", null, `@keyframes tabSlideR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}@keyframes tabSlideL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}`), /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), corpLogo && /* @__PURE__ */ import_react.default.createElement("img", { src: corpLogo, alt: "Logo", style: { height: 26, maxWidth: 100, objectFit: "contain", display: "block", marginLeft: 6 } }), /* @__PURE__ */ import_react.default.createElement("label", { style: { ...S.ghostBtn, padding: "3px 7px", fontSize: 9, cursor: "pointer" }, title: corpLogo ? "Logo ersetzen" : "Firmenlogo hochladen" }, corpLogo ? "\u270E Logo" : "+ Logo", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: "image/*", style: { display: "none" }, onChange: uploadLogo })), corpLogo && /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, padding: "3px 6px", fontSize: 9 }, onClick: removeLogo, title: "Logo entfernen" }, "\u2715"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: () => setChangelogVersion(Object.keys(CHANGELOG)[0]), title: "Was ist neu?" }, "\u{1F4CB} Changelog"), window.electronAPI && /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: () => setShowUpdateModal(true) }, updateStatus.type === "downloaded" ? "\u2193 Update bereit" : updateStatus.type === "available" ? "\u2191 Update verf\xFCgbar" : "\u2191 Updates"), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, color: "#f5a623" }, onClick: () => setShowDonateModal(true) }, "\u2615"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
+    return /* @__PURE__ */ import_react.default.createElement(HelpContext.Provider, { value: setHelpSection }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.app }, /* @__PURE__ */ import_react.default.createElement("header", { style: S.header }, /* @__PURE__ */ import_react.default.createElement("div", { style: S.logo }, "\u26A1 STROMPLANER"), corpLogo && /* @__PURE__ */ import_react.default.createElement("img", { src: corpLogo, alt: "Logo", style: { height: 26, maxWidth: 100, objectFit: "contain", display: "block", marginLeft: 6 } }), /* @__PURE__ */ import_react.default.createElement("label", { style: { ...S.ghostBtn, padding: "3px 7px", fontSize: 9, cursor: "pointer" }, title: corpLogo ? "Logo ersetzen" : "Firmenlogo hochladen" }, corpLogo ? "\u270E Logo" : "+ Logo", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: "image/*", style: { display: "none" }, onChange: uploadLogo })), corpLogo && /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, padding: "3px 6px", fontSize: 9 }, onClick: removeLogo, title: "Logo entfernen" }, "\u2715"), /* @__PURE__ */ import_react.default.createElement("div", { style: S.headerMeta }, meta.production, " \xB7 v", meta.version, " \xB7 ", meta.date), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontSize: 10, color: "#555", marginLeft: 4 }, title: "Automatisch gespeichert" }, "\u{1F4BE} auto"), /* @__PURE__ */ import_react.default.createElement("label", { style: S.ghostBtn }, "\u21A5 Laden", /* @__PURE__ */ import_react.default.createElement("input", { type: "file", accept: ".json", onChange: loadJSON, style: { display: "none" } })), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: saveJSON }, "\u{1F4BE} Speichern"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: resetAll }, "\u21BA Neu"), window.electronAPI && /* @__PURE__ */ import_react.default.createElement("button", { style: S.ghostBtn, onClick: () => setShowUpdateModal(true) }, updateStatus.type === "downloaded" ? "\u2193 Update bereit" : updateStatus.type === "available" ? "\u2191 Update verf\xFCgbar" : "\u2191 Updates"), /* @__PURE__ */ import_react.default.createElement("button", { style: { ...S.ghostBtn, color: "#f5a623" }, onClick: () => setShowDonateModal(true) }, "\u2615"), /* @__PURE__ */ import_react.default.createElement("button", { style: S.exportBtn, onClick: exportPDF }, "\u{1F5A8} PDF")), /* @__PURE__ */ import_react.default.createElement("nav", { style: S.nav }, TABS.map(([k, label]) => /* @__PURE__ */ import_react.default.createElement(
       "button",
       {
         key: k,
         style: { ...S.navBtn, ...tab === k ? S.navBtnActive : {}, ...k === "erweitert" ? { color: tab === k ? "#f5a623" : "#c08030", borderColor: tab === k ? "#f5a623" : "transparent" } : {} },
-        onClick: () => {
-          if (k === "erweitert") {
-            setErweitertOpen((o) => !o);
-            goTab("erweitert");
-          } else {
-            goTab(k);
-          }
-        }
+        onClick: () => setTab(k)
       },
-      /* @__PURE__ */ import_react.default.createElement("span", { style: { display: "block", height: 0, fontWeight: 600, overflow: "hidden", visibility: "hidden", pointerEvents: "none" }, "aria-hidden": "true" }, label),
       label
-    )), erweitertOpen && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#3a424c", alignSelf: "center", margin: "0 2px", fontSize: 16 } }, "\u203A"), [["dim", "Leitungsdimensionierung"], ["volt", "Spannungsfall"]].map(([k, lbl]) => /* @__PURE__ */ import_react.default.createElement("button", { key: k, style: {
+    )), tab === "erweitert" && /* @__PURE__ */ import_react.default.createElement(import_react.default.Fragment, null, /* @__PURE__ */ import_react.default.createElement("span", { style: { color: "#3a424c", alignSelf: "center", margin: "0 2px", fontSize: 16 } }, "\u203A"), [["dim", "Leitungsdimensionierung"], ["volt", "Spannungsfall"]].map(([k, lbl]) => /* @__PURE__ */ import_react.default.createElement("button", { key: k, style: {
       ...S.navBtn,
-      ...erweiterSubTab === k && tab === "erweitert" ? S.navBtnActive : {},
-      ...erweiterSubTab === k && tab === "erweitert" ? { color: "#f5a623", borderColor: "#f5a623" } : { color: "#c08030" }
-    }, onClick: () => {
-      setErweiterSubTab(k);
-      goTab("erweitert");
-    } }, /* @__PURE__ */ import_react.default.createElement("span", { style: { display: "block", height: 0, fontWeight: 600, overflow: "hidden", visibility: "hidden", pointerEvents: "none" }, "aria-hidden": "true" }, lbl), lbl)))), /* @__PURE__ */ import_react.default.createElement("main", { style: S.main }, /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("config") }, /* @__PURE__ */ import_react.default.createElement(
+      ...erweiterSubTab === k ? S.navBtnActive : {},
+      ...erweiterSubTab === k ? { color: "#f5a623", borderColor: "#f5a623" } : { color: "#c08030" }
+    }, onClick: () => setErweiterSubTab(k) }, lbl)))), /* @__PURE__ */ import_react.default.createElement("main", { style: S.main }, /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "config" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(
       ConfigTab,
       {
         ...sharedProps,
@@ -45125,7 +45111,7 @@ Fortfahren?`);
         updateMainConn,
         removeMainConn
       }
-    )), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("plan") }, /* @__PURE__ */ import_react.default.createElement(
+    )), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "plan" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(
       PlanTab,
       {
         ...sharedProps,
@@ -45141,7 +45127,7 @@ Fortfahren?`);
         ownLoad,
         meta
       }
-    )), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("overview") }, /* @__PURE__ */ import_react.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("schematic") }, /* @__PURE__ */ import_react.default.createElement(SchematicTab, { ...sharedProps, meta, svgRef: schematicSvgRef, placements, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("boxtypes") }, /* @__PURE__ */ import_react.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("loads") }, /* @__PURE__ */ import_react.default.createElement(LoadsTab, { loads, setLoads })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("inspection") }, /* @__PURE__ */ import_react.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults, inspSign, uploadInspSign, removeInspSign })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("erweitert") }, /* @__PURE__ */ import_react.default.createElement(
+    )), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "overview" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "schematic" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(SchematicTab, { ...sharedProps, meta, svgRef: schematicSvgRef, placements, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "boxtypes" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "loads" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(LoadsTab, { loads, setLoads })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "inspection" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults, inspSign, uploadInspSign, removeInspSign })), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "erweitert" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(
       ErweitertTab,
       {
         cableCalcs,
@@ -45150,12 +45136,12 @@ Fortfahren?`);
         setVoltCalcs,
         subTab: erweiterSubTab
       }
-    )), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("help") }, /* @__PURE__ */ import_react.default.createElement(AnleitungTab, null))), changelogVersion && /* @__PURE__ */ import_react.default.createElement(ChangelogModal, { version: changelogVersion, onClose: () => setChangelogVersion(null) }), showDonateModal && /* @__PURE__ */ import_react.default.createElement(DonateModal, { onClose: () => {
+    )), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: tab === "help" ? "block" : "none" } }, /* @__PURE__ */ import_react.default.createElement(AnleitungTab, null))), changelogVersion && /* @__PURE__ */ import_react.default.createElement(ChangelogModal, { version: changelogVersion, onClose: () => setChangelogVersion(null) }), showDonateModal && /* @__PURE__ */ import_react.default.createElement(DonateModal, { onClose: () => {
       localStorage.setItem("stromplaner_donated", "1");
       setShowDonateModal(false);
     } }), showUpdateModal && /* @__PURE__ */ import_react.default.createElement(UpdateModal, { status: updateStatus, onClose: () => setShowUpdateModal(false), onCheck: () => window.electronAPI.checkForUpdates(), onInstall: () => window.electronAPI.installUpdate(), setStatus: setUpdateStatus }), helpSection && /* @__PURE__ */ import_react.default.createElement(HelpModal, { section: helpSection, onClose: () => setHelpSection(null), goToGuide: () => {
       setHelpSection(null);
-      goTab("help");
+      setTab("help");
     } })));
   }
   function UpdateModal({ status, onClose, onCheck, onInstall, setStatus }) {
@@ -45749,29 +45735,6 @@ Fortfahren?`);
       assignPos(r.id, 0, rootY);
       rootY += subtreeH(r.id) + ROW_GAP;
     });
-    const pushDown = (id, delta) => {
-      if (!positions[id]) return;
-      positions[id] = { ...positions[id], y: positions[id].y + delta };
-      getChildren(id).forEach((ch) => pushDown(ch.id, delta));
-    };
-    const byColumn = {};
-    instances.forEach((inst) => {
-      const pos = positions[inst.id];
-      if (!pos) return;
-      const col = Math.round((pos.x - LEFT_PAD) / COL_W);
-      (byColumn[col] = byColumn[col] || []).push(inst);
-    });
-    Object.keys(byColumn).sort((a, b) => Number(a) - Number(b)).forEach((col) => {
-      const sorted = byColumn[col].slice().sort((a, b) => positions[a.id].y - positions[b.id].y);
-      let minY = -Infinity;
-      sorted.forEach((inst) => {
-        const pos = positions[inst.id];
-        if (pos.y < minY) {
-          pushDown(inst.id, minY - pos.y);
-        }
-        minY = positions[inst.id].y + nodeH(inst) + ROW_GAP;
-      });
-    });
     const outletAbsY = (instId, outletId) => {
       const pos = positions[instId];
       if (!pos) return 0;
@@ -45805,50 +45768,40 @@ Fortfahren?`);
       return (t?.outlets || []).some((o) => (outletToPlacs[`${i.id}__${o.id}`] || []).length > 0);
     });
     const consumerStackPositions = {};
-    const allStacks = [];
     instances.forEach((inst) => {
       const type = boxTypeById[inst.typeId];
       const outlets = type?.outlets || [];
       const pos = positions[inst.id];
       if (!pos) return;
       const leafX = pos.x + NODE_W + Math.round((COL_W - NODE_W) / 2);
+      const blockedRanges = instances.filter((other) => other.id !== inst.id).flatMap((other) => {
+        const otherPos = positions[other.id];
+        if (!otherPos) return [];
+        if (leafX + LEAF_W <= otherPos.x || leafX >= otherPos.x + NODE_W) return [];
+        return [{ top: otherPos.y, bottom: otherPos.y + nodeH(other) }];
+      }).sort((a, b) => a.top - b.top);
+      const claimedRanges = [];
       outlets.forEach((out) => {
         const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
         if (!placs.length) return;
         const oY = outletAbsY(inst.id, out.id);
         const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
-        allStacks.push({ key: `${inst.id}__${out.id}`, leafX, idealTop: oY - LEAF_H / 2, totalH });
-      });
-    });
-    const stacksByCol = {};
-    allStacks.forEach((s) => {
-      (stacksByCol[s.leafX] = stacksByCol[s.leafX] || []).push(s);
-    });
-    Object.values(stacksByCol).forEach((colStacks) => {
-      colStacks.sort((a, b) => a.idealTop - b.idealTop);
-      const blockedByNodes = instances.flatMap((other) => {
-        const otherPos = positions[other.id];
-        if (!otherPos) return [];
-        const lx = colStacks[0].leafX;
-        if (lx + LEAF_W <= otherPos.x || lx >= otherPos.x + NODE_W) return [];
-        return [{ top: otherPos.y, bottom: otherPos.y + nodeH(other) }];
-      }).sort((a, b) => a.top - b.top);
-      const placed = [];
-      colStacks.forEach((stack) => {
-        let top = stack.idealTop;
+        const vTop = GRP_LBL + GRP_PAD;
+        const vBot = GRP_PAD;
+        let stackTop = oY - LEAF_H / 2;
         let changed = true;
         while (changed) {
           changed = false;
-          for (const r of [...blockedByNodes, ...placed].sort((a, b) => a.top - b.top)) {
-            if (top + stack.totalH > r.top && top < r.bottom) {
-              top = r.bottom + 4;
+          for (const r of [...blockedRanges, ...claimedRanges].sort((a, b) => a.top - b.top)) {
+            if (stackTop - vTop < r.bottom && stackTop + totalH + vBot > r.top) {
+              stackTop = r.bottom + vTop + 4;
               changed = true;
               break;
             }
           }
         }
-        placed.push({ top, bottom: top + stack.totalH });
-        consumerStackPositions[stack.key] = top;
+        claimedRanges.push({ top: stackTop - vTop, bottom: stackTop + totalH + vBot });
+        consumerStackPositions[`${inst.id}__${out.id}`] = stackTop;
       });
     });
     const maxLeafBottom = instances.reduce((mx, inst) => {
@@ -45860,10 +45813,10 @@ Fortfahren?`);
         if (!placs.length) return m;
         const stackTop = consumerStackPositions[`${inst.id}__${out.id}`] ?? outletAbsY(inst.id, out.id) - LEAF_H / 2;
         const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
-        return Math.max(m, stackTop + totalH);
+        return Math.max(m, stackTop + totalH + GRP_PAD);
       }, mx);
     }, 0);
-    const svgW = LEFT_PAD + maxDepth * COL_W + PAD + NODE_W + (hasLeafConsumers ? COL_W / 2 + LEAF_W + PAD : 0);
+    const svgW = LEFT_PAD + maxDepth * COL_W + PAD + NODE_W + (hasLeafConsumers ? COL_W / 2 + LEAF_W + GRP_PAD + PAD : 0);
     const svgH = Math.max(totalHeight + PAD * 2, maxLeafBottom + PAD, 260);
     const edges = instances.filter((i) => i.parentId && positions[i.id] && positions[i.parentId]).map((inst) => {
       const parentType = boxTypeById[instById[inst.parentId]?.typeId];
@@ -46126,135 +46079,65 @@ Fortfahren?`);
       const pos = positions[inst.id];
       if (!pos) return [];
       const leafX = pos.x + NODE_W + Math.round((COL_W - NODE_W) / 2);
-      const activeOutlets = outlets.filter((out) => (outletToPlacs[`${inst.id}__${out.id}`] || []).length > 0);
-      const avail = leafX - pos.x - NODE_W - 6;
-      const laneGap = activeOutlets.length > 1 ? Math.min(8, Math.floor(avail / activeOutlets.length)) : 0;
       return outlets.flatMap((out) => {
         const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
         if (!placs.length) return [];
         const oY = outletAbsY(inst.id, out.id);
         const stackTop = consumerStackPositions[`${inst.id}__${out.id}`] ?? oY - LEAF_H / 2;
         const isMC = isMulticore(out.connector);
-        const activeIdx = activeOutlets.findIndex((o) => o.id === out.id);
-        const laneX = pos.x + NODE_W + 4 + activeIdx * laneGap;
-        const midYs = placs.map((_, pi) => stackTop + pi * (LEAF_H + LEAF_GAP) + LEAF_H / 2);
-        const trunkTop = Math.min(oY, ...midYs);
-        const trunkBottom = Math.max(oY, ...midYs);
-        const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
-        const grpPad = 5;
-        const outLabel = out.label || (activeIdx >= 0 ? `Steckplatz ${activeIdx + 1}` : "");
-        return [
-          // Hintergrund-Gruppe für alle Verbraucher dieses Steckplatzes
-          /* @__PURE__ */ import_react.default.createElement(
+        return placs.map((plac, pi) => {
+          const load = loadById?.[plac.loadId];
+          if (!load) return null;
+          const leafY = stackTop + pi * (LEAF_H + LEAF_GAP);
+          const midY = leafY + LEAF_H / 2;
+          const wattStr = load.watt ? `${load.watt} W` : "";
+          const ampStr = load.watt ? ` \xB7 ${round2(load.watt / 230)} A` : "";
+          const maxName = isMC && plac.mcSlot != null ? 14 : 18;
+          const nameDisp = load.name && load.name.length > maxName ? load.name.slice(0, maxName - 1) + "\u2026" : load.name || "?";
+          return /* @__PURE__ */ import_react.default.createElement("g", { key: plac.id }, /* @__PURE__ */ import_react.default.createElement(
+            "path",
+            {
+              d: orthoPath(pos.x + NODE_W, oY, leafX, midY),
+              fill: "none",
+              stroke: "#3a5060",
+              strokeWidth: 1.2
+            }
+          ), /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(${leafX},${leafY})` }, /* @__PURE__ */ import_react.default.createElement(
             "rect",
             {
-              key: `grp_${out.id}`,
-              x: leafX - grpPad,
-              y: stackTop - grpPad,
-              width: LEAF_W + grpPad * 2,
-              height: totalH + grpPad * 2,
-              rx: 7,
-              fill: "#182430",
-              stroke: "#2a4558",
+              width: LEAF_W,
+              height: LEAF_H,
+              rx: 4,
+              fill: "#1a2530",
+              stroke: "#3a5060",
               strokeWidth: 1
             }
-          ),
-          // Steckplatz-Label über der Gruppe
-          /* @__PURE__ */ import_react.default.createElement(
+          ), /* @__PURE__ */ import_react.default.createElement("text", { x: 8, y: 14, fill: "#6aaabf", fontSize: 9, fontWeight: "600" }, nameDisp), /* @__PURE__ */ import_react.default.createElement("text", { x: 8, y: 27, fill: "#3a6070", fontSize: 8 }, wattStr, ampStr), isMC && plac.mcSlot != null && /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement(
+            "rect",
+            {
+              x: LEAF_W - 30,
+              y: 4,
+              width: 26,
+              height: 13,
+              rx: 3,
+              fill: "#1e3a4a",
+              stroke: "#3a7a9a",
+              strokeWidth: 0.8
+            }
+          ), /* @__PURE__ */ import_react.default.createElement(
             "text",
             {
-              key: `grplbl_${out.id}`,
-              x: leafX + 4,
-              y: stackTop - grpPad - 3,
-              fill: "#4a7a96",
+              x: LEAF_W - 17,
+              y: 14,
+              textAnchor: "middle",
+              fill: "#b8ecff",
               fontSize: 8,
               fontWeight: "700"
             },
-            outLabel
-          ),
-          // Kurzer Stub vom Steckplatz zur Lane
-          /* @__PURE__ */ import_react.default.createElement(
-            "line",
-            {
-              key: `stub_${out.id}`,
-              x1: pos.x + NODE_W,
-              y1: oY,
-              x2: laneX,
-              y2: oY,
-              stroke: "#3a5060",
-              strokeWidth: 1.2
-            }
-          ),
-          // Vertikaler Stamm in der Lane (verbindet Outlet mit allen Verbrauchern)
-          /* @__PURE__ */ import_react.default.createElement(
-            "line",
-            {
-              key: `trunk_${out.id}`,
-              x1: laneX,
-              y1: trunkTop,
-              x2: laneX,
-              y2: trunkBottom,
-              stroke: "#3a5060",
-              strokeWidth: 1.2
-            }
-          ),
-          // Einzelne Äste + Verbraucher-Boxen
-          ...placs.map((plac, pi) => {
-            const load = loadById?.[plac.loadId];
-            if (!load) return null;
-            const leafY = stackTop + pi * (LEAF_H + LEAF_GAP);
-            const midY = midYs[pi];
-            const wattStr = load.watt ? `${load.watt} W` : "";
-            const ampStr = load.watt ? ` \xB7 ${round2(load.watt / 230)} A` : "";
-            const maxName = isMC && plac.mcSlot != null ? 14 : 18;
-            const nameDisp = load.name && load.name.length > maxName ? load.name.slice(0, maxName - 1) + "\u2026" : load.name || "?";
-            return /* @__PURE__ */ import_react.default.createElement("g", { key: plac.id }, /* @__PURE__ */ import_react.default.createElement(
-              "line",
-              {
-                x1: laneX,
-                y1: midY,
-                x2: leafX,
-                y2: midY,
-                stroke: "#3a5060",
-                strokeWidth: 1.2
-              }
-            ), /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(${leafX},${leafY})` }, /* @__PURE__ */ import_react.default.createElement(
-              "rect",
-              {
-                width: LEAF_W,
-                height: LEAF_H,
-                rx: 4,
-                fill: "#1a2530",
-                stroke: "#3a5060",
-                strokeWidth: 1
-              }
-            ), /* @__PURE__ */ import_react.default.createElement("text", { x: 8, y: 14, fill: "#6aaabf", fontSize: 9, fontWeight: "600" }, nameDisp), /* @__PURE__ */ import_react.default.createElement("text", { x: 8, y: 27, fill: "#3a6070", fontSize: 8 }, wattStr, ampStr), isMC && plac.mcSlot != null && /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement(
-              "rect",
-              {
-                x: LEAF_W - 30,
-                y: 4,
-                width: 26,
-                height: 13,
-                rx: 3,
-                fill: "#1e3a4a",
-                stroke: "#3a7a9a",
-                strokeWidth: 0.8
-              }
-            ), /* @__PURE__ */ import_react.default.createElement(
-              "text",
-              {
-                x: LEAF_W - 17,
-                y: 14,
-                textAnchor: "middle",
-                fill: "#b8ecff",
-                fontSize: 8,
-                fontWeight: "700"
-              },
-              "Ch.",
-              plac.mcSlot
-            ))));
-          }).filter(Boolean)
-        ];
+            "Ch.",
+            plac.mcSlot
+          ))));
+        }).filter(Boolean);
       });
     }))));
   }
@@ -47111,7 +46994,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     exportBtn: { background: ACCENT, color: "#1c2127", border: "none", borderRadius: 6, padding: "8px 14px", fontWeight: 700, cursor: "pointer", fontSize: 13 },
     ghostBtn: { background: "transparent", color: "#e8eaed", border: `1px solid ${LINE}`, borderRadius: 6, padding: "7px 11px", fontWeight: 600, cursor: "pointer", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 4 },
     nav: { display: "flex", gap: 4, padding: "0 18px", background: DARK, borderBottom: `1px solid ${LINE}`, flexWrap: "wrap", position: "sticky", top: 48, zIndex: 9 },
-    navBtn: { background: "transparent", border: "none", color: "#9aa4af", padding: "11px 13px", cursor: "pointer", fontSize: 13, borderBottom: "3px solid transparent", transition: "color 0.14s,border-color 0.14s" },
+    navBtn: { background: "transparent", border: "none", color: "#9aa4af", padding: "11px 13px", cursor: "pointer", fontSize: 13, borderBottom: "3px solid transparent" },
     navBtnActive: { color: "#fff", borderBottom: `3px solid ${ACCENT}`, fontWeight: 600 },
     main: { padding: 20, maxWidth: 1200, margin: "0 auto" },
     section: { background: PANEL, borderRadius: 10, padding: 20, marginBottom: 20, border: `1px solid ${LINE}` },

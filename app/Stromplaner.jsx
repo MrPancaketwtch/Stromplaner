@@ -72,6 +72,11 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.0.7": [
+    "Changelog-Popup kann ohne Update geöffnet werden",
+    "Bugfix: Blockshaltbild wird jetzt korrekt angezeigt",
+    "Kleine UI/UX Verbesserungen",
+  ],
   "1.0.6": [
     "Das Hochladen einer digitalen Unterschrift im Prüfprotokoll ist jetzt möglich",
     "Spendenlink wurde aktualisiert (GitHub Sponsors → Buymeacoffee)",
@@ -334,7 +339,6 @@ function FilterSelect({ options, value, onChange, placeholder, style }) {
 ══════════════════════════════════════════════════════════════════════════ */
 export default function App() {
   const [tab,  setTab]  = useState("config");
-  const [tabDir,setTabDir]=useState(1);
   const [meta, setMeta] = useState(DEFAULT_META);
   const [showUpdateModal,   setShowUpdateModal]   = useState(false);
   const [updateStatus,      setUpdateStatus]      = useState({ type: 'idle' });
@@ -372,7 +376,6 @@ export default function App() {
   const [cableCalcs,   setCableCalcs]   = useState([]);
   const [voltCalcs,    setVoltCalcs]    = useState([]);
   const [erweiterSubTab, setErweiterSubTab] = useState("dim");
-  const [erweitertOpen,  setErweitertOpen]  = useState(false);
   const [loaded,       setLoaded]       = useState(false); // prevent save before first load
   const [helpSection,  setHelpSection]  = useState(null);
 
@@ -878,20 +881,14 @@ export default function App() {
   const TABS=[
     ["config","1 · Konfiguration"],["plan","2 · Steckplan"],
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
-    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["help","ℹ Anleitung"],["erweitert","Erweitert"],
+    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["erweitert","Erweitert"],
+    ["help","ℹ Anleitung"],
   ];
-  const goTab=(k)=>{
-    const keys=TABS.map(([id])=>id);
-    setTabDir(keys.indexOf(k)>=keys.indexOf(tab)?1:-1);
-    setTab(k);
-  };
-  const panelStyle=(k)=>({display:tab===k?"block":"none",...(tab===k?{animation:`tabSlide${tabDir>0?'R':'L'} 0.18s ease both`}:{})});
   const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById };
 
   return (
     <HelpContext.Provider value={setHelpSection}>
     <div style={S.app}>
-      <style>{`@keyframes tabSlideR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}@keyframes tabSlideL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}`}</style>
       <header style={S.header}>
         <div style={S.logo}>⚡ STROMPLANER</div>
         {corpLogo&&<img src={corpLogo} alt="Logo" style={{height:26,maxWidth:100,objectFit:"contain",display:"block",marginLeft:6}}/>}
@@ -904,7 +901,6 @@ export default function App() {
         <label style={S.ghostBtn}>↥ Laden<input type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/></label>
         <button style={S.ghostBtn} onClick={saveJSON}>💾 Speichern</button>
         <button style={S.ghostBtn} onClick={resetAll}>↺ Neu</button>
-        <button style={S.ghostBtn} onClick={()=>setChangelogVersion(Object.keys(CHANGELOG)[0])} title="Was ist neu?">📋 Changelog</button>
         {window.electronAPI&&<button style={S.ghostBtn} onClick={()=>setShowUpdateModal(true)}>
           {updateStatus.type==='downloaded'?'↓ Update bereit':updateStatus.type==='available'?'↑ Update verfügbar':'↑ Updates'}
         </button>}
@@ -915,64 +911,60 @@ export default function App() {
         {TABS.map(([k,label])=>(
           <button key={k}
             style={{...S.navBtn,...(tab===k?S.navBtnActive:{}),...(k==="erweitert"?{color:tab===k?"#f5a623":"#c08030",borderColor:tab===k?"#f5a623":"transparent"}:{})}}
-            onClick={()=>{ if(k==="erweitert"){ setErweitertOpen(o=>!o); goTab("erweitert"); } else { goTab(k); } }}>
-            <span style={{display:'block',height:0,fontWeight:600,overflow:'hidden',visibility:'hidden',pointerEvents:'none'}} aria-hidden="true">{label}</span>
-            {label}</button>
+            onClick={()=>setTab(k)}>{label}</button>
         ))}
-        {erweitertOpen && <>
+        {tab==="erweitert" && <>
           <span style={{color:"#3a424c",alignSelf:"center",margin:"0 2px",fontSize:16}}>&rsaquo;</span>
           {[["dim","Leitungsdimensionierung"],["volt","Spannungsfall"]].map(([k,lbl])=>(
             <button key={k} style={{
               ...S.navBtn,
-              ...(erweiterSubTab===k && tab==="erweitert" ? S.navBtnActive : {}),
-              ...(erweiterSubTab===k && tab==="erweitert" ? {color:"#f5a623",borderColor:"#f5a623"} : {color:"#c08030"})
-            }} onClick={()=>{ setErweiterSubTab(k); goTab("erweitert"); }}>
-            <span style={{display:'block',height:0,fontWeight:600,overflow:'hidden',visibility:'hidden',pointerEvents:'none'}} aria-hidden="true">{lbl}</span>
-            {lbl}</button>
+              ...(erweiterSubTab===k ? S.navBtnActive : {}),
+              ...(erweiterSubTab===k ? {color:"#f5a623",borderColor:"#f5a623"} : {color:"#c08030"})
+            }} onClick={()=>setErweiterSubTab(k)}>{lbl}</button>
           ))}
         </>}
       </nav>
       <main style={S.main}>
         {/* Alle Tabs bleiben gemountet – nur CSS display:none beim Verstecken */}
-        <div style={panelStyle("config")}>
+        <div style={{display:tab==="config"?"block":"none"}}>
           <ConfigTab {...sharedProps} meta={meta} setMeta={setMeta} boxTypes={boxTypes}
             addInstance={addInstance} removeInstance={removeInstance} updateInstance={updateInstance}
             setParentWithValidation={setParentWithValidation} clearAllInstances={clearAllInstances}
             mainConns={mainConns} addMainConn={addMainConn} updateMainConn={updateMainConn} removeMainConn={removeMainConn} />
         </div>
-        <div style={panelStyle("plan")}>
+        <div style={{display:tab==="plan"?"block":"none"}}>
           <PlanTab {...sharedProps} loads={loads} loadById={loadById}
             placements={placements} addPlacement={addPlacement} addPlacementsFilled={addPlacementsFilled} updatePlacement={updatePlacement} removePlacement={removePlacement}
             activePlan={activePlan} setActivePlan={setActivePlan} ownLoad={ownLoad} meta={meta} />
         </div>
-        <div style={panelStyle("overview")}>
+        <div style={{display:tab==="overview"?"block":"none"}}>
           <OverviewTab {...sharedProps} meta={meta} placements={placements} loads={loads} loadById={loadById} />
         </div>
-        <div style={panelStyle("schematic")}>
+        <div style={{display:tab==="schematic"?"block":"none"}}>
           <SchematicTab {...sharedProps} meta={meta} svgRef={schematicSvgRef} placements={placements} loadById={loadById}/>
         </div>
-        <div style={panelStyle("boxtypes")}>
+        <div style={{display:tab==="boxtypes"?"block":"none"}}>
           <BoxTypesTab boxTypes={boxTypes} setBoxTypes={setBoxTypes} instances={instances} />
         </div>
-        <div style={panelStyle("loads")}>
+        <div style={{display:tab==="loads"?"block":"none"}}>
           <LoadsTab loads={loads} setLoads={setLoads} />
         </div>
-        <div style={panelStyle("inspection")}>
+        <div style={{display:tab==="inspection"?"block":"none"}}>
           <InspectionTab {...sharedProps} meta={meta} placements={placements} loadById={loadById} inspMeta={inspMeta} setInspMeta={setInspMeta} inspResults={inspResults} setInspResults={setInspResults} inspSign={inspSign} uploadInspSign={uploadInspSign} removeInspSign={removeInspSign} />
         </div>
-        <div style={panelStyle("erweitert")}>
+        <div style={{display:tab==="erweitert"?"block":"none"}}>
           <ErweitertTab cableCalcs={cableCalcs} setCableCalcs={setCableCalcs}
             voltCalcs={voltCalcs} setVoltCalcs={setVoltCalcs}
             subTab={erweiterSubTab}/>
         </div>
-        <div style={panelStyle("help")}>
+        <div style={{display:tab==="help"?"block":"none"}}>
           <AnleitungTab/>
         </div>
       </main>
       {changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
       {showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
       {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus}/>}
-      {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);goTab("help");}}/>}
+      {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);setTab("help");}}/>}
     </div>
     </HelpContext.Provider>
   );
@@ -2107,34 +2099,6 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     rootY += subtreeH(r.id) + ROW_GAP;
   });
 
-  // Globaler Overlap-Pass für Verteiler-Boxen:
-  // Pro Spalte (Tiefe) alle Knoten nach Y sortieren und Überlappungen durch Push-Down auflösen.
-  // Push-Down wird rekursiv auf alle Nachkommen übertragen.
-  const pushDown = (id, delta) => {
-    if(!positions[id]) return;
-    positions[id] = { ...positions[id], y: positions[id].y + delta };
-    getChildren(id).forEach(ch => pushDown(ch.id, delta));
-  };
-
-  const byColumn = {};
-  instances.forEach(inst => {
-    const pos = positions[inst.id]; if(!pos) return;
-    const col = Math.round((pos.x - LEFT_PAD) / COL_W);
-    (byColumn[col] = byColumn[col] || []).push(inst);
-  });
-
-  Object.keys(byColumn).sort((a,b) => Number(a)-Number(b)).forEach(col => {
-    const sorted = byColumn[col].slice().sort((a,b) => positions[a.id].y - positions[b.id].y);
-    let minY = -Infinity;
-    sorted.forEach(inst => {
-      const pos = positions[inst.id];
-      if(pos.y < minY) {
-        pushDown(inst.id, minY - pos.y);
-      }
-      minY = positions[inst.id].y + nodeH(inst) + ROW_GAP;
-    });
-  });
-
   const outletAbsY = (instId, outletId) => {
     const pos=positions[instId]; if(!pos) return 0;
     const type=boxTypeById[instById[instId]?.typeId];
@@ -2161,60 +2125,53 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     const t=boxTypeById[i.typeId];
     return (t?.outlets||[]).some(o=>(outletToPlacs[`${i.id}__${o.id}`]||[]).length>0);
   });
-  // Kollisions-freie Stack-Positionen für alle Verbraucher vorberechnen — globaler Zwei-Pass:
-  // 1) Alle Stacks aller Instanzen mit Wunsch-Y sammeln
-  // 2) Pro X-Spalte nach Wunsch-Y sortieren und global platzieren (kein per-Instanz-Silo)
+  // Kollisions-freie Stack-Positionen für alle Verbraucher vorberechnen
+  // (greedy: Push-Down wenn Überschneidung mit Kind-Verteiler oder bereits platziertem Stack)
   const consumerStackPositions = {}; // `instId__outId` → stackTop Y
-
-  // Alle platzierten Stacks mit Wunsch-Y sammeln
-  const allStacks = [];
   instances.forEach(inst => {
     const type = boxTypeById[inst.typeId];
     const outlets = type?.outlets || [];
     const pos = positions[inst.id]; if(!pos) return;
     const leafX = pos.x + NODE_W + Math.round((COL_W-NODE_W)/2);
+
+    // Y-Bereiche ALLER Verteiler ermitteln die sich mit der Consumer-Spalte überschneiden
+    const blockedRanges = instances
+      .filter(other => other.id !== inst.id)
+      .flatMap(other => {
+        const otherPos = positions[other.id]; if(!otherPos) return [];
+        // X-Überschneidung: [leafX, leafX+LEAF_W] ∩ [otherPos.x, otherPos.x+NODE_W]
+        if(leafX + LEAF_W <= otherPos.x || leafX >= otherPos.x + NODE_W) return [];
+        return [{ top: otherPos.y, bottom: otherPos.y + nodeH(other) }];
+      })
+      .sort((a,b) => a.top - b.top);
+
+    const claimedRanges = []; // bereits platzierte Consumer-Stacks dieser Instanz
+
     outlets.forEach(out => {
       const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
       if(!placs.length) return;
       const oY = outletAbsY(inst.id, out.id);
       const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
-      allStacks.push({ key: `${inst.id}__${out.id}`, leafX, idealTop: oY - LEAF_H/2, totalH });
-    });
-  });
+      // Visuelle Ausdehnung der Gruppe (Label oben + Border rundum)
+      const vTop = GRP_LBL + GRP_PAD; // Platz über dem ersten Consumer (Label+Border)
+      const vBot = GRP_PAD;            // Platz unter dem letzten Consumer (Border)
 
-  // Für jede X-Spalte separat: Stacks nach Wunsch-Y sortieren, dann global platzieren
-  const stacksByCol = {};
-  allStacks.forEach(s => {
-    (stacksByCol[s.leafX] = stacksByCol[s.leafX] || []).push(s);
-  });
-
-  Object.values(stacksByCol).forEach(colStacks => {
-    colStacks.sort((a, b) => a.idealTop - b.idealTop);
-
-    // Verteiler-Blöcke die mit dieser X-Spalte überlappen als geblockte Bereiche
-    const blockedByNodes = instances.flatMap(other => {
-      const otherPos = positions[other.id]; if(!otherPos) return [];
-      const lx = colStacks[0].leafX;
-      if(lx + LEAF_W <= otherPos.x || lx >= otherPos.x + NODE_W) return [];
-      return [{ top: otherPos.y, bottom: otherPos.y + nodeH(other) }];
-    }).sort((a, b) => a.top - b.top);
-
-    const placed = []; // bereits platzierte Stacks dieser Spalte
-
-    colStacks.forEach(stack => {
-      let top = stack.idealTop;
+      // Startposition: ideales Zentrum am Outlet; nach unten schieben bis kein Konflikt
+      let stackTop = oY - LEAF_H/2;
       let changed = true;
       while(changed) {
         changed = false;
-        for(const r of [...blockedByNodes, ...placed].sort((a, b) => a.top - b.top)) {
-          if(top + stack.totalH > r.top && top < r.bottom) {
-            top = r.bottom + 4;
+        for(const r of [...blockedRanges, ...claimedRanges].sort((a,b)=>a.top-b.top)) {
+          // Kollision mit visuellem Bereich der Gruppe prüfen (inkl. Label + Border)
+          if((stackTop - vTop) < r.bottom && (stackTop + totalH + vBot) > r.top) {
+            stackTop = r.bottom + vTop + 4;
             changed = true; break;
           }
         }
       }
-      placed.push({ top, bottom: top + stack.totalH });
-      consumerStackPositions[stack.key] = top;
+      // Visuellen Bereich als belegt markieren
+      claimedRanges.push({ top: stackTop - vTop, bottom: stackTop + totalH + vBot });
+      consumerStackPositions[`${inst.id}__${out.id}`] = stackTop;
     });
   });
 
@@ -2227,10 +2184,10 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
       if(!placs.length) return m;
       const stackTop = consumerStackPositions[`${inst.id}__${out.id}`] ?? (outletAbsY(inst.id,out.id)-LEAF_H/2);
       const totalH=placs.length*(LEAF_H+LEAF_GAP)-LEAF_GAP;
-      return Math.max(m, stackTop + totalH);
+      return Math.max(m, stackTop + totalH + GRP_PAD);
     }, mx);
   }, 0);
-  const svgW=LEFT_PAD+(maxDepth)*COL_W+PAD+NODE_W+(hasLeafConsumers?COL_W/2+LEAF_W+PAD:0);
+  const svgW=LEFT_PAD+(maxDepth)*COL_W+PAD+NODE_W+(hasLeafConsumers?COL_W/2+LEAF_W+GRP_PAD+PAD:0);
   const svgH=Math.max(totalHeight+PAD*2, maxLeafBottom+PAD, 260);
 
   /* ── Kanten ──────────────────────────────────────────────────────────── */
@@ -2463,73 +2420,46 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
             const outlets=type?.outlets||[];
             const pos=positions[inst.id]; if(!pos) return [];
             const leafX=pos.x+NODE_W+Math.round((COL_W-NODE_W)/2);
-            // Jeder Steckplatz bekommt eine eigene Lane-X für sein Kabel, damit sich die Leitungen nicht überlagen
-            const activeOutlets=outlets.filter(out=>(outletToPlacs[`${inst.id}__${out.id}`]||[]).length>0);
-            const avail=leafX-pos.x-NODE_W-6; // usable px between node edge and consumer box
-            const laneGap=activeOutlets.length>1?Math.min(8,Math.floor(avail/activeOutlets.length)):0;
             return outlets.flatMap(out=>{
               const placs=outletToPlacs[`${inst.id}__${out.id}`]||[];
               if(!placs.length) return [];
               const oY=outletAbsY(inst.id, out.id);
+              // Kollisions-freie Position (ggf. nach unten verschoben)
               const stackTop=consumerStackPositions[`${inst.id}__${out.id}`]??oY-LEAF_H/2;
-              const isMC=isMulticore(out.connector);
-              const activeIdx=activeOutlets.findIndex(o=>o.id===out.id);
-              const laneX=pos.x+NODE_W+4+activeIdx*laneGap;
-              const midYs=placs.map((_,pi)=>stackTop+pi*(LEAF_H+LEAF_GAP)+LEAF_H/2);
-              const trunkTop=Math.min(oY,...midYs);
-              const trunkBottom=Math.max(oY,...midYs);
-              const totalH=placs.length*(LEAF_H+LEAF_GAP)-LEAF_GAP;
-              const grpPad=5;
-              const outLabel=out.label||(activeIdx>=0?`Steckplatz ${activeIdx+1}`:'');
-              return [
-                // Hintergrund-Gruppe für alle Verbraucher dieses Steckplatzes
-                <rect key={`grp_${out.id}`}
-                      x={leafX-grpPad} y={stackTop-grpPad}
-                      width={LEAF_W+grpPad*2} height={totalH+grpPad*2}
-                      rx={7} fill="#182430" stroke="#2a4558" strokeWidth={1}/>,
-                // Steckplatz-Label über der Gruppe
-                <text key={`grplbl_${out.id}`}
-                      x={leafX+4} y={stackTop-grpPad-3}
-                      fill="#4a7a96" fontSize={8} fontWeight="700">{outLabel}</text>,
-                // Kurzer Stub vom Steckplatz zur Lane
-                <line key={`stub_${out.id}`} x1={pos.x+NODE_W} y1={oY} x2={laneX} y2={oY}
-                      stroke="#3a5060" strokeWidth={1.2}/>,
-                // Vertikaler Stamm in der Lane (verbindet Outlet mit allen Verbrauchern)
-                <line key={`trunk_${out.id}`} x1={laneX} y1={trunkTop} x2={laneX} y2={trunkBottom}
-                      stroke="#3a5060" strokeWidth={1.2}/>,
-                // Einzelne Äste + Verbraucher-Boxen
-                ...placs.map((plac,pi)=>{
-                  const load=loadById?.[plac.loadId]; if(!load) return null;
-                  const leafY=stackTop+pi*(LEAF_H+LEAF_GAP);
-                  const midY=midYs[pi];
-                  const wattStr=load.watt?`${load.watt} W`:"";
-                  const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
-                  const maxName=isMC&&plac.mcSlot!=null?14:18;
-                  const nameDisp=load.name&&load.name.length>maxName?load.name.slice(0,maxName-1)+"…":(load.name||"?");
-                  return (
-                    <g key={plac.id}>
-                      <line x1={laneX} y1={midY} x2={leafX} y2={midY}
-                            stroke="#3a5060" strokeWidth={1.2}/>
-                      <g transform={`translate(${leafX},${leafY})`}>
-                        <rect width={LEAF_W} height={LEAF_H} rx={4}
-                              fill="#1a2530" stroke="#3a5060" strokeWidth={1}/>
-                        <text x={8} y={14} fill="#6aaabf" fontSize={9} fontWeight="600">{nameDisp}</text>
-                        <text x={8} y={27} fill="#3a6070" fontSize={8}>{wattStr}{ampStr}</text>
-                        {isMC&&plac.mcSlot!=null&&(
-                          <g>
-                            <rect x={LEAF_W-30} y={4} width={26} height={13} rx={3}
-                                  fill="#1e3a4a" stroke="#3a7a9a" strokeWidth={0.8}/>
-                            <text x={LEAF_W-17} y={14} textAnchor="middle"
-                                  fill="#b8ecff" fontSize={8} fontWeight="700">
-                              Ch.{plac.mcSlot}
-                            </text>
-                          </g>
-                        )}
-                      </g>
+              const isMC = isMulticore(out.connector);
+              return placs.map((plac,pi)=>{
+                const load=loadById?.[plac.loadId]; if(!load) return null;
+                const leafY=stackTop+pi*(LEAF_H+LEAF_GAP);
+                const midY=leafY+LEAF_H/2;
+                const wattStr=load.watt?`${load.watt} W`:"";
+                const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
+                // Bei MC: Name etwas kürzer lassen, damit das Slot-Badge Platz hat
+                const maxName = isMC&&plac.mcSlot!=null ? 14 : 18;
+                const nameDisp=load.name&&load.name.length>maxName?load.name.slice(0,maxName-1)+"…":(load.name||"?");
+                return (
+                  <g key={plac.id}>
+                    <path d={orthoPath(pos.x+NODE_W,oY,leafX,midY)}
+                          fill="none" stroke="#3a5060" strokeWidth={1.2}/>
+                    <g transform={`translate(${leafX},${leafY})`}>
+                      <rect width={LEAF_W} height={LEAF_H} rx={4}
+                            fill="#1a2530" stroke="#3a5060" strokeWidth={1}/>
+                      <text x={8} y={14} fill="#6aaabf" fontSize={9} fontWeight="600">{nameDisp}</text>
+                      <text x={8} y={27} fill="#3a6070" fontSize={8}>{wattStr}{ampStr}</text>
+                      {/* Multicore-Slot-Badge oben rechts */}
+                      {isMC&&plac.mcSlot!=null&&(
+                        <g>
+                          <rect x={LEAF_W-30} y={4} width={26} height={13} rx={3}
+                                fill="#1e3a4a" stroke="#3a7a9a" strokeWidth={0.8}/>
+                          <text x={LEAF_W-17} y={14} textAnchor="middle"
+                                fill="#b8ecff" fontSize={8} fontWeight="700">
+                            Ch.{plac.mcSlot}
+                          </text>
+                        </g>
+                      )}
                     </g>
-                  );
-                }).filter(Boolean),
-              ];
+                  </g>
+                );
+              }).filter(Boolean);
             });
           })}
 
@@ -3681,7 +3611,7 @@ const S={
   exportBtn:        {background:ACCENT,color:"#1c2127",border:"none",borderRadius:6,padding:"8px 14px",fontWeight:700,cursor:"pointer",fontSize:13},
   ghostBtn:         {background:"transparent",color:"#e8eaed",border:`1px solid ${LINE}`,borderRadius:6,padding:"7px 11px",fontWeight:600,cursor:"pointer",fontSize:12,display:"inline-flex",alignItems:"center",gap:4},
   nav:              {display:"flex",gap:4,padding:"0 18px",background:DARK,borderBottom:`1px solid ${LINE}`,flexWrap:"wrap",position:"sticky",top:48,zIndex:9},
-  navBtn:           {background:"transparent",border:"none",color:"#9aa4af",padding:"11px 13px",cursor:"pointer",fontSize:13,borderBottom:"3px solid transparent",transition:"color 0.14s,border-color 0.14s"},
+  navBtn:           {background:"transparent",border:"none",color:"#9aa4af",padding:"11px 13px",cursor:"pointer",fontSize:13,borderBottom:"3px solid transparent"},
   navBtnActive:     {color:"#fff",borderBottom:`3px solid ${ACCENT}`,fontWeight:600},
   main:             {padding:20,maxWidth:1200,margin:"0 auto"},
   section:          {background:PANEL,borderRadius:10,padding:20,marginBottom:20,border:`1px solid ${LINE}`},
