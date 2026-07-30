@@ -73,9 +73,12 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 
 const CHANGELOG = {
   "1.0.7": [
+    "Hauptanschluss wurde in Einspeisepunkt umbenannt",
+    "Schaltbild: Steckplatz-Gruppen mit Label und Hintergrund für bessere Lesbarkeit",
+    "Schaltbild: Leitungen der Steckplätze überlagern sich nicht mehr",
+    "Tab-Wechsel mit Wisch-Animation und ohne Layout-Verschiebung",
+    "Erweitert-Unterreiter bleiben beim Tab-Wechsel sichtbar (Toggle)",
     "Button zum Anzeigen des Changelogs hinzugefügt",
-    "Blockschaltbild wird jetzt richtig angezeigt",
-    "Kleine UI/UX Verbesserungen",
     "Kleine Bugfixes und Verbesserungen",
   ],
   "1.0.6": [
