@@ -371,6 +371,7 @@ export default function App() {
   const [cableCalcs,   setCableCalcs]   = useState([]);
   const [voltCalcs,    setVoltCalcs]    = useState([]);
   const [erweiterSubTab, setErweiterSubTab] = useState("dim");
+  const [erweitertOpen,  setErweitertOpen]  = useState(false);
   const [loaded,       setLoaded]       = useState(false); // prevent save before first load
   const [helpSection,  setHelpSection]  = useState(null);
 
@@ -896,6 +897,7 @@ export default function App() {
         <label style={S.ghostBtn}>↥ Laden<input type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/></label>
         <button style={S.ghostBtn} onClick={saveJSON}>💾 Speichern</button>
         <button style={S.ghostBtn} onClick={resetAll}>↺ Neu</button>
+        <button style={S.ghostBtn} onClick={()=>setChangelogVersion(Object.keys(CHANGELOG)[0])} title="Was ist neu?">📋 Changelog</button>
         {window.electronAPI&&<button style={S.ghostBtn} onClick={()=>setShowUpdateModal(true)}>
           {updateStatus.type==='downloaded'?'↓ Update bereit':updateStatus.type==='available'?'↑ Update verfügbar':'↑ Updates'}
         </button>}
@@ -906,16 +908,16 @@ export default function App() {
         {TABS.map(([k,label])=>(
           <button key={k}
             style={{...S.navBtn,...(tab===k?S.navBtnActive:{}),...(k==="erweitert"?{color:tab===k?"#f5a623":"#c08030",borderColor:tab===k?"#f5a623":"transparent"}:{})}}
-            onClick={()=>setTab(k)}>{label}</button>
+            onClick={()=>{ if(k==="erweitert"){ setErweitertOpen(o=>!o); setTab("erweitert"); } else { setTab(k); } }}>{label}</button>
         ))}
-        {tab==="erweitert" && <>
+        {erweitertOpen && <>
           <span style={{color:"#3a424c",alignSelf:"center",margin:"0 2px",fontSize:16}}>&rsaquo;</span>
           {[["dim","Leitungsdimensionierung"],["volt","Spannungsfall"]].map(([k,lbl])=>(
             <button key={k} style={{
               ...S.navBtn,
-              ...(erweiterSubTab===k ? S.navBtnActive : {}),
-              ...(erweiterSubTab===k ? {color:"#f5a623",borderColor:"#f5a623"} : {color:"#c08030"})
-            }} onClick={()=>setErweiterSubTab(k)}>{lbl}</button>
+              ...(erweiterSubTab===k && tab==="erweitert" ? S.navBtnActive : {}),
+              ...(erweiterSubTab===k && tab==="erweitert" ? {color:"#f5a623",borderColor:"#f5a623"} : {color:"#c08030"})
+            }} onClick={()=>{ setErweiterSubTab(k); setTab("erweitert"); }}>{lbl}</button>
           ))}
         </>}
       </nav>
@@ -2094,6 +2096,34 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     rootY += subtreeH(r.id) + ROW_GAP;
   });
 
+  // Globaler Overlap-Pass für Verteiler-Boxen:
+  // Pro Spalte (Tiefe) alle Knoten nach Y sortieren und Überlappungen durch Push-Down auflösen.
+  // Push-Down wird rekursiv auf alle Nachkommen übertragen.
+  const pushDown = (id, delta) => {
+    if(!positions[id]) return;
+    positions[id] = { ...positions[id], y: positions[id].y + delta };
+    getChildren(id).forEach(ch => pushDown(ch.id, delta));
+  };
+
+  const byColumn = {};
+  instances.forEach(inst => {
+    const pos = positions[inst.id]; if(!pos) return;
+    const col = Math.round((pos.x - LEFT_PAD) / COL_W);
+    (byColumn[col] = byColumn[col] || []).push(inst);
+  });
+
+  Object.keys(byColumn).sort((a,b) => Number(a)-Number(b)).forEach(col => {
+    const sorted = byColumn[col].slice().sort((a,b) => positions[a.id].y - positions[b.id].y);
+    let minY = -Infinity;
+    sorted.forEach(inst => {
+      const pos = positions[inst.id];
+      if(pos.y < minY) {
+        pushDown(inst.id, minY - pos.y);
+      }
+      minY = positions[inst.id].y + nodeH(inst) + ROW_GAP;
+    });
+  });
+
   const outletAbsY = (instId, outletId) => {
     const pos=positions[instId]; if(!pos) return 0;
     const type=boxTypeById[instById[instId]?.typeId];
@@ -2120,48 +2150,60 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     const t=boxTypeById[i.typeId];
     return (t?.outlets||[]).some(o=>(outletToPlacs[`${i.id}__${o.id}`]||[]).length>0);
   });
-  // Kollisions-freie Stack-Positionen für alle Verbraucher vorberechnen
-  // (greedy: Push-Down wenn Überschneidung mit Kind-Verteiler oder bereits platziertem Stack)
+  // Kollisions-freie Stack-Positionen für alle Verbraucher vorberechnen — globaler Zwei-Pass:
+  // 1) Alle Stacks aller Instanzen mit Wunsch-Y sammeln
+  // 2) Pro X-Spalte nach Wunsch-Y sortieren und global platzieren (kein per-Instanz-Silo)
   const consumerStackPositions = {}; // `instId__outId` → stackTop Y
+
+  // Alle platzierten Stacks mit Wunsch-Y sammeln
+  const allStacks = [];
   instances.forEach(inst => {
     const type = boxTypeById[inst.typeId];
     const outlets = type?.outlets || [];
     const pos = positions[inst.id]; if(!pos) return;
     const leafX = pos.x + NODE_W + Math.round((COL_W-NODE_W)/2);
-
-    // Y-Bereiche ALLER Verteiler ermitteln die sich mit der Consumer-Spalte überschneiden
-    const blockedRanges = instances
-      .filter(other => other.id !== inst.id)
-      .flatMap(other => {
-        const otherPos = positions[other.id]; if(!otherPos) return [];
-        // X-Überschneidung: [leafX, leafX+LEAF_W] ∩ [otherPos.x, otherPos.x+NODE_W]
-        if(leafX + LEAF_W <= otherPos.x || leafX >= otherPos.x + NODE_W) return [];
-        return [{ top: otherPos.y, bottom: otherPos.y + nodeH(other) }];
-      })
-      .sort((a,b) => a.top - b.top);
-
-    const claimedRanges = []; // bereits platzierte Consumer-Stacks dieser Instanz
-
     outlets.forEach(out => {
       const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
       if(!placs.length) return;
       const oY = outletAbsY(inst.id, out.id);
       const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
+      allStacks.push({ key: `${inst.id}__${out.id}`, leafX, idealTop: oY - LEAF_H/2, totalH });
+    });
+  });
 
-      // Startposition: ideales Zentrum am Outlet; nach unten schieben bis kein Konflikt
-      let stackTop = oY - LEAF_H/2;
+  // Für jede X-Spalte separat: Stacks nach Wunsch-Y sortieren, dann global platzieren
+  const stacksByCol = {};
+  allStacks.forEach(s => {
+    (stacksByCol[s.leafX] = stacksByCol[s.leafX] || []).push(s);
+  });
+
+  Object.values(stacksByCol).forEach(colStacks => {
+    colStacks.sort((a, b) => a.idealTop - b.idealTop);
+
+    // Verteiler-Blöcke die mit dieser X-Spalte überlappen als geblockte Bereiche
+    const blockedByNodes = instances.flatMap(other => {
+      const otherPos = positions[other.id]; if(!otherPos) return [];
+      const lx = colStacks[0].leafX;
+      if(lx + LEAF_W <= otherPos.x || lx >= otherPos.x + NODE_W) return [];
+      return [{ top: otherPos.y, bottom: otherPos.y + nodeH(other) }];
+    }).sort((a, b) => a.top - b.top);
+
+    const placed = []; // bereits platzierte Stacks dieser Spalte
+
+    colStacks.forEach(stack => {
+      let top = stack.idealTop;
       let changed = true;
       while(changed) {
         changed = false;
-        for(const r of [...blockedRanges, ...claimedRanges].sort((a,b)=>a.top-b.top)) {
-          if(stackTop + totalH > r.top && stackTop < r.bottom) {
-            stackTop = r.bottom + 4;
+        for(const r of [...blockedByNodes, ...placed].sort((a, b) => a.top - b.top)) {
+          if(top + stack.totalH > r.top && top < r.bottom) {
+            top = r.bottom + 4;
             changed = true; break;
           }
         }
       }
-      claimedRanges.push({ top: stackTop, bottom: stackTop + totalH });
-      consumerStackPositions[`${inst.id}__${out.id}`] = stackTop;
+      placed.push({ top, bottom: top + stack.totalH });
+      consumerStackPositions[stack.key] = top;
     });
   });
 
