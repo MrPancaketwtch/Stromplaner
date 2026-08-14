@@ -2960,7 +2960,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
   const getIR = (iid) => { const sv=inspResults[iid]||{}; return {...IR_DEF,...sv,sicht:sv.sicht?[...sv.sicht]:[...IR_DEF.sicht],outlets:sv.outlets||{}}; };
   const updIR = (iid,patch) => setInspResults(s=>({...s,[iid]:{...getIR(iid),...patch}}));
 
-  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",zsL1:"",zsL2:"",zsL3:"",ikL1:"",ikL2:"",ikL3:"",notInUse:false,zsOverride:"",ikOverride:"",cableLen:"",cableA:"",cosPhi:"0.95" };
+  const OR_DEF = { rcdT1:"",rcdIan:"",ok:false,zs:"",ik:"",zsL1:"",zsL2:"",zsL3:"",ikL1:"",ikL2:"",ikL3:"",notInUse:false,zsOverride:"",ikOverride:"",zsOverrideL1:"",zsOverrideL2:"",zsOverrideL3:"",ikOverrideL1:"",ikOverrideL2:"",ikOverrideL3:"",overrideActive:false,cableLen:"",cableA:"",cosPhi:"0.95" };
   const getOR = (iid,oid) => ({...OR_DEF,...((getIR(iid).outlets||{})[oid]||{})});
   const updOR = (iid,oid,patch) => {
     const ir=getIR(iid);
@@ -2975,25 +2975,43 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
     childInstIds.forEach(cid=>{
       const cType=boxTypeById[instById[cid]?.typeId];
       (cType?.outlets||[]).forEach(co=>{
-        const grandChildInsts=instances.filter(ci=>ci.parentId===cid&&ci.parentOutletId===co.id);
-        if(grandChildInsts.length>0){
-          // Outlet hat selbst einen Unterverteiler → rekursiv ableiten
-          const d=childDerived(grandChildInsts.map(ci=>ci.id));
-          if(d.zs) zsVals.push(Number(d.zs));
-          if(d.ik) ikVals.push(Number(d.ik));
-        } else {
-          const collect=(cor)=>{
-            if(cor.notInUse) return;
-            if(is3ph(co.connector)){
-              ["zsL1","zsL2","zsL3"].forEach(k=>{ if(cor[k]) zsVals.push(Number(cor[k])); });
-              ["ikL1","ikL2","ikL3"].forEach(k=>{ if(cor[k]) ikVals.push(Number(cor[k])); });
+        if(isMulticore(co.connector)){
+          // Multicore: jeden Slot einzeln prüfen – dort kann auch ein UV stecken
+          for(let s=1;s<=(co.mcSlots||6);s++){
+            const slotId=`${co.id}_s${s}`;
+            const gcInsts=instances.filter(ci=>ci.parentId===cid&&ci.parentOutletId===slotId);
+            if(gcInsts.length>0){
+              const d=childDerived(gcInsts.map(ci=>ci.id));
+              if(d.zs) zsVals.push(Number(d.zs));
+              if(d.ik) ikVals.push(Number(d.ik));
             } else {
-              if(cor.zs) zsVals.push(Number(cor.zs));
-              if(cor.ik) ikVals.push(Number(cor.ik));
+              const cor=getOR(cid,slotId);
+              if(!cor.notInUse){
+                if(cor.zs) zsVals.push(Number(cor.zs));
+                if(cor.ik) ikVals.push(Number(cor.ik));
+              }
             }
-          };
-          if(isMulticore(co.connector)){ for(let s=1;s<=(co.mcSlots||6);s++) collect(getOR(cid,`${co.id}_s${s}`)); }
-          else collect(getOR(cid,co.id));
+          }
+        } else {
+          const grandChildInsts=instances.filter(ci=>ci.parentId===cid&&ci.parentOutletId===co.id);
+          if(grandChildInsts.length>0){
+            // Outlet hat selbst einen Unterverteiler → rekursiv ableiten
+            const d=childDerived(grandChildInsts.map(ci=>ci.id));
+            if(d.zs) zsVals.push(Number(d.zs));
+            if(d.ik) ikVals.push(Number(d.ik));
+          } else {
+            const collect=(cor)=>{
+              if(cor.notInUse) return;
+              if(is3ph(co.connector)){
+                ["zsL1","zsL2","zsL3"].forEach(k=>{ if(cor[k]) zsVals.push(Number(cor[k])); });
+                ["ikL1","ikL2","ikL3"].forEach(k=>{ if(cor[k]) ikVals.push(Number(cor[k])); });
+              } else {
+                if(cor.zs) zsVals.push(Number(cor.zs));
+                if(cor.ik) ikVals.push(Number(cor.ik));
+              }
+            };
+            collect(getOR(cid,co.id));
+          }
         }
       });
     });
@@ -3199,9 +3217,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           if(or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">–</span><span class="r muted">–</span><span class="r muted">—</span></div>`;
           if(hasChild){
             const d=childDerived(childInstIds||[]);
-            const hasOv=!!(or.zsOverride||or.ikOverride);
-            const zsVal=or.zsOverride||d.zs||"";
-            const ikVal=or.ikOverride||d.ik||"";
+            const hasOv=or.overrideActive||!!(or.zsOverride||or.ikOverride||or.zsOverrideL1||or.zsOverrideL2||or.zsOverrideL3||or.ikOverrideL1||or.ikOverrideL2||or.ikOverrideL3);
+            const zsVal=(hasOv?(is3p?worstZs(or.zsOverrideL1,or.zsOverrideL2,or.zsOverrideL3)||or.zsOverride:or.zsOverride)||d.zs:d.zs)||"";
+            const ikVal=(hasOv?(is3p?worstIk(or.ikOverrideL1,or.ikOverrideL2,or.ikOverrideL3)||or.ikOverride:or.ikOverride)||d.ik:d.ik)||"";
             const ckZs=zsVal?pdfChk(zsVal,undefined,zsLimO):"";
             const ckIk=ikVal?pdfChk(ikVal,ikLimO,undefined):"";
             const ck=ckIk==="bad"||ckZs==="bad"?"bad":ckIk==="ok"||ckZs==="ok"?"ok":"";
@@ -3503,8 +3521,11 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                   const outHasRcd=(o)=>o.protection==="RCBO"||!!o.rcdId;
                   if(isMulticore(outlet.connector)){
                     const slots=outlet.mcSlots||6;
-                    for(let s=1;s<=slots;s++)
-                      schleifenRows.push({oid:`${outlet.id}_s${s}`,label:`${outlet.label} – SP ${s}`,subLabel:`${PHASES[(s-1)%3]} · ${outlet.amp}A`,amp:outlet.amp||16,is3p:false,hasChild:false,childName:"",hasRcd:outHasRcd(outlet)});
+                    for(let s=1;s<=slots;s++){
+                      const slotId=`${outlet.id}_s${s}`;
+                      const slotChildInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===slotId);
+                      schleifenRows.push({oid:slotId,label:`${outlet.label} – SP ${s}`,subLabel:`${PHASES[(s-1)%3]} · ${outlet.amp}A`,amp:outlet.amp||16,is3p:false,hasChild:slotChildInsts.length>0,childName:slotChildInsts[0]?.name||"",childInstIds:slotChildInsts.map(ci=>ci.id),hasRcd:outHasRcd(outlet)});
+                    }
                   } else {
                     const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===outlet.id);
                     schleifenRows.push({oid:outlet.id,label:outlet.label,subLabel:`${CONN[outlet.connector]?.label||""} ${outlet.amp}A`,amp:outlet.amp||type?.feedAmp||16,is3p:is3ph(outlet.connector),hasChild:childInsts.length>0,childName:childInsts[0]?.name||"",childInstIds:childInsts.map(ci=>ci.id),hasRcd:outHasRcd(outlet)});
@@ -3521,18 +3542,20 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 
                         if(hasChild){
                           const d=childDerived(childInstIds||[]);
-                          const effZs=or.zsOverride||d.zs;
-                          const effIk=or.ikOverride||d.ik;
+                          const hasOverride=or.overrideActive||!!(or.zsOverride||or.ikOverride||or.zsOverrideL1||or.zsOverrideL2||or.zsOverrideL3||or.ikOverrideL1||or.ikOverrideL2||or.ikOverrideL3);
+                          const effZs=hasOverride?(is3p?worstZs(or.zsOverrideL1,or.zsOverrideL2,or.zsOverrideL3)||or.zsOverride:or.zsOverride)||d.zs:d.zs;
+                          const effIk=hasOverride?(is3p?worstIk(or.ikOverrideL1,or.ikOverrideL2,or.ikOverrideL3)||or.ikOverride:or.ikOverride)||d.ik:d.ik;
                           const okZs=effZs?chk(effZs,undefined,zsLim):null;
                           const okIk=effIk?chk(effIk,ikLim,undefined):null;
                           const anyBad=okZs===false||okIk===false;
                           const anyOk=okZs===true||okIk===true;
-                          const hasOverride=!!(or.zsOverride||or.ikOverride);
+                          const resetPatch={zsOverride:"",ikOverride:"",zsOverrideL1:"",zsOverrideL2:"",zsOverrideL3:"",ikOverrideL1:"",ikOverrideL2:"",ikOverrideL3:"",overrideActive:false};
+                          const activatePatch=is3p?{overrideActive:true}:{zsOverride:d.zs||"",ikOverride:d.ik||"",overrideActive:true};
                           return (
                             <div key={oid} style={{background:anyBad?"rgba(231,76,60,0.07)":anyOk?"rgba(46,204,113,0.05)":"rgba(245,166,35,0.04)",border:`1px solid ${anyBad?"#e74c3c":anyOk?"#2ecc71":"rgba(245,166,35,0.3)"}`,borderRadius:5,padding:"6px 8px"}}>
                               <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:3,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                                 <span>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></span>
-                                <button onClick={()=>updOR(inst.id,oid,hasOverride?{zsOverride:"",ikOverride:""}:{zsOverride:d.zs||"",ikOverride:d.ik||""})} style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6,flexShrink:0,color:hasOverride?"#f5a623":"#9aa4af"}}>
+                                <button onClick={()=>updOR(inst.id,oid,hasOverride?resetPatch:activatePatch)} style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6,flexShrink:0,color:hasOverride?"#f5a623":"#9aa4af"}}>
                                   {hasOverride?"↩ Ableitung":"✎ Nachtragen"}
                                 </button>
                               </div>
@@ -3540,16 +3563,43 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                               {hasOverride?(
                                 <div>
                                   <div style={{fontSize:10,color:"#e67e22",marginBottom:4,fontStyle:"italic"}}>Separat gemessener Wert am Eingang (abgeleiteter Wert: {d.zs||"–"} Ω / {d.ik||"–"} A)</div>
-                                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                                    <div>
-                                      <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>Z_s (Ω) <span style={{color:"#555"}}>≤ {zsLim.toFixed(2).replace(".",",")} Ω</span></div>
-                                      <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okZs)}} value={or.zsOverride||""} onChange={e=>updOR(inst.id,oid,{zsOverride:e.target.value})}/>
+                                  {is3p?(
+                                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                                      <div>
+                                        <div style={{fontSize:10,color:"#7c8794",marginBottom:3}}>Z_s (Ω) <span style={{color:"#555"}}>≤ {zsLim.toFixed(2).replace(".",",")} Ω</span></div>
+                                        {["L1","L2","L3"].map(ph=>{
+                                          const key=`zsOverride${ph}`; const v=or[key]||"";
+                                          const ok=v!==""?chk(v,undefined,zsLim):null;
+                                          return <div key={ph} style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
+                                            <span style={{fontSize:10,color:"#666",width:18}}>{ph}</span>
+                                            <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:72,...inpBorder(ok)}} value={v} onChange={e=>updOR(inst.id,oid,{[key]:e.target.value})}/>
+                                          </div>;
+                                        })}
+                                      </div>
+                                      <div>
+                                        <div style={{fontSize:10,color:"#7c8794",marginBottom:3}}>I_k (A) <span style={{color:"#555"}}>≥ {ikLim} A</span></div>
+                                        {["L1","L2","L3"].map(ph=>{
+                                          const key=`ikOverride${ph}`; const v=or[key]||"";
+                                          const ok=v!==""?chk(v,ikLim,undefined):null;
+                                          return <div key={ph} style={{display:"flex",alignItems:"center",gap:4,marginBottom:2}}>
+                                            <span style={{fontSize:10,color:"#666",width:18}}>{ph}</span>
+                                            <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:72,...inpBorder(ok)}} value={v} onChange={e=>updOR(inst.id,oid,{[key]:e.target.value})}/>
+                                          </div>;
+                                        })}
+                                      </div>
                                     </div>
-                                    <div>
-                                      <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>I_k (A) <span style={{color:"#555"}}>≥ {ikLim} A</span></div>
-                                      <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okIk)}} value={or.ikOverride||""} onChange={e=>updOR(inst.id,oid,{ikOverride:e.target.value})}/>
+                                  ):(
+                                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                                      <div>
+                                        <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>Z_s (Ω) <span style={{color:"#555"}}>≤ {zsLim.toFixed(2).replace(".",",")} Ω</span></div>
+                                        <input type="number" step="0.01" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okZs)}} value={or.zsOverride||""} onChange={e=>updOR(inst.id,oid,{zsOverride:e.target.value})}/>
+                                      </div>
+                                      <div>
+                                        <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>I_k (A) <span style={{color:"#555"}}>≥ {ikLim} A</span></div>
+                                        <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okIk)}} value={or.ikOverride||""} onChange={e=>updOR(inst.id,oid,{ikOverride:e.target.value})}/>
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </div>
                               ):(d.zs||d.ik)?(
                                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -3558,7 +3608,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                                     <input readOnly value={d.zs} style={{...S.inputSm,width:80,...inpBorder(okZs),opacity:0.55,cursor:"default"}}/>
                                   </div>
                                   <div>
-                                    <div style={{fontSize:10,color:"#555",marginBottom:2}}>I_k (A) <span style={{color:"#444"}}>≥ {ikLim} A</span></div>
+                                    <div style={{fontSize:10,color:"#444",marginBottom:2}}>I_k (A) <span style={{color:"#444"}}>≥ {ikLim} A</span></div>
                                     <input readOnly value={d.ik} style={{...S.inputSm,width:80,...inpBorder(okIk),opacity:0.55,cursor:"default"}}/>
                                   </div>
                                   <div style={{fontSize:9,color:"#555",alignSelf:"flex-end",paddingBottom:2}}>schlechtester Wert<br/>aus Unterverteilung</div>
