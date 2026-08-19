@@ -28212,14 +28212,13 @@ button:active { filter: brightness(0.95); }
       if (!localStorage.getItem("stromplaner_donated")) setShowDonateModal(true);
     }, []);
     (0, import_react.useEffect)(() => {
-      if (!window.electronAPI?.appVersion) return;
-      window.electronAPI.appVersion().then((v) => {
-        const seen = localStorage.getItem("stromplaner_seen_version");
-        if (seen !== v && CHANGELOG[v]) {
-          setChangelogVersion(v);
-          localStorage.setItem("stromplaner_seen_version", v);
-        }
-      });
+      const v = true ? "1.0.8" : null;
+      if (!v) return;
+      const seen = localStorage.getItem("stromplaner_seen_version");
+      if (seen !== v && CHANGELOG[v]) {
+        setChangelogVersion(v);
+        localStorage.setItem("stromplaner_seen_version", v);
+      }
     }, []);
     const saveTimer = (0, import_react.useRef)(null);
     const schematicSvgRef = (0, import_react.useRef)(null);
@@ -30657,13 +30656,16 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
   <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${lastNum} / PTOT</span></footer>
 </article>`;
         pages = pages.replace(/PTOT/g, String(pdfPC));
-        if (!window.electronAPI?.exportInspectionPdf) {
-          alert("PDF-Export nicht verf\xFCgbar \u2013 bitte App neu starten.");
-          return;
+        const fullHtml = `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`;
+        if (window.electronAPI?.exportInspectionPdf) {
+          window.electronAPI.exportInspectionPdf(fullHtml).catch((err) => alert("PDF-Export Fehler: " + (err?.message || err)));
+        } else {
+          const blob = new Blob([fullHtml], { type: "text/html;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const w = window.open(url, "Stromplaner \u2013 Pr\xFCfprotokoll");
+          if (!w) alert("Popup-Blocker aktiv \u2013 bitte Popups f\xFCr diese Seite erlauben und erneut versuchen.");
+          setTimeout(() => URL.revokeObjectURL(url), 3e4);
         }
-        window.electronAPI.exportInspectionPdf(
-          `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`
-        ).catch((err) => alert("PDF-Export Fehler: " + (err?.message || err)));
       } catch (err) {
         alert("PDF-Fehler: " + (err?.stack || err?.message || String(err)));
       }

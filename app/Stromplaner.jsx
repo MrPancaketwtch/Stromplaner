@@ -428,14 +428,13 @@ export default function App() {
   },[]);
 
   useEffect(()=>{
-    if(!window.electronAPI?.appVersion) return;
-    window.electronAPI.appVersion().then(v=>{
-      const seen = localStorage.getItem("stromplaner_seen_version");
-      if(seen !== v && CHANGELOG[v]) {
-        setChangelogVersion(v);
-        localStorage.setItem("stromplaner_seen_version", v);
-      }
-    });
+    const v = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : null;
+    if(!v) return;
+    const seen = localStorage.getItem("stromplaner_seen_version");
+    if(seen !== v && CHANGELOG[v]) {
+      setChangelogVersion(v);
+      localStorage.setItem("stromplaner_seen_version", v);
+    }
   },[]);
 
   // Save on every change (debounced 600ms)
@@ -3349,13 +3348,17 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     // Platzhalter durch tatsächliche Gesamtseitenzahl ersetzen
     pages=pages.replace(/PTOT/g,String(pdfPC));
 
-    if(!window.electronAPI?.exportInspectionPdf){
-      alert("PDF-Export nicht verfügbar – bitte App neu starten.");
-      return;
+    const fullHtml=`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`;
+    if(window.electronAPI?.exportInspectionPdf){
+      window.electronAPI.exportInspectionPdf(fullHtml)
+        .catch(err=>alert("PDF-Export Fehler: "+(err?.message||err)));
+    } else {
+      const blob=new Blob([fullHtml],{type:"text/html;charset=utf-8"});
+      const url=URL.createObjectURL(blob);
+      const w=window.open(url,"Stromplaner – Prüfprotokoll");
+      if(!w) alert("Popup-Blocker aktiv – bitte Popups für diese Seite erlauben und erneut versuchen.");
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
     }
-    window.electronAPI.exportInspectionPdf(
-      `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`
-    ).catch(err=>alert("PDF-Export Fehler: "+(err?.message||err)));
   } catch(err){ alert("PDF-Fehler: "+(err?.stack||err?.message||String(err))); } };
 
   // Topologische Sortierung: Einspeisepunkt → Kinder → Enkel (BFS, alphabetisch je Ebene)

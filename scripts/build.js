@@ -17,6 +17,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 `;
 
 async function build() {
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   fs.writeFileSync(ENTRY, entryCode);
   try {
     const result = await esbuild.build({
@@ -24,7 +25,10 @@ async function build() {
       bundle: true,
       format: "iife",
       loader: { ".jsx": "jsx" },
-      define: { "process.env.NODE_ENV": '"production"' },
+      define: {
+        "process.env.NODE_ENV": '"production"',
+        "__APP_VERSION__": JSON.stringify(pkg.version),
+      },
       write: false,
     });
 
