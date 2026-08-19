@@ -51,9 +51,13 @@ function createWindow() {
       'document.body.style.opacity="0"'
     ).catch(() => {});
     setTimeout(() => {
-      if (!splash.isDestroyed()) splash.close();
+      if (!splash.isDestroyed()) {
+        splash.setAlwaysOnTop(false);
+        splash.close();
+      }
       win.show();
       win.focus();
+      win.webContents.focus();
       if (app.isPackaged) setupAutoUpdater(win);
     }, 300);
   };

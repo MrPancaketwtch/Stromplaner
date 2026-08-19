@@ -24,6 +24,7 @@ async function build() {
       bundle: true,
       format: "iife",
       loader: { ".jsx": "jsx" },
+      define: { "process.env.NODE_ENV": '"production"' },
       write: false,
     });
 
