@@ -76,6 +76,9 @@ const CHANGELOG = {
     "Kaskadierung: Unterverteiler an Multicore-Slots werden jetzt korrekt über beliebig viele Ebenen weitergereicht",
     "Nachtragen bei 3-phasigen Abgängen: Eingabe jetzt pro Phase (L1/L2/L3), Worst-Case wird automatisch abgeleitet",
     "Nachtragen-Button: funktioniert jetzt auch wenn noch keine abgeleiteten Messwerte vorhanden sind",
+    "Eingang: Neues Messfeld im Prüfprotokoll für Z_s / I_k direkt am UV-Eingang (bei höher abgesicherter Zuleitung)",
+    "LS-Charakteristik: B/C/D/K wird jetzt bei der Grenzwertberechnung für Z_s und I_k berücksichtigt",
+    "Texteingaben in der paketierter Version: Fokus-Problem beim Start behoben",
   ],
   "1.0.7": [
     "Hauptanschluss wurde in Einspeisepunkt umbenannt",
@@ -3171,6 +3174,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const ckVLL=pdfChkAll([ir.voltL1L2,ir.voltL2L3,ir.voltL1L3],360,424);
       const ckVNPE=pdfChk(ir.voltNPE,undefined,1);
       const ckVLPE=pdfChkAll([ir.voltL1PE,ir.voltL2PE,ir.voltL3PE],207,244);
+      const hasInletMeas=!!(ir.zs||ir.ik);
       let secIdx=4;
       const rcdSec=pdfRcdRows.length?secIdx++:0;
       const abgSec=secIdx++;
@@ -3290,7 +3294,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.2</span>U L–N (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1N,ir.voltL2N,ir.voltL3N)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLN)}</span></div>
         <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.3</span>U L–L (L1-L2 / L2-L3 / L1-L3)</span><span class="r"><strong>${fv(ir.voltL1L2,ir.voltL2L3,ir.voltL1L3)}</strong></span><span class="r muted">360–424 V</span><span class="r">${badge(ckVLL)}</span></div>
         <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.4</span>U N–PE</span><span class="r"><strong>${ir.voltNPE?esc(ir.voltNPE)+"&thinsp;V":"–"}</strong></span><span class="r muted">Spannungsfrei</span><span class="r">${badge(ckVNPE)}</span></div>
-        <div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U L–PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE,ir.voltL2PE,ir.voltL3PE)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLPE)}</span></div>
+        <div class="trow${!hasInletMeas?" row-last":""}" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U L–PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE,ir.voltL2PE,ir.voltL3PE)}</strong></span><span class="r muted">207–244 V</span><span class="r">${badge(ckVLPE)}</span></div>
+        ${hasInletMeas?`<div class="trow${!ir.ik?" row-last":""}" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.6</span>Z_s Eingang</span><span class="r"><strong>${ir.zs?esc(ir.zs)+"&thinsp;Ω":"–"}</strong></span><span class="r muted">–</span><span class="r"><span class="muted">–</span></span></div>${ir.ik?`<div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.7</span>I_k Eingang</span><span class="r"><strong>${esc(ir.ik)}&thinsp;A</strong></span><span class="r muted">–</span><span class="r"><span class="muted">–</span></span></div>`:""}`:""}
+
       </div></section>
     ${pdfRcdRows.length?`<section class="block"><header class="bar"><span><strong>${n}.${rcdSec} · RCD-Prüfung</strong><span class="bar-sub">${pdfRcdRows.length} Stk.</span></span></header>
       <div class="block-body">
@@ -3479,6 +3485,22 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                     <option value="links">Linksdrehfeld</option>
                   </select>
                 </Field>
+              </div>
+
+              {/* ── Schleifen am UV-Eingang ── */}
+              <div style={{marginBottom:14}}>
+                <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Schleifenimpedanz Eingang</p>
+                <div style={{fontSize:10,color:"#555",marginBottom:6}}>Messung direkt am UV-Eingang – einzutragen wenn die Zuleitung höher abgesichert ist als alle Abgänge.</div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <div>
+                    <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>Z_s (Ω)</div>
+                    <input type="number" step="0.01" placeholder="–" style={S.inputSm} value={ir.zs||""} onChange={e=>updIR(inst.id,{zs:e.target.value})}/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>I_k (A)</div>
+                    <input type="number" step="1" placeholder="–" style={S.inputSm} value={ir.ik||""} onChange={e=>updIR(inst.id,{ik:e.target.value})}/>
+                  </div>
+                </div>
               </div>
 
               {/* ── RCD-Prüfung ── */}
