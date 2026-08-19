@@ -3187,13 +3187,13 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             const oid=`${o.id}_s${s}`;
             const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id&&p.mcSlot===s);
             const lbl=pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–";
-            abgRows.push({oid,label:`${o.label} SP${s}`,lbl,amp:o.amp||16,is3p:false,hasChild:false,hasRcd:o.protection==="RCBO"||!!o.rcdId});
+            abgRows.push({oid,label:`${o.label} SP${s}`,lbl,amp:o.amp||16,is3p:false,hasChild:false,hasRcd:o.protection==="RCBO"||!!o.rcdId,breaker:o.breaker||"C"});
           }
         } else {
           const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===o.id);
           const pl=(placements||[]).filter(p=>p.instanceId===inst.id&&p.outletId===o.id);
           const lbl=childInsts.length?childInsts[0].name:(pl.length?(loadById||{})[pl[0].loadId]?.name||"–":"–");
-          abgRows.push({oid:o.id,label:o.label,lbl,amp:o.amp||type?.feedAmp||16,is3p:is3ph(o.connector),hasChild:childInsts.length>0,childInstIds:childInsts.map(ci=>ci.id),hasRcd:o.protection==="RCBO"||!!o.rcdId});
+          abgRows.push({oid:o.id,label:o.label,lbl,amp:o.amp||type?.feedAmp||16,is3p:is3ph(o.connector),hasChild:childInsts.length>0,childInstIds:childInsts.map(ci=>ci.id),hasRcd:o.protection==="RCBO"||!!o.rcdId,breaker:o.breaker||"C"});
         }
       });
 
@@ -3216,8 +3216,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Verteiler</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
         ${chunk.map(({oid,label,lbl,amp,is3p,hasChild,childInstIds,hasRcd},i)=>{
           const or=getOR(inst.id,oid);
-          const ikLimO=amp*10;
-          const zsLimO=hasRcd?2.0:parseFloat((230/(amp*10)).toFixed(2));
+          const ikFactorO=breaker==="B"?5:breaker==="D"?20:breaker==="K"?14:10;
+          const ikLimO=amp*ikFactorO;
+          const zsLimO=hasRcd?2.0:parseFloat((230/(amp*ikFactorO)).toFixed(2));
           const last=(i===chunk.length-1&&isLastChunk)?" row-last":"";
           if(or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">–</span><span class="r muted">–</span><span class="r muted">—</span></div>`;
           if(hasChild){
@@ -3529,21 +3530,22 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                     for(let s=1;s<=slots;s++){
                       const slotId=`${outlet.id}_s${s}`;
                       const slotChildInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===slotId);
-                      schleifenRows.push({oid:slotId,label:`${outlet.label} – SP ${s}`,subLabel:`${PHASES[(s-1)%3]} · ${outlet.amp}A`,amp:outlet.amp||16,is3p:false,hasChild:slotChildInsts.length>0,childName:slotChildInsts[0]?.name||"",childInstIds:slotChildInsts.map(ci=>ci.id),hasRcd:outHasRcd(outlet)});
+                      schleifenRows.push({oid:slotId,label:`${outlet.label} – SP ${s}`,subLabel:`${PHASES[(s-1)%3]} · ${outlet.amp}A`,amp:outlet.amp||16,is3p:false,hasChild:slotChildInsts.length>0,childName:slotChildInsts[0]?.name||"",childInstIds:slotChildInsts.map(ci=>ci.id),hasRcd:outHasRcd(outlet),breaker:outlet.breaker||"C"});
                     }
                   } else {
                     const childInsts=instances.filter(ci=>ci.parentId===inst.id&&ci.parentOutletId===outlet.id);
-                    schleifenRows.push({oid:outlet.id,label:outlet.label,subLabel:`${CONN[outlet.connector]?.label||""} ${outlet.amp}A`,amp:outlet.amp||type?.feedAmp||16,is3p:is3ph(outlet.connector),hasChild:childInsts.length>0,childName:childInsts[0]?.name||"",childInstIds:childInsts.map(ci=>ci.id),hasRcd:outHasRcd(outlet)});
+                    schleifenRows.push({oid:outlet.id,label:outlet.label,subLabel:`${CONN[outlet.connector]?.label||""} ${outlet.amp}A`,amp:outlet.amp||type?.feedAmp||16,is3p:is3ph(outlet.connector),hasChild:childInsts.length>0,childName:childInsts[0]?.name||"",childInstIds:childInsts.map(ci=>ci.id),hasRcd:outHasRcd(outlet),breaker:outlet.breaker||"C"});
                   }
                 });
                 return (
                   <div style={{marginBottom:14}}>
                     <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Schleifenimpedanz &amp; Kurzschluss</p>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:4}}>
-                      {schleifenRows.map(({oid,label,subLabel,amp,is3p,hasChild,childName,childInstIds,hasRcd})=>{
+                      {schleifenRows.map(({oid,label,subLabel,amp,is3p,hasChild,childName,childInstIds,hasRcd,breaker})=>{
                         const or=getOR(inst.id,oid);
-                        const zsLim=hasRcd?2.0:parseFloat((230/(amp*10)).toFixed(2));
-                        const ikLim=amp*10;
+                        const ikFactor=breaker==="B"?5:breaker==="D"?20:breaker==="K"?14:10;
+                        const zsLim=hasRcd?2.0:parseFloat((230/(amp*ikFactor)).toFixed(2));
+                        const ikLim=amp*ikFactor;
 
                         if(hasChild){
                           const d=childDerived(childInstIds||[]);
