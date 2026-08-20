@@ -3750,7 +3750,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                   </div>
                   <div style={{width:130,paddingBottom:2}}>
                     <Field label="Schweregrad">
-                      <select style={S.input} value={ir.bemerkungSchwere||"bad"} onChange={e=>updIR(inst.id,{bemerkungSchwere:e.target.value})} disabled={!ir.bemerkung}>
+                      <select style={S.input} value={ir.bemerkungSchwere||"bad"} onChange={e=>updIR(inst.id,{bemerkungSchwere:e.target.value})}>
                         <option value="bad">✕ Mangel</option>
                         <option value="warn">! Hinweis</option>
                       </select>
