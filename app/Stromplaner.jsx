@@ -2585,7 +2585,7 @@ const HELP_SECTIONS = {
   },
   hauptanschluesse: {
     title: 'Einspeisepunkte',
-    text: 'Hier definierst du die Einspeisepunkte deiner Anlage – also die Anschlüsse, aus denen deine Verteiler gespeist werden. Gib jedem Einspeisepunkt einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung Bühne") und trag ein, mit wieviel Ampere er abgesichert ist. Vergiss nicht, sie zu beschriften!',
+    text: 'Hier definierst du die Einspeisepunkte deiner Anlage – also die Anschlüsse, aus denen deine Verteiler gespeist werden. Gib jedem Einspeisepunkt einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung Bühne") und trag ein, mit wieviel Ampere er abgesichert ist.',
     extra: ''
   },
   verteiler: {
@@ -3217,7 +3217,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const renderChunk=(chunk,isLastChunk)=>`<section class="block"><header class="bar"><span><strong>${n}.${abgSec} · Abgänge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
       <div class="block-body">
         <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Verteiler</span><span class="r">Z_s (Ω)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">≥ In×10 A</span></span><span class="r">Befund</span></div>
-        ${chunk.map(({oid,label,lbl,amp,is3p,hasChild,childInstIds,hasRcd},i)=>{
+        ${chunk.map(({oid,label,lbl,amp,is3p,hasChild,childInstIds,hasRcd,breaker},i)=>{
           const or=getOR(inst.id,oid);
           const ikFactorO=breaker==="B"?5:breaker==="D"?20:breaker==="K"?14:10;
           const ikLimO=amp*ikFactorO;
