@@ -371,6 +371,8 @@ export default function App() {
   // placements: {id, instanceId, outletId, mcSlot(num|null), loadId}
   const [placements, setPlacements] = useState([]);
   const [activePlan,   setActivePlan]   = useState(null);
+  const [recents,      setRecents]      = useState([]);
+  const [showRecents,  setShowRecents]  = useState(false);
   const [inspMeta,     setInspMeta]     = useState({ inspector:"", date:new Date().toISOString().slice(0,10), time:"", equipment:"", address:"", location:"", netType:"" });
   const [inspResults,  setInspResults]  = useState({});
   const [corpLogo,     setCorpLogo]     = useState(()=>localStorage.getItem('sp_corp_logo')||"");
@@ -438,6 +440,10 @@ export default function App() {
       setChangelogVersion(v);
       localStorage.setItem("stromplaner_seen_version", v);
     }
+  },[]);
+
+  useEffect(()=>{
+    window.electronAPI?.getRecents().then(setRecents).catch(()=>{});
   },[]);
 
   // Save on every change (debounced 600ms)
@@ -602,30 +608,59 @@ export default function App() {
   };
 
   /* ── JSON Save/Load ────────────────────────────────────────────────────── */
-  const saveJSON=()=>{
-    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs};
-    downloadJSON(data,`Stromplan_${meta.production.replace(/\s+/g,"_")}.json`);
+  const applyPlanData=(d)=>{
+    if(d._format!=="stromplaner"){ alert("Keine gültige Stromplaner-Datei."); return false; }
+    if(d.meta)        setMeta(d.meta);
+    if(d.mainConns)   setMainConns(d.mainConns||[]);
+    if(d.boxTypes)    setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType),"name"));
+    if(d.loads)       setLoads(alphaSort(d.loads.map(l=>({...l,threePhase:l.threePhase||false})),"name"));
+    if(d.instances)   setInstances(d.instances.map(migrateInstance));
+    if(d.placements)  setPlacements(d.placements);
+    if(d.inspMeta)    setInspMeta(d.inspMeta);
+    if(d.inspResults) setInspResults(d.inspResults);
+    if(d.cableCalcs)  setCableCalcs(d.cableCalcs);
+    if(d.voltCalcs)   setVoltCalcs(d.voltCalcs);
+    setActivePlan(null);
+    return true;
   };
+
+  const saveJSON=async()=>{
+    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs};
+    if(window.electronAPI?.savePlan){
+      const result=await window.electronAPI.savePlan({json:JSON.stringify(data,null,2),suggestedName:`Stromplan_${meta.production.replace(/\s+/g,"_")}`});
+      if(result?.recents) setRecents(result.recents);
+    } else {
+      downloadJSON(data,`Stromplan_${meta.production.replace(/\s+/g,"_")}.json`);
+    }
+  };
+
+  const openPlan=async()=>{
+    if(window.electronAPI?.openPlan){
+      const result=await window.electronAPI.openPlan();
+      if(!result) return;
+      try{ if(applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }
+      catch(err){ alert("Fehler: "+err.message); }
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const openRecent=async(filePath)=>{
+    setShowRecents(false);
+    const result=await window.electronAPI.openRecent(filePath);
+    if(result.error==="not-found"){ alert("Datei nicht gefunden – wurde sie verschoben oder gelöscht?"); if(result.recents) setRecents(result.recents); return; }
+    if(result.error){ alert("Fehler: "+result.error); return; }
+    try{ if(applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }
+    catch(err){ alert("Fehler: "+err.message); }
+  };
+
+  const fileInputRef=useRef(null);
   const loadJSON=(e)=>{
     const file=e.target.files?.[0]; if(!file) return;
     const reader=new FileReader();
     reader.onload=(ev)=>{
-      try {
-        const d=JSON.parse(ev.target.result);
-        if(d._format!=="stromplaner"){ alert("Keine gültige Stromplaner-Datei."); return; }
-        if(d.meta)       setMeta(d.meta);
-        if(d.mainConns)  setMainConns(d.mainConns||[]);
-        if(d.boxTypes)   setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType),"name"));
-        if(d.loads)      setLoads(alphaSort(d.loads.map(l=>({...l,threePhase:l.threePhase||false})),"name"));
-        if(d.instances)   setInstances(d.instances.map(migrateInstance));
-        if(d.placements)  setPlacements(d.placements);
-        if(d.inspMeta)    setInspMeta(d.inspMeta);
-        if(d.inspResults) setInspResults(d.inspResults);
-        if(d.cableCalcs)  setCableCalcs(d.cableCalcs);
-        if(d.voltCalcs)   setVoltCalcs(d.voltCalcs);
-        setActivePlan(null);
-        alert("Planung geladen ✓");
-      } catch(err){ alert("Fehler: "+err.message); }
+      try{ applyPlanData(JSON.parse(ev.target.result)); }
+      catch(err){ alert("Fehler: "+err.message); }
     };
     reader.readAsText(file);
     e.target.value="";
@@ -920,7 +955,18 @@ export default function App() {
         {corpLogo&&<button style={{...S.ghostBtn,padding:"3px 6px",fontSize:9}} onClick={removeLogo} title="Logo entfernen">✕</button>}
         <div style={S.headerMeta}>{meta.production} · v{meta.version} · {meta.date}</div>
         <span style={{fontSize:10,color:"#555",marginLeft:4}} title="Automatisch gespeichert">💾 auto</span>
-        <label style={S.ghostBtn}>↥ Laden<input type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/></label>
+        <input ref={fileInputRef} type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/>
+        <button style={S.ghostBtn} onClick={openPlan}>↥ Laden</button>
+        {window.electronAPI&&recents.length>0&&<div style={{position:"relative"}}>
+          <button style={{...S.ghostBtn,padding:"4px 5px"}} title="Zuletzt geöffnet" onClick={()=>setShowRecents(v=>!v)}>⏱</button>
+          {showRecents&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",minWidth:260,maxWidth:360,marginTop:4}} onMouseLeave={()=>setShowRecents(false)}>
+            <div style={{padding:"6px 10px",fontSize:10,color:"#7c8794",borderBottom:"1px solid #2e3640",letterSpacing:.5,textTransform:"uppercase"}}>Zuletzt geöffnet</div>
+            {recents.map((r,i)=><button key={i} onClick={()=>openRecent(r.filePath)} style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",padding:"7px 12px",cursor:"pointer",color:"#c8d0d8",fontSize:11,borderBottom:i<recents.length-1?"1px solid #232a33":"none"}} onMouseEnter={e=>e.currentTarget.style.background="#232a33"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+              <div style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+              <div style={{fontSize:9,color:"#7c8794",marginTop:1}}>{new Date(r.date).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"})} · {r.filePath}</div>
+            </button>)}
+          </div>}
+        </div>}
         <button style={S.ghostBtn} onClick={saveJSON}>💾 Speichern</button>
         <button style={S.ghostBtn} onClick={resetAll}>↺ Neu</button>
         <button style={S.ghostBtn} onClick={()=>setChangelogVersion(Object.keys(CHANGELOG)[0])} title="Was ist neu?">📋 Changelog</button>

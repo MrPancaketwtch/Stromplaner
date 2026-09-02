@@ -126,6 +126,67 @@ function setupAutoUpdater(win) {
 
 ipcMain.handle('app-version', () => app.getVersion());
 
+// ── Planungsstände: Verzeichnis + Recents ────────────────────────────────────
+const getPlansDir  = () => path.join(app.getPath('documents'), 'Stromplaner');
+const getRecentsFile = () => path.join(app.getPath('userData'), 'recents.json');
+
+function ensurePlansDir() {
+  const d = getPlansDir();
+  if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+}
+function loadRecents() {
+  try { if (fs.existsSync(getRecentsFile())) return JSON.parse(fs.readFileSync(getRecentsFile(), 'utf8')); } catch {}
+  return [];
+}
+function addRecent(filePath, name) {
+  let list = loadRecents().filter(r => r.filePath !== filePath);
+  list.unshift({ filePath, name, date: new Date().toISOString() });
+  if (list.length > 10) list = list.slice(0, 10);
+  try { fs.writeFileSync(getRecentsFile(), JSON.stringify(list, null, 2), 'utf8'); } catch {}
+  return list;
+}
+
+ipcMain.handle('get-recents', () => loadRecents());
+
+ipcMain.handle('save-plan', async (_event, { json, suggestedName }) => {
+  ensurePlansDir();
+  const parent = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible());
+  const { filePath, canceled } = await dialog.showSaveDialog(parent, {
+    title: 'Stromplan speichern',
+    defaultPath: path.join(getPlansDir(), `${suggestedName}.json`),
+    filters: [{ name: 'Stromplaner-Datei', extensions: ['json'] }],
+  });
+  if (canceled || !filePath) return null;
+  fs.writeFileSync(filePath, json, 'utf8');
+  const name = path.basename(filePath, '.json');
+  return { filePath, name, recents: addRecent(filePath, name) };
+});
+
+ipcMain.handle('open-plan', async () => {
+  ensurePlansDir();
+  const parent = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible());
+  const { filePaths, canceled } = await dialog.showOpenDialog(parent, {
+    title: 'Stromplan öffnen',
+    defaultPath: getPlansDir(),
+    filters: [{ name: 'Stromplaner-Datei', extensions: ['json'] }],
+    properties: ['openFile'],
+  });
+  if (canceled || !filePaths.length) return null;
+  const filePath = filePaths[0];
+  const name = path.basename(filePath, '.json');
+  return { data: fs.readFileSync(filePath, 'utf8'), filePath, name, recents: addRecent(filePath, name) };
+});
+
+ipcMain.handle('open-recent', async (_event, filePath) => {
+  if (!fs.existsSync(filePath)) {
+    const list = loadRecents().filter(r => r.filePath !== filePath);
+    try { fs.writeFileSync(getRecentsFile(), JSON.stringify(list, null, 2), 'utf8'); } catch {}
+    return { error: 'not-found', recents: list };
+  }
+  const name = path.basename(filePath, '.json');
+  return { data: fs.readFileSync(filePath, 'utf8'), filePath, name, recents: addRecent(filePath, name) };
+});
+
 ipcMain.handle('export-inspection-pdf', async (_event, html) => {
   const tmpPath = path.join(os.tmpdir(), `ep-${Date.now()}.html`);
   let win;

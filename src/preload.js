@@ -6,4 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onUpdateStatus:      (cb) => ipcRenderer.on('update-status', (_, msg) => cb(msg)),
   appVersion:          () => ipcRenderer.invoke('app-version'),
   exportInspectionPdf: (html) => ipcRenderer.invoke('export-inspection-pdf', html),
+  savePlan:            (args) => ipcRenderer.invoke('save-plan', args),
+  openPlan:            () => ipcRenderer.invoke('open-plan'),
+  openRecent:          (filePath) => ipcRenderer.invoke('open-recent', filePath),
+  getRecents:          () => ipcRenderer.invoke('get-recents'),
 });
