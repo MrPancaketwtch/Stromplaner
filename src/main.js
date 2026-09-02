@@ -127,7 +127,7 @@ function setupAutoUpdater(win) {
 ipcMain.handle('app-version', () => app.getVersion());
 
 // ── Planungsstände: Verzeichnis + Recents ────────────────────────────────────
-const getPlansDir  = () => path.join(app.getPath('documents'), 'Stromplaner');
+const getPlansDir  = () => path.join(app.getPath('documents'), 'Stromplaner', 'Speicherstände', 'Gesamt');
 const getRecentsFile = () => path.join(app.getPath('userData'), 'recents.json');
 
 function ensurePlansDir() {
