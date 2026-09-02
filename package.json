@@ -1,6 +1,6 @@
 {
   "name": "stromplaner",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "private": true,
   "main": "src/main.js",
   "scripts": {
