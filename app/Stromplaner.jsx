@@ -957,14 +957,17 @@ export default function App() {
         <span style={{fontSize:10,color:"#555",marginLeft:4}} title="Automatisch gespeichert">💾 auto</span>
         <input ref={fileInputRef} type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/>
         <button style={S.ghostBtn} onClick={openPlan}>↥ Laden</button>
-        {window.electronAPI&&recents.length>0&&<div style={{position:"relative"}}>
+        {window.electronAPI&&<div style={{position:"relative"}}>
           <button style={{...S.ghostBtn,padding:"4px 5px"}} title="Zuletzt geöffnet" onClick={()=>setShowRecents(v=>!v)}>⏱</button>
-          {showRecents&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",minWidth:260,maxWidth:360,marginTop:4}} onMouseLeave={()=>setShowRecents(false)}>
+          {showRecents&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",minWidth:280,maxWidth:380,marginTop:4}} onMouseLeave={()=>setShowRecents(false)}>
             <div style={{padding:"6px 10px",fontSize:10,color:"#7c8794",borderBottom:"1px solid #2e3640",letterSpacing:.5,textTransform:"uppercase"}}>Zuletzt geöffnet</div>
-            {recents.map((r,i)=><button key={i} onClick={()=>openRecent(r.filePath)} style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",padding:"7px 12px",cursor:"pointer",color:"#c8d0d8",fontSize:11,borderBottom:i<recents.length-1?"1px solid #232a33":"none"}} onMouseEnter={e=>e.currentTarget.style.background="#232a33"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-              <div style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
-              <div style={{fontSize:9,color:"#7c8794",marginTop:1}}>{new Date(r.date).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"})} · {r.filePath}</div>
-            </button>)}
+            {recents.length===0
+              ? <div style={{padding:"10px 12px",fontSize:11,color:"#7c8794",fontStyle:"italic"}}>Noch keine Dateien geöffnet.</div>
+              : recents.map((r,i)=><button key={i} onClick={()=>openRecent(r.filePath)} style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",padding:"7px 12px",cursor:"pointer",color:"#c8d0d8",fontSize:11,borderBottom:i<recents.length-1?"1px solid #232a33":"none"}} onMouseEnter={e=>e.currentTarget.style.background="#232a33"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                <div style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.name}</div>
+                <div style={{fontSize:9,color:"#7c8794",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{new Date(r.date).toLocaleDateString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric"})} · {r.filePath}</div>
+              </button>)
+            }
           </div>}
         </div>}
         <button style={S.ghostBtn} onClick={saveJSON}>💾 Speichern</button>
