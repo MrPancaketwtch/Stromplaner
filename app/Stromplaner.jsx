@@ -72,6 +72,9 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.0.9": [
+    "Export Fix: PDF aus der Errichtungsprüfung wird wieder generiert.",
+  ],
   "1.0.8": [
     "Kaskadierung: Unterverteiler an Multicore-Slots werden jetzt korrekt über beliebig viele Ebenen weitergereicht",
     "Nachtragen bei 3-phasigen Abgängen: Eingabe jetzt pro Phase (L1/L2/L3), Worst-Case wird automatisch abgeleitet",
