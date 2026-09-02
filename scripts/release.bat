@@ -59,14 +59,18 @@ echo [2/5] App bauen...
 npm run build
 if %errorlevel% neq 0 ( echo Build fehlgeschlagen. & pause & exit /b 1 )
 
-echo [3/5] Commit (falls noetig)...
+echo [3/5] Commit...
 git add package.json app/Stromplaner.html app/Stromplaner.jsx README.md
-git diff --cached --quiet
-if %errorlevel% neq 0 (
-    git commit -m "chore: release v%VERSION%"
-    if %errorlevel% neq 0 ( echo Commit fehlgeschlagen. & pause & exit /b 1 )
-) else (
-    echo   Keine Aenderungen zum Committen – bereits alles vorbereitet.
+git commit -m "chore: release v%VERSION%"
+set COMMIT_CODE=%errorlevel%
+if %COMMIT_CODE% neq 0 (
+    git diff --cached --quiet
+    if %errorlevel% neq 0 (
+        echo Commit fehlgeschlagen.
+        pause
+        exit /b 1
+    )
+    echo   Keine neuen Aenderungen – Commit nicht noetig.
 )
 
 echo [4/5] Branch pushen...
