@@ -447,7 +447,7 @@ export default function App() {
   },[]);
 
   useEffect(()=>{
-    window.electronAPI?.getRecents().then(setRecents).catch(()=>{});
+    window.electronAPI?.getRecents?.().then(setRecents).catch(()=>{});
   },[]);
 
   // Save on every change (debounced 600ms)
@@ -651,7 +651,7 @@ export default function App() {
 
   const openRecent=async(filePath)=>{
     setShowRecents(false);
-    const result=await window.electronAPI.openRecent(filePath);
+    const result=await window.electronAPI?.openRecent?.(filePath);
     if(result.error==="not-found"){ alert("Datei nicht gefunden – wurde sie verschoben oder gelöscht?"); if(result.recents) setRecents(result.recents); return; }
     if(result.error){ alert("Fehler: "+result.error); return; }
     try{ if(applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }

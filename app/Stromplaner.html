@@ -28221,7 +28221,7 @@ button:active { filter: brightness(0.95); }
       if (!localStorage.getItem("stromplaner_donated")) setShowDonateModal(true);
     }, []);
     (0, import_react.useEffect)(() => {
-      const v = true ? "1.0.9" : null;
+      const v = true ? "1.0.10" : null;
       if (!v) return;
       const seen = localStorage.getItem("stromplaner_seen_version");
       if (seen !== v && CHANGELOG[v]) {
@@ -28230,7 +28230,7 @@ button:active { filter: brightness(0.95); }
       }
     }, []);
     (0, import_react.useEffect)(() => {
-      window.electronAPI?.getRecents().then(setRecents).catch(() => {
+      window.electronAPI?.getRecents?.().then(setRecents).catch(() => {
       });
     }, []);
     const saveTimer = (0, import_react.useRef)(null);
@@ -28450,7 +28450,7 @@ Fortfahren?`);
     };
     const openRecent = async (filePath) => {
       setShowRecents(false);
-      const result = await window.electronAPI.openRecent(filePath);
+      const result = await window.electronAPI?.openRecent?.(filePath);
       if (result.error === "not-found") {
         alert("Datei nicht gefunden \u2013 wurde sie verschoben oder gel\xF6scht?");
         if (result.recents) setRecents(result.recents);
