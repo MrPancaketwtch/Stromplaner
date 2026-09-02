@@ -72,6 +72,10 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.0.11": [
+    "Speicherverzeichnis liegt jetzt im App-Ordner (AppData\\Stromplaner) statt in Dokumente",
+    "release.bat: call-Direktive und enabledelayedexpansion für zuverlässigeren Release-Ablauf",
+  ],
   "1.0.10": [
     "Zuletzt geöffnet: Schnellzugriff auf die letzten 10 Planungsstände über den ⏱-Button im Header",
     "Speichern/Laden: Nativer Dateidialog öffnet standardmäßig in Dokumente\\Stromplaner\\Speicherstände\\Gesamt",
