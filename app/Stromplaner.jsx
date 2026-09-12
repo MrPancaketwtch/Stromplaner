@@ -73,7 +73,7 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
-  "1.0.11": [
+  "1.0.12": [
     "Speicherverzeichnis liegt jetzt im App-Ordner (AppData\\Stromplaner) statt in Dokumente",
     "release.bat: call-Direktive und enabledelayedexpansion für zuverlässigeren Release-Ablauf",
     "RCD/RCBO-Prüfung: Auslösestrom-Grenzwert ½·Nennwert – Nennwert (rot wenn zu niedrig oder zu hoch); OK-Kästchen entfällt; RCBO-Nennwert (mA) am Anschluss einstellbar (Standard: 30 mA)",
