@@ -102,9 +102,10 @@ Vollständiges Prüfprotokoll nach DIN VDE 0100-600 für mobile Stromverteilunge
 - Sichtprüfung (6 Punkte, klickbar ok / offen)
 - Netzspannungen L–N, L–L, L–PE, N–PE mit Grenzwertampel
 - Drehfeld (Rechts- / Linksdrehfeld)
-- RCCB-Prüfung pro Schutzorgan: Auslösezeit t_A (ms) ≤ 300 ms · Auslösestrom I_An (mA) ≤ Nennwert · OK-Checkbox
+- RCCB-Prüfung pro Schutzorgan: Auslösezeit t_A (ms) ≤ 300 ms · Auslösestrom I_An (mA) im Bereich ½·Nennwert – Nennwert (Werte darunter oder darüber werden rot markiert)
   - RCCB-Gruppen (FI-Schalter für Gruppe) als eigene Prüfzeilen
   - RCBO-Steckplätze einzeln; **Multicore-Steckplätze werden in Einzelslots expandiert** (SP 1 … SP n, je mit Phasenzuordnung)
+  - RCBO-Nennwert (mA) direkt am Steckplatz einstellbar (Standard: 30 mA)
 - Schleifenimpedanz Z_s (Ω) und Kurzschlussstrom I_k (A) pro Steckplatz
   - Multicore-Steckplätze ebenfalls in Einzelslots aufgeteilt
   - **Grenzwerte:** Ohne RCD gilt `Z_s ≤ U₀ / (Iₙ × 10)` (Abschaltbedingung LSS). Bei RCCB-/RCBO-geschützten Steckplätzen wäre der theoretische Grenzwert `U₀ / IΔn ≈ 7.666 Ω` (30 mA), da der RCD bereits bei 30 mA auslöst — unabhängig von der Schleifenimpedanz. In der Praxis signalisieren Werte über **2 Ω** jedoch einen schlechten Schutzleiterkontakt und sollten untersucht werden. Das Tool verwendet daher **2 Ω** als Praxisgrenze für RCD-geschützte Stromkreise.
@@ -120,7 +121,8 @@ Verwaltung aller Verteiler-Typen.
 - Beliebig viele Steckplätze: Label, Stecker-Typ, Nennstrom, Phase, Sicherungscharakteristik (B/C/D/K), Schutzart (LS / RCBO / Keine)
   - Multicore-Steckplätze: Anzahl Slots (1–48) konfigurierbar
 - **Bulk-Hinzufügen:** Mehrere Steckplätze gleichen Typs auf einmal anlegen — Anzahl, Stecker, Ampere, Sicherung, Schutzart wählen; optional RCCB-Gruppe zuweisen und Phasenrotation aktivieren (L1→L2→L3→…)
-- RCCB-Gruppen (separate FI-Schalter): Strom, Auslösestrom (mA), Polzahl
+- RCCB-Gruppen (separate FI-Schalter): Auslösestrom (mA), Polzahl
+- **RCBO-Steckplätze:** Auslösestrom (mA) direkt am Steckplatz einstellbar (Standard: 30 mA)
 - Import / Export als JSON
 
 ### Verbraucher *(Stammdaten)*
@@ -281,7 +283,7 @@ npm run dist
 ### Wichtige Datenstrukturen
 ```
 BoxType:    { id, name, feedConnector, outlets[], rcds[] }
-Outlet:     { id, label, connector, amp, phase, breaker, char, protection, rcdId, mcSlots? }
+Outlet:     { id, label, connector, amp, phase, breaker, char, protection, rcdId, rcdMa?, mcSlots? }
 RCD:        { id, label, amp, mA, poles }
 Instance:   { id, typeId, name, parentId, parentOutletId, mainConnectionId }
 Placement:  { id, instanceId, outletId, mcSlot, loadId }
@@ -289,7 +291,7 @@ Load:       { id, name, watt, threePhase }
 ```
 
 ### Connector-Typen
-`CEE16` · `CEE32` · `CEE63` · `CEE125` · `CEE16_1` · `CEE32_1` · `PL125` · `PL200` · `PL400` · `MC` · `SCHUKO`
+`CEE16` · `CEE32` · `CEE63` · `CEE125` · `CEE16_1` · `CEE32_1` · `PL200` · `PL400` · `PL660` · `PL1000` · `MC` · `SCHUKO`
 
 Adapter-Verbindungen sind innerhalb einer Steckerfamilie (CEE3P, CEE1P, PL, MC, SCHUKO) erlaubt und werden im Schaltbild lila hervorgehoben.
 

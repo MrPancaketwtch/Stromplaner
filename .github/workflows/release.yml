@@ -34,3 +34,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+  release-notes:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update release description
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          V="${VERSION#v}"
+          gh release edit "$VERSION" --repo "$GH_REPO" --notes "## Herunterladen
+
+| Plattform | Datei |
+|---|---|
+| 🪟 **Windows** | \`Stromplaner Setup ${V}.exe\` |
+| 🍎 **macOS (Apple Silicon / M-Series)** | \`Stromplaner-${V}-arm64.dmg\` |
+| 🍎 **macOS (Intel)** | \`Stromplaner-${V}.dmg\` |
+
+> **macOS-Hinweis:** Beim ersten Öffnen erscheint eine Warnung „Entwickler nicht verifiziert" — Rechtsklick auf die App → **Öffnen** → **Öffnen** umgeht das einmalig.
+
+---
+
+Die anderen Dateien (\`.yml\`, \`.blockmap\`, \`.zip\`) werden intern für automatische In-App-Updates benötigt und müssen nicht manuell heruntergeladen werden."

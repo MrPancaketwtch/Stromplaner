@@ -10,11 +10,12 @@ const CONN = {
   CEE32:   { label:"32A 3LNPE 400V",  amp:32,  phases:3 },
   CEE63:   { label:"63A 3LNPE 400V",  amp:63,  phases:3 },
   CEE125:  { label:"125A 3LNPE 400V", amp:125, phases:3 },
-  CEE16_1: { label:"16A 1LNP 230V",   amp:16,  phases:1 },
-  CEE32_1: { label:"32A 1LNP 230V",   amp:32,  phases:1 },
-  PL125:   { label:"125A Powerlock",  amp:125, phases:3 },
+  CEE16_1: { label:"16A 1LNPE 230V",  amp:16,  phases:1 },
+  CEE32_1: { label:"32A 1LNPE 230V",  amp:32,  phases:1 },
   PL200:   { label:"200A Powerlock",  amp:200, phases:3 },
   PL400:   { label:"400A Powerlock",  amp:400, phases:3 },
+  PL660:   { label:"660A Powerlock",  amp:660, phases:3 },
+  PL1000:  { label:"1000A Powerlock", amp:1000,phases:3 },
   MC:      { label:"Multicore",       amp:16,  phases:1, isMulticore:true },
   SCHUKO:  { label:"Schuko",          amp:16,  phases:1 },
 };
@@ -22,7 +23,7 @@ const CONN = {
 const CONN_FAMILY = {
   CEE16:"CEE3P", CEE32:"CEE3P", CEE63:"CEE3P", CEE125:"CEE3P",
   CEE16_1:"CEE1P", CEE32_1:"CEE1P",
-  PL125:"PL", PL200:"PL", PL400:"PL",
+  PL200:"PL", PL400:"PL", PL660:"PL", PL1000:"PL",
   MC:"MC", SCHUKO:"SCHUKO",
 };
 
@@ -75,6 +76,9 @@ const CHANGELOG = {
   "1.0.11": [
     "Speicherverzeichnis liegt jetzt im App-Ordner (AppData\\Stromplaner) statt in Dokumente",
     "release.bat: call-Direktive und enabledelayedexpansion für zuverlässigeren Release-Ablauf",
+    "RCD/RCBO-Prüfung: Auslösestrom-Grenzwert ½·Nennwert – Nennwert (rot wenn zu niedrig oder zu hoch); OK-Kästchen entfällt; RCBO-Nennwert (mA) am Anschluss einstellbar (Standard: 30 mA)",
+    "Multicore Schnellerfassung: Phasenrotation läuft nach dem letzten Slot wieder von vorne (statt über das Ende hinaus zu zählen)",
+    "Anschluss-Typen: 125A Powerlock entfernt; 660A und 1000A Powerlock neu; CEE Blau 16A/32A heißt jetzt korrekt 1LNPE statt 1LNP",
   ],
   "1.0.10": [
     "Zuletzt geöffnet: Schnellzugriff auf die letzten 10 Planungsstände über den ⏱-Button im Header",
@@ -145,15 +149,19 @@ const sortOutlets  = (outlets) => [...outlets].sort((a,b)=>{
 });
 
 /* ── Migration ─────────────────────────────────────────────────────────── */
-const migrateOutlet = (o, idx) => ({
-  ...o,
-  phase:      o.phase      || (is3ph(o.connector) ? "L1L2L3" : PHASES[idx%3]),
-  breaker:    o.breaker    || "C",
-  protection: (o.protection==="RCD") ? "Keine" : (o.protection || (o.connector==="SCHUKO"||o.connector==="MC" ? "RCBO" : "LS")),
-  rcdId:      o.rcdId ?? null,
-  // Multicore: number of slots (default 6 if not set)
-  mcSlots:    isMulticore(o.connector) ? (o.mcSlots||6) : undefined,
-});
+const migrateOutlet = (o, idx) => {
+  const prot = (o.protection==="RCD") ? "Keine" : (o.protection || (o.connector==="SCHUKO"||o.connector==="MC" ? "RCBO" : "LS"));
+  return {
+    ...o,
+    phase:      o.phase      || (is3ph(o.connector) ? "L1L2L3" : PHASES[idx%3]),
+    breaker:    o.breaker    || "C",
+    protection: prot,
+    rcdId:      o.rcdId ?? null,
+    rcdMa:      prot==="RCBO" ? (o.rcdMa ?? 30) : undefined,
+    // Multicore: number of slots (default 6 if not set)
+    mcSlots:    isMulticore(o.connector) ? (o.mcSlots||6) : undefined,
+  };
+};
 const migrateBoxType = (bt) => {
   // Auto-migrate: old protection:"RCD" outlets → RCD-group object + protection:"Keine"
   let rcds = bt.rcds ? [...bt.rcds] : [];
@@ -587,7 +595,8 @@ export default function App() {
   };
 
   const addPlacement=(instanceId)=>setPlacements(s=>[...s,{id:uid(),instanceId,outletId:"",mcSlot:null,loadId:""}]);
-  const addPlacementsFilled=(instanceId,loadId,outletId,count,startMcSlot=null)=>setPlacements(s=>[...s,...Array.from({length:count},(_,i)=>({id:uid(),instanceId,outletId:outletId||"",mcSlot:startMcSlot!==null?startMcSlot+i:null,loadId:loadId||""}))]);
+  const addPlacementsFilled=(instanceId,loadId,outletId,count,startMcSlot=null,maxMcSlots=null)=>setPlacements(s=>[...s,...Array.from({length:count},(_,i)=>({id:uid(),instanceId,outletId:outletId||"",mcSlot:startMcSlot!==null?(maxMcSlots?((startMcSlot-1+i)%maxMcSlots)+1:startMcSlot+i):null,loadId:loadId||""}))]);
+
   const updatePlacement=(id,patch)=>setPlacements(s=>s.map(p=>p.id===id?{...p,...patch}:p));
   const removePlacement=(id)=>setPlacements(s=>s.filter(p=>p.id!==id));
 
@@ -1262,7 +1271,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
   const openHelp=useContext(HelpContext);
   const [bulkLoadId,  setBulkLoadId]  = useState("");
   const [bulkOutletId,setBulkOutletId]= useState("");
-  const [bulkCount,   setBulkCount]   = useState(1);
+  const [bulkCount,   setBulkCount]   = useState("1");
   // Nur Verteiler anzeigen, die an einem Einspeisepunkt oder an einem anderen Verteiler hängen
   const activeInstances = instances.filter(i=>i.mainConnectionId||i.parentId);
 
@@ -1403,9 +1412,12 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
           const bulkOutletObj=bulkOutletId?type?.outlets.find(o=>o.id===bulkOutletId):null;
           const isBulkMC=bulkOutletObj&&isMulticore(bulkOutletObj.connector);
           const getNextMcSlot=(outletId)=>{
+            const obj=type?.outlets.find(o=>o.id===outletId);
+            const maxSlots=obj?.mcSlots||6;
             const used=rows.filter(p=>p.outletId===outletId&&p.mcSlot!=null).map(p=>p.mcSlot);
             if(!used.length) return 1;
-            return Math.max(...used)+1;
+            const next=Math.max(...used)+1;
+            return next>maxSlots?1:next;
           };
           return (
             <div style={{display:"flex",alignItems:"flex-end",gap:8,marginTop:14,padding:"10px 12px",background:"#1b2026",borderRadius:7,border:`1px solid ${LINE}`,flexWrap:"wrap"}}>
@@ -1420,15 +1432,16 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
               </div>
               <div style={{width:70}}>
                 <div style={S.fieldLabel}>Menge</div>
-                <input type="number" min="1" max="50" style={{...S.inputSm,width:"100%",textAlign:"center"}} value={bulkCount} onChange={e=>setBulkCount(Math.max(1,parseInt(e.target.value)||1))}/>
+                <input type="number" min="1" max="50" style={{...S.inputSm,width:"100%",textAlign:"center"}} value={bulkCount} onChange={e=>setBulkCount(e.target.value)} onBlur={()=>setBulkCount(String(Math.max(1,Math.min(50,parseInt(bulkCount)||1))))}/>
               </div>
               <button style={{...S.primaryBtn,alignSelf:"flex-end"}} disabled={!canAdd}
                 onClick={()=>{
-                  const n=Math.max(1,Math.min(50,bulkCount));
+                  const n=Math.max(1,Math.min(50,parseInt(bulkCount)||1));
                   const startSlot=isBulkMC?getNextMcSlot(bulkOutletId):null;
-                  addPlacementsFilled(inst.id,bulkLoadId,bulkOutletId,n,startSlot);
+                  const maxSlots=isBulkMC?(bulkOutletObj?.mcSlots||6):null;
+                  addPlacementsFilled(inst.id,bulkLoadId,bulkOutletId,n,startSlot,maxSlots);
                 }}>
-                {bulkCount>1?`${bulkCount}× hinzufügen`:"Hinzufügen"}
+                {parseInt(bulkCount)>1?`${parseInt(bulkCount)}× hinzufügen`:"Hinzufügen"}
               </button>
               <button style={{...S.ghostBtn,alignSelf:"flex-end"}} onClick={()=>addPlacement(inst.id)} title="Leere Zeile hinzufügen">+ leer</button>
             </div>
@@ -1497,7 +1510,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
 ══════════════════════════════════════════════════════════════════════════ */
 function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   const [openId,setOpenId]=useState(null);
-  const [bulk,setBulk]=useState({count:1,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdId:null,rotatePhase:false});
+  const [bulk,setBulk]=useState({count:"1",connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdId:null,rotatePhase:false});
   const updBulk=(patch)=>setBulk(s=>{
     const n={...s,...patch};
     if(patch.connector){ n.amp=CONN[patch.connector]?.amp||n.amp; n.phase=is3ph(patch.connector)?"L1L2L3":isMulticore(patch.connector)?"L1":(n.phase==="L1L2L3"?"L1":n.phase); }
@@ -1522,7 +1535,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
       })};
     }));
   };
-  const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Anschluss ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdId:null}]}));
+  const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Anschluss ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdMa:30,rcdId:null}]}));
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
   const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Verteiler",feedConnector:"CEE32",feedAmp:32,rcds:[],outlets:[]},...s]); setOpenId(id); };
   const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Verteiler-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Verteiler-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
@@ -1613,7 +1626,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                 <table style={S.table}>
                   <thead><tr>
                     <th style={S.th}>Name / Steckplatz</th><th style={S.th}>Stecker</th><th style={S.th}>A</th>
-                    <th style={S.th}>Phase</th><th style={S.th}>Steckpl.*</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}>RCCB-Gruppe</th><th style={S.th}></th>
+                    <th style={S.th}>Phase</th><th style={S.th}>Steckpl.*</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}>FI&nbsp;mA</th><th style={S.th}>RCCB-Gruppe</th><th style={S.th}></th>
                   </tr></thead>
                   <tbody>
                     {b.outlets.map(o=>(
@@ -1640,6 +1653,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                         </td>
                         <td style={S.td}><select style={{...S.selectSm,width:55}} value={o.breaker||"C"} onChange={e=>updateOutlet(b.id,o.id,{breaker:e.target.value})}>{BREAKER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></td>
                         <td style={S.td}><select style={{...S.selectSm,width:70}} value={o.protection||"LS"} onChange={e=>updateOutlet(b.id,o.id,{protection:e.target.value})}>{PROTECTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></td>
+                        <td style={S.td}>{o.protection==="RCBO"?<input type="number" min={1} max={500} style={{...S.inputSm,width:58}} value={o.rcdMa??30} onChange={e=>updateOutlet(b.id,o.id,{rcdMa:+e.target.value})}/>:<span style={{color:"#555",fontSize:11}}>—</span>}</td>
                         <td style={S.td}>
                           {(b.rcds||[]).length>0
                             ? <select style={{...S.selectSm,width:100}} value={o.rcdId||""} onChange={e=>updateOutlet(b.id,o.id,{rcdId:e.target.value||null})}>
@@ -1657,7 +1671,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                 <p style={{...S.hint,marginTop:6}}>* Steckplätze gilt nur für Multicore-Anschlüsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, …</p>
                 <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
                   <span style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginRight:2}}>Bulk:</span>
-                  <input type="number" min={1} max={48} style={{...S.inputSm,width:46}} value={bulk.count} onChange={e=>updBulk({count:Math.max(1,+e.target.value)})} title="Anzahl"/>
+                  <input type="number" min={1} max={48} style={{...S.inputSm,width:46}} value={bulk.count} onChange={e=>updBulk({count:e.target.value})} onBlur={()=>updBulk({count:String(Math.max(1,Math.min(48,parseInt(bulk.count)||1)))})} title="Anzahl"/>
                   <select style={S.selectSm} value={bulk.connector} onChange={e=>updBulk({connector:e.target.value})}>
                     {CONN_SORTED_ENTRIES.map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                   </select>
@@ -1692,7 +1706,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                       if(bulk.rotatePhase) return PHASES[(base+i)%PHASES.length];
                       return bulk.phase;
                     };
-                    const neu=Array.from({length:bulk.count},(_,i)=>({
+                    const neu=Array.from({length:Math.max(1,Math.min(48,parseInt(bulk.count)||1))},(_,i)=>({
                       id:uid(),
                       label:`Anschluss ${base+i+1}`,
                       connector:bulk.connector,
@@ -1704,7 +1718,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                       ...(isMulticore(bulk.connector)?{mcSlots:6}:{})
                     }));
                     setBoxTypes(s=>s.map(bx=>bx.id!==b.id?bx:{...bx,outlets:[...bx.outlets,...neu]}));
-                  }}>+ {bulk.count}×</button>
+                  }}>+ {parseInt(bulk.count)||1}×</button>
                 </div>
                 <button style={{...S.secondaryBtn,marginTop:6}} onClick={()=>addOutlet(b.id)}>+ Einzeln hinzufügen</button>
               </div>
@@ -1948,13 +1962,13 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     CEE16:"CEE 16A 3L+N+PE",  CEE32:"CEE 32A 3L+N+PE",
     CEE63:"CEE 63A 3L+N+PE",  CEE125:"CEE 125A 3L+N+PE",
     CEE16_1:"CEE 16A L+N+PE", CEE32_1:"CEE 32A L+N+PE",
-    PL125:"Powerlock 125A",   PL200:"Powerlock 200A", PL400:"Powerlock 400A",
+    PL200:"Powerlock 200A", PL400:"Powerlock 400A", PL660:"Powerlock 660A", PL1000:"Powerlock 1000A",
     MC:"Multicore",           SCHUKO:"Schuko 16A",
   }[type] || type || "–");
   const connShort = (type) => ({
     CEE16:"CEE16",CEE32:"CEE32",CEE63:"CEE63",CEE125:"CEE125",
     CEE16_1:"CEE16 1ph",CEE32_1:"CEE32 1ph",
-    PL125:"PL125",PL200:"PL200",PL400:"PL400",
+    PL200:"PL200",PL400:"PL400",PL660:"PL660",PL1000:"PL1k",
     MC:"MC",SCHUKO:"Schuko",
   }[type] || type || "–");
 
@@ -2013,7 +2027,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     if(["CEE16","CEE32","CEE63","CEE125"].includes(type)) return SymCEE3ph;
     if(["CEE16_1","CEE32_1"].includes(type)) return SymCEE1ph;
     if(type==="SCHUKO") return SymSchuko;
-    if(["PL125","PL200","PL400"].includes(type)) return SymPowerlock;
+    if(["PL200","PL400","PL660","PL1000"].includes(type)) return SymPowerlock;
     if(type==="MC") return SymMulticore;
     return null;
   };
@@ -3221,8 +3235,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const pdfRcdRows=[];
       (type?.rcds||[]).forEach(rcd=>pdfRcdRows.push({rowType:"rcd",rcd,outlet:null,oid:`rcd_${rcd.id}`,rowLabel:rcd.label,iAnLimit:rcd.mA,protLabel:`RCD ${rcd.mA} mA`}));
       outlets.filter(o=>o.protection==="RCBO").forEach(o=>{
-        if(isMulticore(o.connector)){const slots=o.mcSlots||6;for(let s=1;s<=slots;s++)pdfRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`,iAnLimit:null,protLabel:`RCBO ${o.breaker} ${o.amp}A`});}
-        else pdfRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:o.id,rowLabel:o.label,iAnLimit:null,protLabel:`RCBO ${o.breaker} ${o.amp}A`});
+        const rMa=o.rcdMa??30;
+        if(isMulticore(o.connector)){const slots=o.mcSlots||6;for(let s=1;s<=slots;s++)pdfRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`,iAnLimit:rMa,protLabel:`RCBO ${o.amp}A / ${rMa}mA`});}
+        else pdfRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:o.id,rowLabel:o.label,iAnLimit:rMa,protLabel:`RCBO ${o.amp}A / ${rMa}mA`});
       });
       const parent=inst.parentId?instById[inst.parentId]:null;
       const n=instIdx+1;
@@ -3359,8 +3374,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       </div></section>
     ${pdfRcdRows.length?`<section class="block"><header class="bar"><span><strong>${n}.${rcdSec} · RCD-Prüfung</strong><span class="bar-sub">${pdfRcdRows.length} Stk.</span></span></header>
       <div class="block-body">
-        <div class="thead" style="grid-template-columns:1fr 80px 100px 90px 60px"><span>Anschluss / RCD</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">&le; Nennwert</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">&le; 300 ms</span></span><span class="r">OK</span></div>
-        ${pdfRcdRows.map(({rowType,rcd,outlet,oid,rowLabel,iAnLimit,protLabel},i)=>{const or=getOR(inst.id,oid);const okT=pdfChk(or.rcdT1,undefined,300);const okIan=iAnLimit?pdfChk(or.rcdIan,undefined,iAnLimit):"";const bgStyle=rowType==="rcd"?"background:rgba(245,166,35,0.04);":"";return`<div class="trow${i===pdfRcdRows.length-1?" row-last":""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px 60px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan==="bad"?" bad":""}"><strong>${esc(or.rcdIan)||"–"}</strong>${iAnLimit?`<br><span class="muted" style="font-size:8px">&le; ${iAnLimit}&thinsp;mA</span>`:""}</span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span><span class="r">${or.ok?`<span class="ok">✓ ok</span>`:`<span class="muted">–</span>`}</span></div>`;}).join("")}
+        <div class="thead" style="grid-template-columns:1fr 80px 100px 90px"><span>Anschluss / RCD</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">½N – N</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">&le; 300 ms</span></span></div>
+        ${pdfRcdRows.map(({rowType,rcd,outlet,oid,rowLabel,iAnLimit,protLabel},i)=>{const or=getOR(inst.id,oid);const okT=pdfChk(or.rcdT1,undefined,300);const okIan=iAnLimit?pdfChk(or.rcdIan,iAnLimit/2,iAnLimit):"";const bgStyle=rowType==="rcd"?"background:rgba(245,166,35,0.04);":"";return`<div class="trow${i===pdfRcdRows.length-1?" row-last":""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan==="bad"?" bad":""}"><strong>${esc(or.rcdIan)||"–"}</strong>${iAnLimit?`<br><span class="muted" style="font-size:8px">${iAnLimit/2}–${iAnLimit}&thinsp;mA</span>`:""}</span><span class="r${okT==="bad"?" bad":""}"><strong>${esc(or.rcdT1)||"–"}</strong></span></div>`;}).join("")}
       </div></section>`:""}
     ${renderChunk(chunk,isLast)}
     ${isLast?cableHTML:""}
@@ -3494,11 +3509,12 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
             expandedRcdRows.push({rowType:"rcd",rcd,outlet:null,oid:`rcd_${rcd.id}`,rowLabel:rcd.label,iAnLimit:rcd.mA,protLabel:`RCD ${rcd.mA} mA`});
           });
           rcboOutlets.forEach(o=>{
+            const rMa=o.rcdMa??30;
             if(isMulticore(o.connector)){
               const slots=o.mcSlots||6;
-              for(let s=1;s<=slots;s++) expandedRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`,iAnLimit:null,protLabel:`RCBO ${o.breaker} ${o.amp}A`});
+              for(let s=1;s<=slots;s++) expandedRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:`${o.id}_s${s}`,rowLabel:`${o.label} – SP ${s} (${PHASES[(s-1)%3]})`,iAnLimit:rMa,protLabel:`RCBO ${o.amp}A / ${rMa}mA`});
             } else {
-              expandedRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:o.id,rowLabel:o.label,iAnLimit:null,protLabel:`RCBO ${o.breaker} ${o.amp}A`});
+              expandedRcdRows.push({rowType:"rcbo",rcd:null,outlet:o,oid:o.id,rowLabel:o.label,iAnLimit:rMa,protLabel:`RCBO ${o.amp}A / ${rMa}mA`});
             }
           });
 
@@ -3574,29 +3590,23 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                     <thead><tr>
                       <th style={S.th}>Anschluss / RCD</th>
                       <th style={S.th}>Schutz</th>
-                      <th style={S.th}>I_An (mA)<br/><span style={S.normHint}>≤ Nennwert</span></th>
+                      <th style={S.th}>I_An (mA)<br/><span style={S.normHint}>½N – N</span></th>
                       <th style={S.th}>t_A (ms)<br/><span style={S.normHint}>≤ 300 ms</span></th>
-                      <th style={S.th}>OK?</th>
                     </tr></thead>
                     <tbody>
                       {expandedRcdRows.map(({rowType,rcd,outlet,oid,rowLabel,iAnLimit,protLabel})=>{
                         const or=getOR(inst.id,oid);
                         const okT=chk(or.rcdT1,undefined,300);
-                        const okIan=iAnLimit?chk(or.rcdIan,undefined,iAnLimit):null;
+                        const okIan=iAnLimit?chk(or.rcdIan,iAnLimit/2,iAnLimit):null;
                         return (
                           <tr key={oid} style={rowType==="rcd"?{background:"rgba(245,166,35,0.06)"}:{}}>
                             <td style={S.td}><span style={rowType==="rcd"?{color:"#f5a623",fontWeight:600}:{}}>{rowLabel}</span></td>
                             <td style={{...S.td,fontSize:11,color:"#9aa4af"}}>{protLabel}</td>
                             <td style={cellBg(okIan)}>
                               <input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okIan)}} value={or.rcdIan||""} onChange={e=>updOR(inst.id,oid,{rcdIan:e.target.value})}/>
-                              {iAnLimit&&<span style={S.normHint}>&le; {iAnLimit}&thinsp;mA</span>}
+                              {iAnLimit&&<span style={S.normHint}>{iAnLimit/2}–{iAnLimit}&thinsp;mA</span>}
                             </td>
                             <td style={cellBg(okT)}><input type="number" step="1" placeholder="–" style={{...S.inputSm,width:80,...inpBorder(okT)}} value={or.rcdT1||""} onChange={e=>updOR(inst.id,oid,{rcdT1:e.target.value})}/></td>
-                            <td style={{...S.td,textAlign:"center"}}>
-                              <button onClick={()=>updOR(inst.id,oid,{ok:!or.ok})} title={or.ok?"OK – klicken zum Zurücksetzen":"Nicht OK – klicken für OK"} style={{width:22,height:22,borderRadius:4,border:`2px solid ${or.ok?"#2ecc71":"#3a424c"}`,cursor:"pointer",fontWeight:700,fontSize:12,background:or.ok?"#1a5c2e":"transparent",color:or.ok?"#2ecc71":"#555",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}>
-                                {or.ok?"✓":""}
-                              </button>
-                            </td>
                           </tr>
                         );
                       })}

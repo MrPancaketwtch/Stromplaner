@@ -51,13 +51,13 @@ function createWindow() {
       'document.body.style.opacity="0"'
     ).catch(() => {});
     setTimeout(() => {
+      win.show();
+      win.focus();
+      win.webContents.focus();
       if (!splash.isDestroyed()) {
         splash.setAlwaysOnTop(false);
         splash.close();
       }
-      win.show();
-      win.focus();
-      win.webContents.focus();
       if (app.isPackaged) setupAutoUpdater(win);
     }, 300);
   };
@@ -67,6 +67,8 @@ function createWindow() {
 
   win.once('ready-to-show', () => { appReady = true; tryShow(); });
   setTimeout(() => { minTimeUp = true; tryShow(); }, 3000);
+
+  win.on('focus', () => { if (!win.isDestroyed()) win.webContents.focus(); });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url || url === 'about:blank') {
@@ -215,6 +217,8 @@ ipcMain.handle('export-inspection-pdf', async (_event, html) => {
 
     fs.writeFileSync(filePath, pdfBuffer);
     shell.showItemInFolder(filePath);
+    const mainWin = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible());
+    if (mainWin) { mainWin.focus(); mainWin.webContents.focus(); }
     return filePath;
   } finally {
     if (win && !win.isDestroyed()) win.destroy();
