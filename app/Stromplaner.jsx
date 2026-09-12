@@ -79,6 +79,7 @@ const CHANGELOG = {
     "RCD/RCBO-Prüfung: Auslösestrom-Grenzwert ½·Nennwert – Nennwert (rot wenn zu niedrig oder zu hoch); OK-Kästchen entfällt; RCBO-Nennwert (mA) am Anschluss einstellbar (Standard: 30 mA)",
     "Multicore Schnellerfassung: Phasenrotation läuft nach dem letzten Slot wieder von vorne (statt über das Ende hinaus zu zählen)",
     "Anschluss-Typen: 125A Powerlock entfernt; 660A und 1000A Powerlock neu; CEE Blau 16A/32A heißt jetzt korrekt 1LNPE statt 1LNP",
+    "Verteiler-Typen und Verbraucher werden jetzt als Bibliothek in AppData gespeichert (AppData\\Stromplaner\\Speicherstände\\Bibliothek.json) und beim Start von dort geladen – unabhängig vom aktiven Planungsstand",
   ],
   "1.0.10": [
     "Zuletzt geöffnet: Schnellzugriff auf die letzten 10 Planungsstände über den ⏱-Button im Header",
@@ -386,6 +387,7 @@ export default function App() {
   const [instances,  setInstances]  = useState([]);
   // placements: {id, instanceId, outletId, mcSlot(num|null), loadId}
   const [placements, setPlacements] = useState([]);
+  const [schaltbildLayout, setSchaltbildLayout] = useState({ positions:{}, consumerPositions:{}, annotations:[] });
   const [activePlan,   setActivePlan]   = useState(null);
   const [recents,      setRecents]      = useState([]);
   const [showRecents,  setShowRecents]  = useState(false);
@@ -415,7 +417,7 @@ export default function App() {
   const [helpSection,  setHelpSection]  = useState(null);
 
   /* ── Autosave ──────────────────────────────────────────────────────────── */
-  // Load on mount
+  // Load on mount: localStorage first, then AppData library (overrides boxTypes/loads)
   useEffect(()=>{
     try {
       const raw = localStorage.getItem(LS_KEY);
@@ -432,10 +434,22 @@ export default function App() {
           if(d.inspResults) setInspResults(d.inspResults);
           if(d.cableCalcs)  setCableCalcs(d.cableCalcs);
           if(d.voltCalcs)   setVoltCalcs(d.voltCalcs);
+          if(d.schaltbildLayout) setSchaltbildLayout(d.schaltbildLayout);
         }
       }
     } catch(e){ console.warn("Autosave load error",e); }
-    setLoaded(true);
+    // AppData-Bibliothek überschreibt boxTypes/loads (autoritativ)
+    if(window.electronAPI?.loadLibrary){
+      window.electronAPI.loadLibrary()
+        .then(d=>{
+          if(d?.boxTypes) setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType),"name"));
+          if(d?.loads)    setLoads(alphaSort(d.loads.map(l=>({...l,threePhase:l.threePhase||false})),"name"));
+        })
+        .catch(()=>{})
+        .finally(()=>setLoaded(true));
+    } else {
+      setLoaded(true);
+    }
   },[]);
 
   useEffect(()=>{
@@ -462,6 +476,17 @@ export default function App() {
     window.electronAPI?.getRecents?.().then(setRecents).catch(()=>{});
   },[]);
 
+  // Bibliothek (Verteiler-Typen + Verbraucher) in AppData speichern (debounced 1s)
+  const libSaveTimer = useRef(null);
+  useEffect(()=>{
+    if(!loaded || !window.electronAPI?.saveLibrary) return;
+    clearTimeout(libSaveTimer.current);
+    libSaveTimer.current = setTimeout(()=>{
+      window.electronAPI.saveLibrary({ boxTypes, loads }).catch(()=>{});
+    }, 1000);
+    return ()=>clearTimeout(libSaveTimer.current);
+  },[boxTypes, loads, loaded]);
+
   // Save on every change (debounced 600ms)
   const saveTimer = useRef(null);
   const schematicSvgRef = useRef(null);
@@ -470,12 +495,12 @@ export default function App() {
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(()=>{
       try {
-        const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs};
+        const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout};
         localStorage.setItem(LS_KEY, JSON.stringify(data));
       } catch(e){ console.warn("Autosave error",e); }
     },600);
     return ()=>clearTimeout(saveTimer.current);
-  },[meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,loaded]);
+  },[meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout,loaded]);
 
   /* ── Derived ───────────────────────────────────────────────────────────── */
   const boxTypeById  = useMemo(()=>{ const m={}; boxTypes.forEach(b=>m[b.id]=b);   return m; },[boxTypes]);
@@ -637,12 +662,13 @@ export default function App() {
     if(d.inspResults) setInspResults(d.inspResults);
     if(d.cableCalcs)  setCableCalcs(d.cableCalcs);
     if(d.voltCalcs)   setVoltCalcs(d.voltCalcs);
+    setSchaltbildLayout(d.schaltbildLayout || { positions:{}, consumerPositions:{}, annotations:[] });
     setActivePlan(null);
     return true;
   };
 
   const saveJSON=async()=>{
-    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs};
+    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout};
     if(window.electronAPI?.savePlan){
       const result=await window.electronAPI.savePlan({json:JSON.stringify(data,null,2),suggestedName:`Stromplan_${meta.production.replace(/\s+/g,"_")}`});
       if(result?.recents) setRecents(result.recents);
@@ -1034,7 +1060,7 @@ export default function App() {
           <OverviewTab {...sharedProps} meta={meta} placements={placements} loads={loads} loadById={loadById} />
         </div>
         <div style={panelStyle("schematic")}>
-          <SchematicTab {...sharedProps} meta={meta} svgRef={schematicSvgRef} placements={placements} loadById={loadById}/>
+          <SchematicTab {...sharedProps} meta={meta} svgRef={schematicSvgRef} placements={placements} loadById={loadById} schaltbildLayout={schaltbildLayout} setSchaltbildLayout={setSchaltbildLayout}/>
         </div>
         <div style={panelStyle("boxtypes")}>
           <BoxTypesTab boxTypes={boxTypes} setBoxTypes={setBoxTypes} instances={instances} />
@@ -1954,7 +1980,14 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Schaltbild – Blockschaltbild mit IEC-Symbolen
 ══════════════════════════════════════════════════════════════════════════ */
-function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,mainConnById,isAdapted,svgRef,placements,loadById }) {
+function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,mainConnById,isAdapted,svgRef,placements,loadById,schaltbildLayout,setSchaltbildLayout }) {
+  const [tool, setTool]         = useState("move");
+  const [dragState, setDragState]   = useState(null);
+  const [livePos, setLivePos]   = useState(null);
+  const [drawState, setDrawState]   = useState(null);
+  const [selectedAnnot, setSelectedAnnot] = useState(null);
+  const [pendingText, setPendingText] = useState(null); // { svgX, svgY, clientX, clientY }
+
   if(instances.length===0) return <Section title="Blockschaltbild"><p style={S.empty}>Aktiviere zuerst Verteiler im Konfiguration-Tab.</p></Section>;
 
   /* ── Connector-Labels (sketchartig: Spannung + Phasigkeit) ───────────── */
@@ -2227,6 +2260,23 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     });
   });
 
+  // Apply user position overrides (after auto-layout push-down pass)
+  const layoutOverrides = schaltbildLayout?.positions || {};
+  Object.entries(layoutOverrides).forEach(([id, p]) => {
+    if(positions[id]) positions[id] = { x: p.x, y: p.y };
+  });
+  // Apply live drag position (nodes only; consumer stacks use their own live logic)
+  if(livePos && livePos.kind === "node" && positions[livePos.id]) {
+    positions[livePos.id] = { x: livePos.x, y: livePos.y };
+  }
+
+  const getSVGPoint = (e) => {
+    const svgEl = svgRef.current; if(!svgEl) return { x:0, y:0 };
+    const pt = svgEl.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svgEl.getScreenCTM().inverse());
+  };
+
   const outletAbsY = (instId, outletId) => {
     const pos=positions[instId]; if(!pos) return 0;
     const type=boxTypeById[instById[instId]?.typeId];
@@ -2324,8 +2374,8 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
       return Math.max(m, stackTop + totalH + GRP_PAD);
     }, mx);
   }, 0);
-  const svgW=LEFT_PAD+(maxDepth)*COL_W+PAD+NODE_W+(hasLeafConsumers?COL_W/2+LEAF_W+GRP_PAD+PAD:0);
-  const svgH=Math.max(totalHeight+PAD*2, maxLeafBottom+PAD, 260);
+  const svgW=LEFT_PAD+(maxDepth)*COL_W+PAD+NODE_W+(hasLeafConsumers?COL_W/2+LEAF_W+GRP_PAD+PAD:0)+800;
+  const svgH=Math.max(totalHeight+PAD*2, maxLeafBottom+PAD, 260)+600;
 
   /* ── Kanten ──────────────────────────────────────────────────────────── */
   const edges=instances
@@ -2354,10 +2404,140 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
     return (Math.min(...ys)+Math.max(...ys)+nodeH(instById[ri[ri.length-1].id]))/2;
   };
 
+  const annotations = schaltbildLayout?.annotations || [];
+  const hasOverrides = Object.keys(schaltbildLayout?.positions || {}).length > 0
+    || Object.keys(schaltbildLayout?.consumerPositions || {}).length > 0
+    || annotations.length > 0;
+
+  const toolBtnStyle = (t) => ({
+    padding:"3px 10px", fontSize:12, borderRadius:4, border:"1px solid",
+    cursor:"pointer", userSelect:"none",
+    background: tool===t ? "#2a4a6a" : "#1e2830",
+    borderColor: tool===t ? "#4a8ab8" : "#2e3a48",
+    color: tool===t ? "#9dd5f5" : "#6a8a9a",
+  });
+
+  const applyAnnotDelta = (dx, dy, annotId) => {
+    if(!dx && !dy) return;
+    setSchaltbildLayout(prev => ({
+      ...prev,
+      annotations: (prev.annotations||[]).map(a =>
+        a.id === annotId
+          ? { ...a, x1: a.x1+dx, y1: a.y1+dy,
+              ...(a.x2 !== undefined ? { x2: a.x2+dx, y2: a.y2+dy } : {}) }
+          : a
+      )
+    }));
+  };
+
+  const onSVGMouseMove = (e) => {
+    if(dragState) {
+      const pt = getSVGPoint(e);
+      const dx = pt.x - dragState.svgStartX;
+      const dy = pt.y - dragState.svgStartY;
+      setLivePos({ kind: dragState.kind, id: dragState.id, key: dragState.key, annotId: dragState.annotId,
+                   x: (dragState.origX ?? 0) + dx, y: (dragState.origY ?? 0) + dy, dx, dy });
+    } else if(drawState) {
+      const pt = getSVGPoint(e);
+      setDrawState(s => s ? { ...s, x2: pt.x, y2: pt.y } : s);
+    }
+  };
+  const onSVGMouseUp = (e) => {
+    if(dragState) {
+      if(dragState.kind === "node" && livePos)
+        setSchaltbildLayout(prev => ({ ...prev, positions: { ...(prev.positions||{}), [dragState.id]: { x: livePos.x, y: livePos.y } } }));
+      else if(dragState.kind === "consumer" && livePos)
+        setSchaltbildLayout(prev => ({ ...prev, consumerPositions: { ...(prev.consumerPositions||{}), [dragState.key]: { x: livePos.x, y: livePos.y } } }));
+      else if(dragState.kind === "annot" && livePos)
+        applyAnnotDelta(livePos.dx, livePos.dy, dragState.annotId);
+      setDragState(null); setLivePos(null);
+    } else if(drawState && drawState.x2 !== undefined) {
+      const { type, x1, y1, x2, y2 } = drawState;
+      if(Math.abs(x2-x1) > 4 || Math.abs(y2-y1) > 4)
+        setSchaltbildLayout(prev => ({ ...prev, annotations: [...(prev.annotations||[]), { id: uid(), type, x1, y1, x2, y2 }] }));
+      setDrawState(null);
+    } else {
+      setSelectedAnnot(null);
+    }
+  };
+  const onSVGMouseLeave = () => {
+    if(dragState && livePos) {
+      if(dragState.kind === "node")
+        setSchaltbildLayout(prev => ({ ...prev, positions: { ...(prev.positions||{}), [dragState.id]: { x: livePos.x, y: livePos.y } } }));
+      else if(dragState.kind === "consumer")
+        setSchaltbildLayout(prev => ({ ...prev, consumerPositions: { ...(prev.consumerPositions||{}), [dragState.key]: { x: livePos.x, y: livePos.y } } }));
+      else if(dragState.kind === "annot")
+        applyAnnotDelta(livePos.dx, livePos.dy, dragState.annotId);
+    }
+    setDragState(null); setLivePos(null); setDrawState(null);
+  };
+
+  const startTextAnnot = (e) => {
+    if(tool !== "text") return;
+    const pt = getSVGPoint(e);
+    setPendingText({ svgX: pt.x, svgY: pt.y, clientX: e.clientX, clientY: e.clientY });
+  };
+  const commitText = (txt) => {
+    if(txt && txt.trim() && pendingText)
+      setSchaltbildLayout(prev => ({ ...prev, annotations: [...(prev.annotations||[]), { id: uid(), type:"text", x1: pendingText.svgX, y1: pendingText.svgY, text: txt.trim() }] }));
+    setPendingText(null);
+  };
+  const deleteAnnot = (id) => {
+    setSchaltbildLayout(prev => ({ ...prev, annotations: (prev.annotations||[]).filter(a => a.id !== id) }));
+    setSelectedAnnot(null);
+  };
+
+  const svgCursor = tool === "text" ? "text" : tool === "rect" || tool === "line" ? "crosshair" : "default";
+
   return (
     <Section title="Blockschaltbild" subtitle="Topologie · IEC 60309 · ausführliche Anschlussbezeichnungen">
-      <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"78vh",background:"#1b2026",borderRadius:8,padding:12}}>
-        <svg ref={svgRef} width={svgW} height={svgH} style={{display:"block",minWidth:svgW}}>
+      {/* ── Inline text input overlay ────────────────────────────────────── */}
+      {pendingText && (
+        <input autoFocus
+          style={{position:"fixed",left:pendingText.clientX,top:pendingText.clientY,zIndex:9999,
+                  background:"#1e2830",border:"1px solid #4a8ab8",color:"#cdd6df",
+                  padding:"3px 8px",fontSize:13,borderRadius:3,outline:"none",minWidth:140}}
+          onKeyDown={(e)=>{
+            if(e.key==="Enter"){ commitText(e.target.value); e.stopPropagation(); }
+            else if(e.key==="Escape"){ setPendingText(null); e.stopPropagation(); }
+          }}
+          onBlur={(e)=>commitText(e.target.value)}
+        />
+      )}
+      {/* ── Toolbar ──────────────────────────────────────────────────────── */}
+      <div style={{display:"flex",gap:6,marginBottom:8,alignItems:"center",flexWrap:"wrap"}}>
+        <button style={toolBtnStyle("move")} onClick={()=>setTool("move")} title="Verteiler verschieben">✥ Bewegen</button>
+        <button style={toolBtnStyle("text")} onClick={()=>setTool("text")} title="Text-Annotation">T Text</button>
+        <button style={toolBtnStyle("rect")} onClick={()=>setTool("rect")} title="Rechteck zeichnen">▭ Rechteck</button>
+        <button style={toolBtnStyle("line")} onClick={()=>setTool("line")} title="Linie zeichnen">╱ Linie</button>
+        {selectedAnnot && (
+          <button onClick={()=>deleteAnnot(selectedAnnot)}
+            style={{padding:"3px 10px",fontSize:12,borderRadius:4,border:"1px solid #a04040",background:"#2a1818",color:"#f08080",cursor:"pointer"}}>
+            × Löschen
+          </button>
+        )}
+        <div style={{flex:1}}/>
+        {hasOverrides && (
+          <button onClick={()=>{ if(confirm("Layout und Annotationen zurücksetzen?")) setSchaltbildLayout({ positions:{}, consumerPositions:{}, annotations:[] }); }}
+            style={{padding:"3px 10px",fontSize:11,borderRadius:4,border:"1px solid #3a5060",background:"#1a2830",color:"#5a8090",cursor:"pointer"}}>
+            ↺ Auto-Layout
+          </button>
+        )}
+      </div>
+      <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"75vh",background:"#1b2026",borderRadius:8,padding:12}}>
+        <svg ref={svgRef} width={svgW} height={svgH} style={{display:"block",minWidth:svgW,cursor:svgCursor,userSelect:"none"}}
+          onMouseMove={onSVGMouseMove}
+          onMouseUp={onSVGMouseUp}
+          onMouseLeave={onSVGMouseLeave}
+          onClick={startTextAnnot}
+          onMouseDown={(e)=>{
+            if(tool==="rect"||tool==="line"){
+              const pt=getSVGPoint(e);
+              setDrawState({ type:tool, x1:pt.x, y1:pt.y, x2:pt.x, y2:pt.y });
+              e.preventDefault();
+            }
+          }}
+        >
 
           {/* ── Einspeisepunkte ─────────────────────────────────────────── */}
           {mainConns.map(mc=>{
@@ -2433,12 +2613,21 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
             // Footer-Bereich Beginn
             const footY=outY+outlets.length*OUT_H;
 
+            const isDraggingThis = dragState?.id === inst.id;
             return (
-              <g key={inst.id} transform={`translate(${pos.x},${pos.y})`}>
+              <g key={inst.id} transform={`translate(${pos.x},${pos.y})`}
+                style={{cursor: tool==="move" ? (isDraggingThis ? "grabbing" : "grab") : "default"}}
+                onMouseDown={(e)=>{
+                  if(tool!=="move") return;
+                  const pt=getSVGPoint(e);
+                  setDragState({ kind:"node", id:inst.id, origX:pos.x, origY:pos.y, svgStartX:pt.x, svgStartY:pt.y });
+                  e.stopPropagation(); e.preventDefault();
+                }}
+              >
 
                 {/* ── Rahmen ─────────────────────────────────────────────── */}
                 <rect width={NODE_W} height={h} rx={5}
-                      fill="#21282f" stroke="#3a424c" strokeWidth={1.5}/>
+                      fill="#21282f" stroke={isDraggingThis?"#4a8ab8":"#3a424c"} strokeWidth={isDraggingThis?2:1.5}/>
 
                 {/* ── Header: Instanz-Name (groß) + Typ-Name (klein) ──────── */}
                 <rect width={NODE_W} height={HDR_H} rx={5} fill="#171c22"/>
@@ -2556,55 +2745,65 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
             const type=boxTypeById[inst.typeId];
             const outlets=type?.outlets||[];
             const pos=positions[inst.id]; if(!pos) return [];
-            const leafX=pos.x+NODE_W+Math.round((COL_W-NODE_W)/2);
-            // Jeder Steckplatz bekommt eine eigene Lane-X für sein Kabel, damit sich die Leitungen nicht überlagen
+            const autoLeafX=pos.x+NODE_W+Math.round((COL_W-NODE_W)/2);
             const activeOutlets=outlets.filter(out=>(outletToPlacs[`${inst.id}__${out.id}`]||[]).length>0);
-            const avail=leafX-pos.x-NODE_W-6; // usable px between node edge and consumer box
+            const avail=autoLeafX-pos.x-NODE_W-6;
             const laneGap=activeOutlets.length>1?Math.min(8,Math.floor(avail/activeOutlets.length)):0;
             return outlets.flatMap(out=>{
               const placs=outletToPlacs[`${inst.id}__${out.id}`]||[];
               if(!placs.length) return [];
+              const cKey=`${inst.id}__${out.id}`;
               const oY=outletAbsY(inst.id, out.id);
-              const stackTop=consumerStackPositions[`${inst.id}__${out.id}`]??oY-LEAF_H/2;
+              const autoStackTop=consumerStackPositions[cKey]??oY-LEAF_H/2;
+              const consOverride=schaltbildLayout?.consumerPositions?.[cKey];
+              const baseStackX=consOverride?consOverride.x:autoLeafX;
+              const baseStackTop=consOverride?consOverride.y:autoStackTop;
+              const isDraggingCons=dragState?.kind==="consumer"&&dragState?.key===cKey;
+              const effectiveStackX=isDraggingCons&&livePos?livePos.x:baseStackX;
+              const effectiveStackTop=isDraggingCons&&livePos?livePos.y:baseStackTop;
               const isMC=isMulticore(out.connector);
               const activeIdx=activeOutlets.findIndex(o=>o.id===out.id);
               const laneX=pos.x+NODE_W+4+activeIdx*laneGap;
-              const midYs=placs.map((_,pi)=>stackTop+pi*(LEAF_H+LEAF_GAP)+LEAF_H/2);
+              const midYs=placs.map((_,pi)=>effectiveStackTop+pi*(LEAF_H+LEAF_GAP)+LEAF_H/2);
               const trunkTop=Math.min(oY,...midYs);
               const trunkBottom=Math.max(oY,...midYs);
               const totalH=placs.length*(LEAF_H+LEAF_GAP)-LEAF_GAP;
-              const grpPad=5;
               const outLabel=out.label||(activeIdx>=0?`Steckplatz ${activeIdx+1}`:'');
               return [
-                // Hintergrund-Gruppe für alle Verbraucher dieses Steckplatzes
-                <rect key={`grp_${out.id}`}
-                      x={leafX-grpPad} y={stackTop-grpPad}
-                      width={LEAF_W+grpPad*2} height={totalH+grpPad*2}
-                      rx={7} fill="#182430" stroke="#2a4558" strokeWidth={1}/>,
-                // Steckplatz-Label über der Gruppe
-                <text key={`grplbl_${out.id}`}
-                      x={leafX+4} y={stackTop-grpPad-3}
-                      fill="#4a7a96" fontSize={8} fontWeight="700">{outLabel}</text>,
-                // Kurzer Stub vom Steckplatz zur Lane
-                <line key={`stub_${out.id}`} x1={pos.x+NODE_W} y1={oY} x2={laneX} y2={oY}
-                      stroke="#3a5060" strokeWidth={1.2}/>,
-                // Vertikaler Stamm in der Lane (verbindet Outlet mit allen Verbrauchern)
-                <line key={`trunk_${out.id}`} x1={laneX} y1={trunkTop} x2={laneX} y2={trunkBottom}
-                      stroke="#3a5060" strokeWidth={1.2}/>,
-                // Einzelne Äste + Verbraucher-Boxen
-                ...placs.map((plac,pi)=>{
-                  const load=loadById?.[plac.loadId]; if(!load) return null;
-                  const leafY=stackTop+pi*(LEAF_H+LEAF_GAP);
-                  const midY=midYs[pi];
-                  const wattStr=load.watt?`${load.watt} W`:"";
-                  const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
-                  const maxName=isMC&&plac.mcSlot!=null?14:18;
-                  const nameDisp=load.name&&load.name.length>maxName?load.name.slice(0,maxName-1)+"…":(load.name||"?");
-                  return (
-                    <g key={plac.id}>
-                      <line x1={laneX} y1={midY} x2={leafX} y2={midY}
-                            stroke="#3a5060" strokeWidth={1.2}/>
-                      <g transform={`translate(${leafX},${leafY})`}>
+                // Verbindungslinien (statisch, nicht im draggable-group)
+                <g key={`conn_${out.id}`} style={{pointerEvents:"none"}}>
+                  <line x1={pos.x+NODE_W} y1={oY} x2={laneX} y2={oY} stroke="#3a5060" strokeWidth={1.2}/>
+                  <line x1={laneX} y1={trunkTop} x2={laneX} y2={trunkBottom} stroke="#3a5060" strokeWidth={1.2}/>
+                  {placs.map((_,pi)=>(
+                    <line key={pi} x1={laneX} y1={midYs[pi]} x2={effectiveStackX} y2={midYs[pi]}
+                          stroke="#3a5060" strokeWidth={1.2}/>
+                  ))}
+                </g>,
+                // Draggable Verbraucher-Gruppe
+                <g key={`stack_${out.id}`} transform={`translate(${effectiveStackX},${effectiveStackTop})`}
+                   style={{cursor:tool==="move"?(isDraggingCons?"grabbing":"grab"):"default"}}
+                   onMouseDown={(e)=>{
+                     if(tool!=="move") return;
+                     const pt=getSVGPoint(e);
+                     setDragState({ kind:"consumer", key:cKey, origX:effectiveStackX, origY:effectiveStackTop, svgStartX:pt.x, svgStartY:pt.y });
+                     e.stopPropagation(); e.preventDefault();
+                   }}
+                >
+                  <rect x={-GRP_PAD} y={-GRP_PAD}
+                        width={LEAF_W+GRP_PAD*2} height={totalH+GRP_PAD*2}
+                        rx={7} fill="#182430"
+                        stroke={isDraggingCons?"#4a8ab8":"#2a4558"}
+                        strokeWidth={isDraggingCons?1.5:1}/>
+                  <text x={4} y={-GRP_PAD-3} fill="#4a7a96" fontSize={8} fontWeight="700">{outLabel}</text>
+                  {placs.map((plac,pi)=>{
+                    const load=loadById?.[plac.loadId]; if(!load) return null;
+                    const leafY=pi*(LEAF_H+LEAF_GAP);
+                    const wattStr=load.watt?`${load.watt} W`:"";
+                    const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
+                    const maxName=isMC&&plac.mcSlot!=null?14:18;
+                    const nameDisp=load.name&&load.name.length>maxName?load.name.slice(0,maxName-1)+"…":(load.name||"?");
+                    return (
+                      <g key={plac.id} transform={`translate(0,${leafY})`}>
                         <rect width={LEAF_W} height={LEAF_H} rx={4}
                               fill="#1a2530" stroke="#3a5060" strokeWidth={1}/>
                         <text x={8} y={14} fill="#6aaabf" fontSize={9} fontWeight="600">{nameDisp}</text>
@@ -2620,12 +2819,71 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
                           </g>
                         )}
                       </g>
-                    </g>
-                  );
-                }).filter(Boolean),
+                    );
+                  }).filter(Boolean)}
+                </g>,
               ];
             });
           })}
+
+          {/* ── Annotations ─────────────────────────────────────────────── */}
+          {annotations.map(a => {
+            const isSelected = selectedAnnot === a.id;
+            const isDraggingAnnot = dragState?.kind === "annot" && dragState?.annotId === a.id;
+            const dx = isDraggingAnnot && livePos ? livePos.dx : 0;
+            const dy = isDraggingAnnot && livePos ? livePos.dy : 0;
+            const col = isSelected ? "#4a8ab8" : "#5a7a9a";
+            const annotCursor = tool === "move" ? (isDraggingAnnot ? "grabbing" : "grab") : "pointer";
+            const onAnnotMouseDown = (e) => {
+              if(tool !== "move") return;
+              const pt = getSVGPoint(e);
+              setDragState({ kind:"annot", annotId:a.id, svgStartX:pt.x, svgStartY:pt.y });
+              e.stopPropagation(); e.preventDefault();
+            };
+            const onAnnotClick = (e) => { setSelectedAnnot(isSelected ? null : a.id); e.stopPropagation(); };
+            if(a.type === "text") return (
+              <text key={a.id} x={a.x1+dx} y={a.y1+dy} fill={isSelected?"#9dd5f5":"#c0d0e0"}
+                    fontSize={14} style={{cursor:annotCursor}}
+                    onMouseDown={onAnnotMouseDown} onClick={onAnnotClick}>
+                {a.text}
+              </text>
+            );
+            if(a.type === "rect") {
+              const rx=Math.min(a.x1,a.x2)+dx, ry=Math.min(a.y1,a.y2)+dy;
+              const rw=Math.abs(a.x2-a.x1), rh=Math.abs(a.y2-a.y1);
+              return (
+                <g key={a.id}>
+                  <rect x={rx} y={ry} width={rw} height={rh} rx={3}
+                        fill="none" stroke="transparent" strokeWidth={14}
+                        style={{cursor:annotCursor}} onMouseDown={onAnnotMouseDown} onClick={onAnnotClick}/>
+                  <rect x={rx} y={ry} width={rw} height={rh} rx={3}
+                        fill="none" stroke={col} strokeWidth={1.5} strokeDasharray="6,3"
+                        style={{pointerEvents:"none"}}/>
+                </g>
+              );
+            }
+            if(a.type === "line") return (
+              <g key={a.id}>
+                <line x1={a.x1+dx} y1={a.y1+dy} x2={a.x2+dx} y2={a.y2+dy}
+                      stroke="transparent" strokeWidth={14}
+                      style={{cursor:annotCursor}} onMouseDown={onAnnotMouseDown} onClick={onAnnotClick}/>
+                <line x1={a.x1+dx} y1={a.y1+dy} x2={a.x2+dx} y2={a.y2+dy}
+                      stroke={col} strokeWidth={1.5} strokeDasharray="6,3" strokeLinecap="round"
+                      style={{pointerEvents:"none"}}/>
+              </g>
+            );
+            return null;
+          })}
+
+          {/* ── Live draw preview ────────────────────────────────────────── */}
+          {drawState && drawState.x2 !== undefined && (
+            drawState.type === "rect"
+              ? <rect x={Math.min(drawState.x1,drawState.x2)} y={Math.min(drawState.y1,drawState.y2)}
+                      width={Math.abs(drawState.x2-drawState.x1)} height={Math.abs(drawState.y2-drawState.y1)}
+                      fill="none" stroke="#4a8ab8" strokeWidth={1.5} strokeDasharray="6,3" rx={3} opacity={0.7}/>
+              : <line x1={drawState.x1} y1={drawState.y1} x2={drawState.x2} y2={drawState.y2}
+                      stroke="#4a8ab8" strokeWidth={1.5} strokeDasharray="6,3" strokeLinecap="round" opacity={0.7}/>
+          )}
 
         </svg>
       </div>

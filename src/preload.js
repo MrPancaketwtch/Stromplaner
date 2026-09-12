@@ -10,4 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openPlan:            () => ipcRenderer.invoke('open-plan'),
   openRecent:          (filePath) => ipcRenderer.invoke('open-recent', filePath),
   getRecents:          () => ipcRenderer.invoke('get-recents'),
+  loadLibrary:         () => ipcRenderer.invoke('load-library'),
+  saveLibrary:         (data) => ipcRenderer.invoke('save-library', data),
 });

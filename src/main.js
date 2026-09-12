@@ -129,7 +129,8 @@ function setupAutoUpdater(win) {
 ipcMain.handle('app-version', () => app.getVersion());
 
 // ── Planungsstände: Verzeichnis + Recents ────────────────────────────────────
-const getPlansDir  = () => path.join(app.getPath('userData'), 'Speicherstände', 'Gesamt');
+const getPlansDir    = () => path.join(app.getPath('userData'), 'Speicherstände', 'Gesamt');
+const getLibraryFile = () => path.join(app.getPath('userData'), 'Speicherstände', 'Bibliothek.json');
 const getRecentsFile = () => path.join(app.getPath('userData'), 'recents.json');
 
 function ensurePlansDir() {
@@ -149,6 +150,23 @@ function addRecent(filePath, name) {
 }
 
 ipcMain.handle('get-recents', () => loadRecents());
+
+ipcMain.handle('load-library', () => {
+  try {
+    const f = getLibraryFile();
+    if(fs.existsSync(f)) return JSON.parse(fs.readFileSync(f, 'utf8'));
+  } catch(e) { console.error('load-library error:', e); }
+  return null;
+});
+
+ipcMain.handle('save-library', (_event, data) => {
+  try {
+    const f = getLibraryFile();
+    const dir = path.dirname(f);
+    if(!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(f, JSON.stringify(data, null, 2), 'utf8');
+  } catch(e) { console.error('save-library error:', e); }
+});
 
 ipcMain.handle('save-plan', async (_event, { json, suggestedName }) => {
   ensurePlansDir();

@@ -27872,7 +27872,8 @@ button:active { filter: brightness(0.95); }
       "release.bat: call-Direktive und enabledelayedexpansion f\xFCr zuverl\xE4ssigeren Release-Ablauf",
       "RCD/RCBO-Pr\xFCfung: Ausl\xF6sestrom-Grenzwert \xBD\xB7Nennwert \u2013 Nennwert (rot wenn zu niedrig oder zu hoch); OK-K\xE4stchen entf\xE4llt; RCBO-Nennwert (mA) am Anschluss einstellbar (Standard: 30 mA)",
       "Multicore Schnellerfassung: Phasenrotation l\xE4uft nach dem letzten Slot wieder von vorne (statt \xFCber das Ende hinaus zu z\xE4hlen)",
-      "Anschluss-Typen: 125A Powerlock entfernt; 660A und 1000A Powerlock neu; CEE Blau 16A/32A hei\xDFt jetzt korrekt 1LNPE statt 1LNP"
+      "Anschluss-Typen: 125A Powerlock entfernt; 660A und 1000A Powerlock neu; CEE Blau 16A/32A hei\xDFt jetzt korrekt 1LNPE statt 1LNP",
+      "Verteiler-Typen und Verbraucher werden jetzt als Bibliothek in AppData gespeichert (AppData\\Stromplaner\\Speicherst\xE4nde\\Bibliothek.json) und beim Start von dort geladen \u2013 unabh\xE4ngig vom aktiven Planungsstand"
     ],
     "1.0.10": [
       "Zuletzt ge\xF6ffnet: Schnellzugriff auf die letzten 10 Planungsst\xE4nde \xFCber den \u23F1-Button im Header",
@@ -28159,6 +28160,7 @@ button:active { filter: brightness(0.95); }
     const [loads, setLoads] = (0, import_react.useState)(alphaSort(clone(DEFAULT_LOADS), "name"));
     const [instances, setInstances] = (0, import_react.useState)([]);
     const [placements, setPlacements] = (0, import_react.useState)([]);
+    const [schaltbildLayout, setSchaltbildLayout] = (0, import_react.useState)({ positions: {}, consumerPositions: {}, annotations: [] });
     const [activePlan, setActivePlan] = (0, import_react.useState)(null);
     const [recents, setRecents] = (0, import_react.useState)([]);
     const [showRecents, setShowRecents] = (0, import_react.useState)(false);
@@ -28218,12 +28220,21 @@ button:active { filter: brightness(0.95); }
             if (d.inspResults) setInspResults(d.inspResults);
             if (d.cableCalcs) setCableCalcs(d.cableCalcs);
             if (d.voltCalcs) setVoltCalcs(d.voltCalcs);
+            if (d.schaltbildLayout) setSchaltbildLayout(d.schaltbildLayout);
           }
         }
       } catch (e) {
         console.warn("Autosave load error", e);
       }
-      setLoaded(true);
+      if (window.electronAPI?.loadLibrary) {
+        window.electronAPI.loadLibrary().then((d) => {
+          if (d?.boxTypes) setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType), "name"));
+          if (d?.loads) setLoads(alphaSort(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
+        }).catch(() => {
+        }).finally(() => setLoaded(true));
+      } else {
+        setLoaded(true);
+      }
     }, []);
     (0, import_react.useEffect)(() => {
       window.electronAPI?.onUpdateStatus((msg) => {
@@ -28246,6 +28257,16 @@ button:active { filter: brightness(0.95); }
       window.electronAPI?.getRecents?.().then(setRecents).catch(() => {
       });
     }, []);
+    const libSaveTimer = (0, import_react.useRef)(null);
+    (0, import_react.useEffect)(() => {
+      if (!loaded || !window.electronAPI?.saveLibrary) return;
+      clearTimeout(libSaveTimer.current);
+      libSaveTimer.current = setTimeout(() => {
+        window.electronAPI.saveLibrary({ boxTypes, loads }).catch(() => {
+        });
+      }, 1e3);
+      return () => clearTimeout(libSaveTimer.current);
+    }, [boxTypes, loads, loaded]);
     const saveTimer = (0, import_react.useRef)(null);
     const schematicSvgRef = (0, import_react.useRef)(null);
     (0, import_react.useEffect)(() => {
@@ -28253,14 +28274,14 @@ button:active { filter: brightness(0.95); }
       clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         try {
-          const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances, placements, inspMeta, inspResults, cableCalcs, voltCalcs };
+          const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances, placements, inspMeta, inspResults, cableCalcs, voltCalcs, schaltbildLayout };
           localStorage.setItem(LS_KEY, JSON.stringify(data));
         } catch (e) {
           console.warn("Autosave error", e);
         }
       }, 600);
       return () => clearTimeout(saveTimer.current);
-    }, [meta, mainConns, boxTypes, loads, instances, placements, inspMeta, inspResults, cableCalcs, voltCalcs, loaded]);
+    }, [meta, mainConns, boxTypes, loads, instances, placements, inspMeta, inspResults, cableCalcs, voltCalcs, schaltbildLayout, loaded]);
     const boxTypeById = (0, import_react.useMemo)(() => {
       const m = {};
       boxTypes.forEach((b) => m[b.id] = b);
@@ -28434,11 +28455,12 @@ Fortfahren?`);
       if (d.inspResults) setInspResults(d.inspResults);
       if (d.cableCalcs) setCableCalcs(d.cableCalcs);
       if (d.voltCalcs) setVoltCalcs(d.voltCalcs);
+      setSchaltbildLayout(d.schaltbildLayout || { positions: {}, consumerPositions: {}, annotations: [] });
       setActivePlan(null);
       return true;
     };
     const saveJSON = async () => {
-      const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances: alphaSort(instances, "name"), placements, inspMeta, inspResults, cableCalcs, voltCalcs };
+      const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances: alphaSort(instances, "name"), placements, inspMeta, inspResults, cableCalcs, voltCalcs, schaltbildLayout };
       if (window.electronAPI?.savePlan) {
         const result = await window.electronAPI.savePlan({ json: JSON.stringify(data, null, 2), suggestedName: `Stromplan_${meta.production.replace(/\s+/g, "_")}` });
         if (result?.recents) setRecents(result.recents);
@@ -28887,7 +28909,7 @@ Fortfahren?`);
         ownLoad,
         meta
       }
-    )), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("overview") }, /* @__PURE__ */ import_react.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("schematic") }, /* @__PURE__ */ import_react.default.createElement(SchematicTab, { ...sharedProps, meta, svgRef: schematicSvgRef, placements, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("boxtypes") }, /* @__PURE__ */ import_react.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("loads") }, /* @__PURE__ */ import_react.default.createElement(LoadsTab, { loads, setLoads })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("inspection") }, /* @__PURE__ */ import_react.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults, inspSign, uploadInspSign, removeInspSign })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("erweitert") }, /* @__PURE__ */ import_react.default.createElement(
+    )), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("overview") }, /* @__PURE__ */ import_react.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("schematic") }, /* @__PURE__ */ import_react.default.createElement(SchematicTab, { ...sharedProps, meta, svgRef: schematicSvgRef, placements, loadById, schaltbildLayout, setSchaltbildLayout })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("boxtypes") }, /* @__PURE__ */ import_react.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("loads") }, /* @__PURE__ */ import_react.default.createElement(LoadsTab, { loads, setLoads })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("inspection") }, /* @__PURE__ */ import_react.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults, inspSign, uploadInspSign, removeInspSign })), /* @__PURE__ */ import_react.default.createElement("div", { style: panelStyle("erweitert") }, /* @__PURE__ */ import_react.default.createElement(
       ErweitertTab,
       {
         cableCalcs,
@@ -29317,7 +29339,13 @@ Fortfahren?`);
       return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Verbraucher nach Verteiler", subtitle: "F\xFCr jede Unterverteilung: platzierte Verbraucher mit Menge und Leistung." }, boxRows.map(({ inst, rows, totalW }) => /* @__PURE__ */ import_react.default.createElement("div", { key: inst.id, style: { marginBottom: 16 } }, /* @__PURE__ */ import_react.default.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: "#e8eaed", marginBottom: 6 } }, inst.name, /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 400, fontSize: 11, color: "#9aa4af", marginLeft: 8 } }, boxTypeById[inst.typeId]?.name || ""), /* @__PURE__ */ import_react.default.createElement("span", { style: { fontWeight: 600, fontSize: 11, color: "#f5a623", marginLeft: 8 } }, totalW, " W")), /* @__PURE__ */ import_react.default.createElement("table", { style: { ...S.table, marginBottom: 0 } }, /* @__PURE__ */ import_react.default.createElement("thead", null, /* @__PURE__ */ import_react.default.createElement("tr", null, /* @__PURE__ */ import_react.default.createElement("th", { style: S.th }, "Verbraucher"), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, textAlign: "right" } }, "Menge"), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, textAlign: "right" } }, "W / Stk."), /* @__PURE__ */ import_react.default.createElement("th", { style: { ...S.th, textAlign: "right" } }, "Gesamt W"))), /* @__PURE__ */ import_react.default.createElement("tbody", null, rows.map((r) => /* @__PURE__ */ import_react.default.createElement("tr", { key: r.load.id }, /* @__PURE__ */ import_react.default.createElement("td", { style: S.td }, r.load.name), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 700, textAlign: "right", fontVariantNumeric: "tabular-nums" } }, r.count), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums" } }, r.load.watt || "\u2013", " W"), /* @__PURE__ */ import_react.default.createElement("td", { style: { ...S.td, fontWeight: 600, textAlign: "right", fontVariantNumeric: "tabular-nums" } }, (r.load.watt || 0) * r.count, " W"))))))));
     })());
   }
-  function SchematicTab({ instances, instById, boxTypeById, rootInstances, mainConns, mainConnById, isAdapted, svgRef, placements, loadById }) {
+  function SchematicTab({ instances, instById, boxTypeById, rootInstances, mainConns, mainConnById, isAdapted, svgRef, placements, loadById, schaltbildLayout, setSchaltbildLayout }) {
+    const [tool, setTool] = (0, import_react.useState)("move");
+    const [dragState, setDragState] = (0, import_react.useState)(null);
+    const [livePos, setLivePos] = (0, import_react.useState)(null);
+    const [drawState, setDrawState] = (0, import_react.useState)(null);
+    const [selectedAnnot, setSelectedAnnot] = (0, import_react.useState)(null);
+    const [pendingText, setPendingText] = (0, import_react.useState)(null);
     if (instances.length === 0) return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Blockschaltbild" }, /* @__PURE__ */ import_react.default.createElement("p", { style: S.empty }, "Aktiviere zuerst Verteiler im Konfiguration-Tab."));
     const connMid = (type) => ({
       CEE16: "CEE 16A 3L+N+PE",
@@ -29526,6 +29554,21 @@ Fortfahren?`);
         minY = positions[inst.id].y + nodeH(inst) + ROW_GAP;
       });
     });
+    const layoutOverrides = schaltbildLayout?.positions || {};
+    Object.entries(layoutOverrides).forEach(([id, p]) => {
+      if (positions[id]) positions[id] = { x: p.x, y: p.y };
+    });
+    if (livePos && livePos.kind === "node" && positions[livePos.id]) {
+      positions[livePos.id] = { x: livePos.x, y: livePos.y };
+    }
+    const getSVGPoint = (e) => {
+      const svgEl = svgRef.current;
+      if (!svgEl) return { x: 0, y: 0 };
+      const pt = svgEl.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      return pt.matrixTransform(svgEl.getScreenCTM().inverse());
+    };
     const outletAbsY = (instId, outletId) => {
       const pos = positions[instId];
       if (!pos) return 0;
@@ -29619,8 +29662,8 @@ Fortfahren?`);
         return Math.max(m, stackTop + totalH + GRP_PAD);
       }, mx);
     }, 0);
-    const svgW = LEFT_PAD + maxDepth * COL_W + PAD + NODE_W + (hasLeafConsumers ? COL_W / 2 + LEAF_W + GRP_PAD + PAD : 0);
-    const svgH = Math.max(totalHeight + PAD * 2, maxLeafBottom + PAD, 260);
+    const svgW = LEFT_PAD + maxDepth * COL_W + PAD + NODE_W + (hasLeafConsumers ? COL_W / 2 + LEAF_W + GRP_PAD + PAD : 0) + 800;
+    const svgH = Math.max(totalHeight + PAD * 2, maxLeafBottom + PAD, 260) + 600;
     const edges = instances.filter((i) => i.parentId && positions[i.id] && positions[i.parentId]).map((inst) => {
       const parentType = boxTypeById[instById[inst.parentId]?.typeId];
       const parentOutlets = parentType?.outlets || [];
@@ -29648,371 +29691,667 @@ Fortfahren?`);
       if (!ys.length) return null;
       return (Math.min(...ys) + Math.max(...ys) + nodeH(instById[ri[ri.length - 1].id])) / 2;
     };
-    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Blockschaltbild", subtitle: "Topologie \xB7 IEC 60309 \xB7 ausf\xFChrliche Anschlussbezeichnungen" }, /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto", overflowY: "auto", maxHeight: "78vh", background: "#1b2026", borderRadius: 8, padding: 12 } }, /* @__PURE__ */ import_react.default.createElement("svg", { ref: svgRef, width: svgW, height: svgH, style: { display: "block", minWidth: svgW } }, mainConns.map((mc) => {
-      const cy = mcCenterY(mc);
-      if (cy === null) return null;
-      const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
-      const bx = LEFT_PAD + 14;
-      return /* @__PURE__ */ import_react.default.createElement("g", { key: mc.id }, /* @__PURE__ */ import_react.default.createElement("line", { x1: bx, y1: cy - 28, x2: bx, y2: cy + 28, stroke: "#f5a623", strokeWidth: 4, strokeLinecap: "round" }), /* @__PURE__ */ import_react.default.createElement("line", { x1: bx - 20, y1: cy, x2: bx - 1, y2: cy, stroke: "#f5a623", strokeWidth: 1.5 }), /* @__PURE__ */ import_react.default.createElement("polygon", { points: `${bx - 5},${cy - 4} ${bx + 3},${cy} ${bx - 5},${cy + 4}`, fill: "#f5a623" }), /* @__PURE__ */ import_react.default.createElement("text", { x: bx - 22, y: cy - 12, textAnchor: "end", fill: "#f5a623", fontSize: 10, fontWeight: "700" }, mc.name), mc.amp && /* @__PURE__ */ import_react.default.createElement("text", { x: bx - 22, y: cy + 22, textAnchor: "end", fill: "#f5a623", fontSize: 9, opacity: "0.75" }, mc.amp, " A"), connInsts.map((ri) => {
-        const pos = positions[ri.id];
-        if (!pos) return null;
-        return /* @__PURE__ */ import_react.default.createElement(
-          "line",
-          {
-            key: ri.id,
-            x1: bx,
-            y1: cy,
-            x2: pos.x,
-            y2: pos.y + HDR_H + FEED_H / 2,
-            stroke: "#f5a623",
-            strokeWidth: 1.2,
-            strokeDasharray: "5,4",
-            opacity: 0.4
-          }
-        );
+    const annotations = schaltbildLayout?.annotations || [];
+    const hasOverrides = Object.keys(schaltbildLayout?.positions || {}).length > 0 || Object.keys(schaltbildLayout?.consumerPositions || {}).length > 0 || annotations.length > 0;
+    const toolBtnStyle = (t) => ({
+      padding: "3px 10px",
+      fontSize: 12,
+      borderRadius: 4,
+      border: "1px solid",
+      cursor: "pointer",
+      userSelect: "none",
+      background: tool === t ? "#2a4a6a" : "#1e2830",
+      borderColor: tool === t ? "#4a8ab8" : "#2e3a48",
+      color: tool === t ? "#9dd5f5" : "#6a8a9a"
+    });
+    const applyAnnotDelta = (dx, dy, annotId) => {
+      if (!dx && !dy) return;
+      setSchaltbildLayout((prev) => ({
+        ...prev,
+        annotations: (prev.annotations || []).map(
+          (a) => a.id === annotId ? {
+            ...a,
+            x1: a.x1 + dx,
+            y1: a.y1 + dy,
+            ...a.x2 !== void 0 ? { x2: a.x2 + dx, y2: a.y2 + dy } : {}
+          } : a
+        )
       }));
-    }), edges.map((e, i) => {
-      const mx = (e.x1 + e.x2) / 2, my = (e.y1 + e.y2) / 2;
-      const lbl = e.outlet ? connShort(e.outlet.connector) : "";
-      const edgeCol = e.staleCon ? "#d97706" : e.adapted ? "#a78bfa" : "#4a5568";
-      const txtCol = e.staleCon ? "#f5a623" : e.adapted ? "#c4a8fa" : "#8ab8d8";
-      const dashArr = e.staleCon ? "4,2" : e.adapted ? "6,3" : void 0;
-      return /* @__PURE__ */ import_react.default.createElement("g", { key: i }, /* @__PURE__ */ import_react.default.createElement(
-        "path",
-        {
-          d: orthoPath(e.x1, e.y1, e.x2, e.y2),
-          fill: "none",
-          stroke: edgeCol,
-          strokeWidth: 1.6,
-          strokeDasharray: dashArr
-        }
-      ), lbl && /* @__PURE__ */ import_react.default.createElement(
-        "text",
-        {
-          x: mx,
-          y: my - 4,
-          textAnchor: "middle",
-          fill: txtCol,
-          fontSize: 8,
-          style: { paintOrder: "stroke", stroke: "#1b2026", strokeWidth: 3 }
+    };
+    const onSVGMouseMove = (e) => {
+      if (dragState) {
+        const pt = getSVGPoint(e);
+        const dx = pt.x - dragState.svgStartX;
+        const dy = pt.y - dragState.svgStartY;
+        setLivePos({
+          kind: dragState.kind,
+          id: dragState.id,
+          key: dragState.key,
+          annotId: dragState.annotId,
+          x: (dragState.origX ?? 0) + dx,
+          y: (dragState.origY ?? 0) + dy,
+          dx,
+          dy
+        });
+      } else if (drawState) {
+        const pt = getSVGPoint(e);
+        setDrawState((s) => s ? { ...s, x2: pt.x, y2: pt.y } : s);
+      }
+    };
+    const onSVGMouseUp = (e) => {
+      if (dragState) {
+        if (dragState.kind === "node" && livePos)
+          setSchaltbildLayout((prev) => ({ ...prev, positions: { ...prev.positions || {}, [dragState.id]: { x: livePos.x, y: livePos.y } } }));
+        else if (dragState.kind === "consumer" && livePos)
+          setSchaltbildLayout((prev) => ({ ...prev, consumerPositions: { ...prev.consumerPositions || {}, [dragState.key]: { x: livePos.x, y: livePos.y } } }));
+        else if (dragState.kind === "annot" && livePos)
+          applyAnnotDelta(livePos.dx, livePos.dy, dragState.annotId);
+        setDragState(null);
+        setLivePos(null);
+      } else if (drawState && drawState.x2 !== void 0) {
+        const { type, x1, y1, x2, y2 } = drawState;
+        if (Math.abs(x2 - x1) > 4 || Math.abs(y2 - y1) > 4)
+          setSchaltbildLayout((prev) => ({ ...prev, annotations: [...prev.annotations || [], { id: uid(), type, x1, y1, x2, y2 }] }));
+        setDrawState(null);
+      } else {
+        setSelectedAnnot(null);
+      }
+    };
+    const onSVGMouseLeave = () => {
+      if (dragState && livePos) {
+        if (dragState.kind === "node")
+          setSchaltbildLayout((prev) => ({ ...prev, positions: { ...prev.positions || {}, [dragState.id]: { x: livePos.x, y: livePos.y } } }));
+        else if (dragState.kind === "consumer")
+          setSchaltbildLayout((prev) => ({ ...prev, consumerPositions: { ...prev.consumerPositions || {}, [dragState.key]: { x: livePos.x, y: livePos.y } } }));
+        else if (dragState.kind === "annot")
+          applyAnnotDelta(livePos.dx, livePos.dy, dragState.annotId);
+      }
+      setDragState(null);
+      setLivePos(null);
+      setDrawState(null);
+    };
+    const startTextAnnot = (e) => {
+      if (tool !== "text") return;
+      const pt = getSVGPoint(e);
+      setPendingText({ svgX: pt.x, svgY: pt.y, clientX: e.clientX, clientY: e.clientY });
+    };
+    const commitText = (txt) => {
+      if (txt && txt.trim() && pendingText)
+        setSchaltbildLayout((prev) => ({ ...prev, annotations: [...prev.annotations || [], { id: uid(), type: "text", x1: pendingText.svgX, y1: pendingText.svgY, text: txt.trim() }] }));
+      setPendingText(null);
+    };
+    const deleteAnnot = (id) => {
+      setSchaltbildLayout((prev) => ({ ...prev, annotations: (prev.annotations || []).filter((a) => a.id !== id) }));
+      setSelectedAnnot(null);
+    };
+    const svgCursor = tool === "text" ? "text" : tool === "rect" || tool === "line" ? "crosshair" : "default";
+    return /* @__PURE__ */ import_react.default.createElement(Section, { title: "Blockschaltbild", subtitle: "Topologie \xB7 IEC 60309 \xB7 ausf\xFChrliche Anschlussbezeichnungen" }, pendingText && /* @__PURE__ */ import_react.default.createElement(
+      "input",
+      {
+        autoFocus: true,
+        style: {
+          position: "fixed",
+          left: pendingText.clientX,
+          top: pendingText.clientY,
+          zIndex: 9999,
+          background: "#1e2830",
+          border: "1px solid #4a8ab8",
+          color: "#cdd6df",
+          padding: "3px 8px",
+          fontSize: 13,
+          borderRadius: 3,
+          outline: "none",
+          minWidth: 140
         },
-        lbl
-      ), e.staleCon && /* @__PURE__ */ import_react.default.createElement(
-        "text",
-        {
-          x: mx,
-          y: my + 10,
-          textAnchor: "middle",
-          fill: "#d97706",
-          fontSize: 9,
-          style: { paintOrder: "stroke", stroke: "#1b2026", strokeWidth: 3 }
+        onKeyDown: (e) => {
+          if (e.key === "Enter") {
+            commitText(e.target.value);
+            e.stopPropagation();
+          } else if (e.key === "Escape") {
+            setPendingText(null);
+            e.stopPropagation();
+          }
         },
-        "\u26A0"
-      ));
-    }), instances.map((inst) => {
-      const pos = positions[inst.id];
-      if (!pos) return null;
-      const type = boxTypeById[inst.typeId];
-      const outlets = type?.outlets || [];
-      const feedConn = type?.feedConnector || "";
-      const FeedSym = connSym(feedConn);
-      const adapted = isAdapted(inst.id);
-      const h = nodeH(inst);
-      const fLines = footerLines(inst);
-      const typeName = type?.name || "\u2013";
-      const dispTypeName = typeName.length > 24 ? typeName.slice(0, 23) + "\u2026" : typeName;
-      const sepY = HDR_H + FEED_H;
-      const outY = HDR_H + FEED_H + SEP_H + SECT_H;
-      const footY = outY + outlets.length * OUT_H;
-      return /* @__PURE__ */ import_react.default.createElement("g", { key: inst.id, transform: `translate(${pos.x},${pos.y})` }, /* @__PURE__ */ import_react.default.createElement(
-        "rect",
-        {
-          width: NODE_W,
-          height: h,
-          rx: 5,
-          fill: "#21282f",
-          stroke: "#3a424c",
-          strokeWidth: 1.5
-        }
-      ), /* @__PURE__ */ import_react.default.createElement("rect", { width: NODE_W, height: HDR_H, rx: 5, fill: "#171c22" }), /* @__PURE__ */ import_react.default.createElement("rect", { y: HDR_H - 5, width: NODE_W, height: 5, fill: "#171c22" }), /* @__PURE__ */ import_react.default.createElement("text", { x: 9, y: 16, fill: "#cdd6df", fontSize: 11, fontWeight: "700" }, inst.name.length > 24 ? inst.name.slice(0, 23) + "\u2026" : inst.name), /* @__PURE__ */ import_react.default.createElement("text", { x: 9, y: 26, fill: "#4a5a6a", fontSize: 7.5 }, dispTypeName), adapted && /* @__PURE__ */ import_react.default.createElement("circle", { cx: NODE_W - 9, cy: HDR_H / 2, r: 4, fill: "#a78bfa", opacity: "0.9" }, /* @__PURE__ */ import_react.default.createElement("title", null, "Adapter: Stecker passt nicht zum Eltern-Anschluss")), inst.parentId && /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(0,${HDR_H + FEED_H / 2})` }, /* @__PURE__ */ import_react.default.createElement(
-        "rect",
-        {
-          x: -10,
-          y: -5,
-          width: 10,
-          height: 10,
-          rx: 1.5,
-          stroke: "#4a7494",
-          strokeWidth: 1.1,
-          fill: "#21282f"
-        }
-      ), /* @__PURE__ */ import_react.default.createElement("circle", { cx: -7, cy: -1, r: 1.4, stroke: "#4a7494", strokeWidth: 0.9, fill: "none" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: -3, cy: -1, r: 1.4, stroke: "#4a7494", strokeWidth: 0.9, fill: "none" }), /* @__PURE__ */ import_react.default.createElement(
-        "line",
-        {
-          x1: 0,
-          y1: 0,
-          x2: FeedSym ? 22 : 7,
-          y2: 0,
-          stroke: "#4a7494",
-          strokeWidth: 0.8,
-          strokeDasharray: "2,2"
-        }
-      )), FeedSym && /* @__PURE__ */ import_react.default.createElement(FeedSym, { x: 6, y: HDR_H + 1, s: 0.78, col: "#3a5a74" }), /* @__PURE__ */ import_react.default.createElement("text", { x: FeedSym ? 24 : 9, y: HDR_H + 12, fill: "#4a7494", fontSize: 8.5 }, "\u2190", " ", connMid(feedConn), type?.feedAmp ? ` \xB7 ${type.feedAmp} A` : ""), /* @__PURE__ */ import_react.default.createElement(
-        "line",
-        {
-          x1: 8,
-          y1: sepY,
-          x2: NODE_W - 8,
-          y2: sepY,
-          stroke: "#2e3848",
-          strokeWidth: 0.8
-        }
-      ), outlets.length > 0 && /* @__PURE__ */ import_react.default.createElement(
-        "text",
-        {
-          x: 9,
-          y: sepY + SECT_H - 2,
-          fill: "#4a5a6a",
-          fontSize: 7.5,
-          fontWeight: "700",
-          fontStyle: "italic"
+        onBlur: (e) => commitText(e.target.value)
+      }
+    ), /* @__PURE__ */ import_react.default.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 8, alignItems: "center", flexWrap: "wrap" } }, /* @__PURE__ */ import_react.default.createElement("button", { style: toolBtnStyle("move"), onClick: () => setTool("move"), title: "Verteiler verschieben" }, "\u2725 Bewegen"), /* @__PURE__ */ import_react.default.createElement("button", { style: toolBtnStyle("text"), onClick: () => setTool("text"), title: "Text-Annotation" }, "T Text"), /* @__PURE__ */ import_react.default.createElement("button", { style: toolBtnStyle("rect"), onClick: () => setTool("rect"), title: "Rechteck zeichnen" }, "\u25AD Rechteck"), /* @__PURE__ */ import_react.default.createElement("button", { style: toolBtnStyle("line"), onClick: () => setTool("line"), title: "Linie zeichnen" }, "\u2571 Linie"), selectedAnnot && /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onClick: () => deleteAnnot(selectedAnnot),
+        style: { padding: "3px 10px", fontSize: 12, borderRadius: 4, border: "1px solid #a04040", background: "#2a1818", color: "#f08080", cursor: "pointer" }
+      },
+      "\xD7 L\xF6schen"
+    ), /* @__PURE__ */ import_react.default.createElement("div", { style: { flex: 1 } }), hasOverrides && /* @__PURE__ */ import_react.default.createElement(
+      "button",
+      {
+        onClick: () => {
+          if (confirm("Layout und Annotationen zur\xFCcksetzen?")) setSchaltbildLayout({ positions: {}, consumerPositions: {}, annotations: [] });
         },
-        "Out:"
-      ), outlets.map((out, idx) => {
-        const ry = outY + idx * OUT_H;
-        const hasChild = !!outletToChild[`${inst.id}__${out.id}`];
-        const hasPlac = (outletToPlacs[`${inst.id}__${out.id}`] || []).length > 0;
-        const active = hasChild || hasPlac;
-        const txtCol = active ? "#7aaec8" : "#344454";
-        const plugCol = active ? "#4a7494" : "transparent";
-        const outName = out.label || `Out ${idx + 1}`;
-        const connDesc = connMid(out.connector);
-        const avail = Math.floor((NODE_W - 24) / 5.6);
-        const combined = `${outName}  ${connDesc}`;
-        const dispLabel = combined.length > avail ? combined.slice(0, avail - 1) + "\u2026" : combined;
-        return /* @__PURE__ */ import_react.default.createElement("g", { key: out.id, transform: `translate(0,${ry})` }, idx > 0 && /* @__PURE__ */ import_react.default.createElement(
-          "line",
-          {
-            x1: 8,
-            y1: 0,
-            x2: NODE_W - 8,
-            y2: 0,
-            stroke: "#252e3a",
-            strokeWidth: 0.5
+        style: { padding: "3px 10px", fontSize: 11, borderRadius: 4, border: "1px solid #3a5060", background: "#1a2830", color: "#5a8090", cursor: "pointer" }
+      },
+      "\u21BA Auto-Layout"
+    )), /* @__PURE__ */ import_react.default.createElement("div", { style: { overflowX: "auto", overflowY: "auto", maxHeight: "75vh", background: "#1b2026", borderRadius: 8, padding: 12 } }, /* @__PURE__ */ import_react.default.createElement(
+      "svg",
+      {
+        ref: svgRef,
+        width: svgW,
+        height: svgH,
+        style: { display: "block", minWidth: svgW, cursor: svgCursor, userSelect: "none" },
+        onMouseMove: onSVGMouseMove,
+        onMouseUp: onSVGMouseUp,
+        onMouseLeave: onSVGMouseLeave,
+        onClick: startTextAnnot,
+        onMouseDown: (e) => {
+          if (tool === "rect" || tool === "line") {
+            const pt = getSVGPoint(e);
+            setDrawState({ type: tool, x1: pt.x, y1: pt.y, x2: pt.x, y2: pt.y });
+            e.preventDefault();
           }
-        ), /* @__PURE__ */ import_react.default.createElement("text", { x: 9, y: 14, fill: txtCol, fontSize: 9 }, dispLabel), active && /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement(
-          "line",
-          {
-            x1: NODE_W - 24,
-            y1: OUT_H / 2,
-            x2: NODE_W - 16,
-            y2: OUT_H / 2,
-            stroke: plugCol,
-            strokeWidth: 1
-          }
-        ), /* @__PURE__ */ import_react.default.createElement(
-          "rect",
-          {
-            x: NODE_W - 16,
-            y: OUT_H / 2 - 5,
-            width: 10,
-            height: 10,
-            rx: 1.5,
-            stroke: plugCol,
-            strokeWidth: 1.1,
-            fill: "none"
-          }
-        ), /* @__PURE__ */ import_react.default.createElement(
-          "line",
-          {
-            x1: NODE_W - 13,
-            y1: OUT_H / 2 - 5,
-            x2: NODE_W - 13,
-            y2: OUT_H / 2 - 8,
-            stroke: plugCol,
-            strokeWidth: 1.2,
-            strokeLinecap: "round"
-          }
-        ), /* @__PURE__ */ import_react.default.createElement(
-          "line",
-          {
-            x1: NODE_W - 9,
-            y1: OUT_H / 2 - 5,
-            x2: NODE_W - 9,
-            y2: OUT_H / 2 - 8,
-            stroke: plugCol,
-            strokeWidth: 1.2,
-            strokeLinecap: "round"
-          }
-        ), /* @__PURE__ */ import_react.default.createElement(
-          "line",
-          {
-            x1: NODE_W - 6,
-            y1: OUT_H / 2,
-            x2: NODE_W,
-            y2: OUT_H / 2,
-            stroke: plugCol,
-            strokeWidth: 1
-          }
-        ), /* @__PURE__ */ import_react.default.createElement("circle", { cx: NODE_W, cy: OUT_H / 2, r: 2.5, fill: plugCol })));
-      }), fLines.length > 0 && /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(0,${footY})` }, /* @__PURE__ */ import_react.default.createElement(
-        "line",
-        {
-          x1: 8,
-          y1: 5,
-          x2: NODE_W - 8,
-          y2: 5,
-          stroke: "#2a3a2a",
-          strokeWidth: 0.7
         }
-      ), fLines.map((ln, li) => /* @__PURE__ */ import_react.default.createElement(
-        "text",
-        {
-          key: li,
-          x: 9,
-          y: 15 + li * FOOT_PER,
-          fill: "#3a6a4a",
-          fontSize: 8
-        },
-        ln
-      ))));
-    }), instances.flatMap((inst) => {
-      const type = boxTypeById[inst.typeId];
-      const outlets = type?.outlets || [];
-      const pos = positions[inst.id];
-      if (!pos) return [];
-      const leafX = pos.x + NODE_W + Math.round((COL_W - NODE_W) / 2);
-      const activeOutlets = outlets.filter((out) => (outletToPlacs[`${inst.id}__${out.id}`] || []).length > 0);
-      const avail = leafX - pos.x - NODE_W - 6;
-      const laneGap = activeOutlets.length > 1 ? Math.min(8, Math.floor(avail / activeOutlets.length)) : 0;
-      return outlets.flatMap((out) => {
-        const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
-        if (!placs.length) return [];
-        const oY = outletAbsY(inst.id, out.id);
-        const stackTop = consumerStackPositions[`${inst.id}__${out.id}`] ?? oY - LEAF_H / 2;
-        const isMC = isMulticore(out.connector);
-        const activeIdx = activeOutlets.findIndex((o) => o.id === out.id);
-        const laneX = pos.x + NODE_W + 4 + activeIdx * laneGap;
-        const midYs = placs.map((_, pi) => stackTop + pi * (LEAF_H + LEAF_GAP) + LEAF_H / 2);
-        const trunkTop = Math.min(oY, ...midYs);
-        const trunkBottom = Math.max(oY, ...midYs);
-        const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
-        const grpPad = 5;
-        const outLabel = out.label || (activeIdx >= 0 ? `Steckplatz ${activeIdx + 1}` : "");
-        return [
-          // Hintergrund-Gruppe für alle Verbraucher dieses Steckplatzes
+      },
+      mainConns.map((mc) => {
+        const cy = mcCenterY(mc);
+        if (cy === null) return null;
+        const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
+        const bx = LEFT_PAD + 14;
+        return /* @__PURE__ */ import_react.default.createElement("g", { key: mc.id }, /* @__PURE__ */ import_react.default.createElement("line", { x1: bx, y1: cy - 28, x2: bx, y2: cy + 28, stroke: "#f5a623", strokeWidth: 4, strokeLinecap: "round" }), /* @__PURE__ */ import_react.default.createElement("line", { x1: bx - 20, y1: cy, x2: bx - 1, y2: cy, stroke: "#f5a623", strokeWidth: 1.5 }), /* @__PURE__ */ import_react.default.createElement("polygon", { points: `${bx - 5},${cy - 4} ${bx + 3},${cy} ${bx - 5},${cy + 4}`, fill: "#f5a623" }), /* @__PURE__ */ import_react.default.createElement("text", { x: bx - 22, y: cy - 12, textAnchor: "end", fill: "#f5a623", fontSize: 10, fontWeight: "700" }, mc.name), mc.amp && /* @__PURE__ */ import_react.default.createElement("text", { x: bx - 22, y: cy + 22, textAnchor: "end", fill: "#f5a623", fontSize: 9, opacity: "0.75" }, mc.amp, " A"), connInsts.map((ri) => {
+          const pos = positions[ri.id];
+          if (!pos) return null;
+          return /* @__PURE__ */ import_react.default.createElement(
+            "line",
+            {
+              key: ri.id,
+              x1: bx,
+              y1: cy,
+              x2: pos.x,
+              y2: pos.y + HDR_H + FEED_H / 2,
+              stroke: "#f5a623",
+              strokeWidth: 1.2,
+              strokeDasharray: "5,4",
+              opacity: 0.4
+            }
+          );
+        }));
+      }),
+      edges.map((e, i) => {
+        const mx = (e.x1 + e.x2) / 2, my = (e.y1 + e.y2) / 2;
+        const lbl = e.outlet ? connShort(e.outlet.connector) : "";
+        const edgeCol = e.staleCon ? "#d97706" : e.adapted ? "#a78bfa" : "#4a5568";
+        const txtCol = e.staleCon ? "#f5a623" : e.adapted ? "#c4a8fa" : "#8ab8d8";
+        const dashArr = e.staleCon ? "4,2" : e.adapted ? "6,3" : void 0;
+        return /* @__PURE__ */ import_react.default.createElement("g", { key: i }, /* @__PURE__ */ import_react.default.createElement(
+          "path",
+          {
+            d: orthoPath(e.x1, e.y1, e.x2, e.y2),
+            fill: "none",
+            stroke: edgeCol,
+            strokeWidth: 1.6,
+            strokeDasharray: dashArr
+          }
+        ), lbl && /* @__PURE__ */ import_react.default.createElement(
+          "text",
+          {
+            x: mx,
+            y: my - 4,
+            textAnchor: "middle",
+            fill: txtCol,
+            fontSize: 8,
+            style: { paintOrder: "stroke", stroke: "#1b2026", strokeWidth: 3 }
+          },
+          lbl
+        ), e.staleCon && /* @__PURE__ */ import_react.default.createElement(
+          "text",
+          {
+            x: mx,
+            y: my + 10,
+            textAnchor: "middle",
+            fill: "#d97706",
+            fontSize: 9,
+            style: { paintOrder: "stroke", stroke: "#1b2026", strokeWidth: 3 }
+          },
+          "\u26A0"
+        ));
+      }),
+      instances.map((inst) => {
+        const pos = positions[inst.id];
+        if (!pos) return null;
+        const type = boxTypeById[inst.typeId];
+        const outlets = type?.outlets || [];
+        const feedConn = type?.feedConnector || "";
+        const FeedSym = connSym(feedConn);
+        const adapted = isAdapted(inst.id);
+        const h = nodeH(inst);
+        const fLines = footerLines(inst);
+        const typeName = type?.name || "\u2013";
+        const dispTypeName = typeName.length > 24 ? typeName.slice(0, 23) + "\u2026" : typeName;
+        const sepY = HDR_H + FEED_H;
+        const outY = HDR_H + FEED_H + SEP_H + SECT_H;
+        const footY = outY + outlets.length * OUT_H;
+        const isDraggingThis = dragState?.id === inst.id;
+        return /* @__PURE__ */ import_react.default.createElement(
+          "g",
+          {
+            key: inst.id,
+            transform: `translate(${pos.x},${pos.y})`,
+            style: { cursor: tool === "move" ? isDraggingThis ? "grabbing" : "grab" : "default" },
+            onMouseDown: (e) => {
+              if (tool !== "move") return;
+              const pt = getSVGPoint(e);
+              setDragState({ kind: "node", id: inst.id, origX: pos.x, origY: pos.y, svgStartX: pt.x, svgStartY: pt.y });
+              e.stopPropagation();
+              e.preventDefault();
+            }
+          },
           /* @__PURE__ */ import_react.default.createElement(
             "rect",
             {
-              key: `grp_${out.id}`,
-              x: leafX - grpPad,
-              y: stackTop - grpPad,
-              width: LEAF_W + grpPad * 2,
-              height: totalH + grpPad * 2,
-              rx: 7,
-              fill: "#182430",
-              stroke: "#2a4558",
-              strokeWidth: 1
+              width: NODE_W,
+              height: h,
+              rx: 5,
+              fill: "#21282f",
+              stroke: isDraggingThis ? "#4a8ab8" : "#3a424c",
+              strokeWidth: isDraggingThis ? 2 : 1.5
             }
           ),
-          // Steckplatz-Label über der Gruppe
+          /* @__PURE__ */ import_react.default.createElement("rect", { width: NODE_W, height: HDR_H, rx: 5, fill: "#171c22" }),
+          /* @__PURE__ */ import_react.default.createElement("rect", { y: HDR_H - 5, width: NODE_W, height: 5, fill: "#171c22" }),
+          /* @__PURE__ */ import_react.default.createElement("text", { x: 9, y: 16, fill: "#cdd6df", fontSize: 11, fontWeight: "700" }, inst.name.length > 24 ? inst.name.slice(0, 23) + "\u2026" : inst.name),
+          /* @__PURE__ */ import_react.default.createElement("text", { x: 9, y: 26, fill: "#4a5a6a", fontSize: 7.5 }, dispTypeName),
+          adapted && /* @__PURE__ */ import_react.default.createElement("circle", { cx: NODE_W - 9, cy: HDR_H / 2, r: 4, fill: "#a78bfa", opacity: "0.9" }, /* @__PURE__ */ import_react.default.createElement("title", null, "Adapter: Stecker passt nicht zum Eltern-Anschluss")),
+          inst.parentId && /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(0,${HDR_H + FEED_H / 2})` }, /* @__PURE__ */ import_react.default.createElement(
+            "rect",
+            {
+              x: -10,
+              y: -5,
+              width: 10,
+              height: 10,
+              rx: 1.5,
+              stroke: "#4a7494",
+              strokeWidth: 1.1,
+              fill: "#21282f"
+            }
+          ), /* @__PURE__ */ import_react.default.createElement("circle", { cx: -7, cy: -1, r: 1.4, stroke: "#4a7494", strokeWidth: 0.9, fill: "none" }), /* @__PURE__ */ import_react.default.createElement("circle", { cx: -3, cy: -1, r: 1.4, stroke: "#4a7494", strokeWidth: 0.9, fill: "none" }), /* @__PURE__ */ import_react.default.createElement(
+            "line",
+            {
+              x1: 0,
+              y1: 0,
+              x2: FeedSym ? 22 : 7,
+              y2: 0,
+              stroke: "#4a7494",
+              strokeWidth: 0.8,
+              strokeDasharray: "2,2"
+            }
+          )),
+          FeedSym && /* @__PURE__ */ import_react.default.createElement(FeedSym, { x: 6, y: HDR_H + 1, s: 0.78, col: "#3a5a74" }),
+          /* @__PURE__ */ import_react.default.createElement("text", { x: FeedSym ? 24 : 9, y: HDR_H + 12, fill: "#4a7494", fontSize: 8.5 }, "\u2190", " ", connMid(feedConn), type?.feedAmp ? ` \xB7 ${type.feedAmp} A` : ""),
           /* @__PURE__ */ import_react.default.createElement(
+            "line",
+            {
+              x1: 8,
+              y1: sepY,
+              x2: NODE_W - 8,
+              y2: sepY,
+              stroke: "#2e3848",
+              strokeWidth: 0.8
+            }
+          ),
+          outlets.length > 0 && /* @__PURE__ */ import_react.default.createElement(
             "text",
             {
-              key: `grplbl_${out.id}`,
-              x: leafX + 4,
-              y: stackTop - grpPad - 3,
-              fill: "#4a7a96",
-              fontSize: 8,
-              fontWeight: "700"
+              x: 9,
+              y: sepY + SECT_H - 2,
+              fill: "#4a5a6a",
+              fontSize: 7.5,
+              fontWeight: "700",
+              fontStyle: "italic"
             },
-            outLabel
+            "Out:"
           ),
-          // Kurzer Stub vom Steckplatz zur Lane
-          /* @__PURE__ */ import_react.default.createElement(
-            "line",
-            {
-              key: `stub_${out.id}`,
-              x1: pos.x + NODE_W,
-              y1: oY,
-              x2: laneX,
-              y2: oY,
-              stroke: "#3a5060",
-              strokeWidth: 1.2
-            }
-          ),
-          // Vertikaler Stamm in der Lane (verbindet Outlet mit allen Verbrauchern)
-          /* @__PURE__ */ import_react.default.createElement(
-            "line",
-            {
-              key: `trunk_${out.id}`,
-              x1: laneX,
-              y1: trunkTop,
-              x2: laneX,
-              y2: trunkBottom,
-              stroke: "#3a5060",
-              strokeWidth: 1.2
-            }
-          ),
-          // Einzelne Äste + Verbraucher-Boxen
-          ...placs.map((plac, pi) => {
-            const load = loadById?.[plac.loadId];
-            if (!load) return null;
-            const leafY = stackTop + pi * (LEAF_H + LEAF_GAP);
-            const midY = midYs[pi];
-            const wattStr = load.watt ? `${load.watt} W` : "";
-            const ampStr = load.watt ? ` \xB7 ${round2(load.watt / 230)} A` : "";
-            const maxName = isMC && plac.mcSlot != null ? 14 : 18;
-            const nameDisp = load.name && load.name.length > maxName ? load.name.slice(0, maxName - 1) + "\u2026" : load.name || "?";
-            return /* @__PURE__ */ import_react.default.createElement("g", { key: plac.id }, /* @__PURE__ */ import_react.default.createElement(
+          outlets.map((out, idx) => {
+            const ry = outY + idx * OUT_H;
+            const hasChild = !!outletToChild[`${inst.id}__${out.id}`];
+            const hasPlac = (outletToPlacs[`${inst.id}__${out.id}`] || []).length > 0;
+            const active = hasChild || hasPlac;
+            const txtCol = active ? "#7aaec8" : "#344454";
+            const plugCol = active ? "#4a7494" : "transparent";
+            const outName = out.label || `Out ${idx + 1}`;
+            const connDesc = connMid(out.connector);
+            const avail = Math.floor((NODE_W - 24) / 5.6);
+            const combined = `${outName}  ${connDesc}`;
+            const dispLabel = combined.length > avail ? combined.slice(0, avail - 1) + "\u2026" : combined;
+            return /* @__PURE__ */ import_react.default.createElement("g", { key: out.id, transform: `translate(0,${ry})` }, idx > 0 && /* @__PURE__ */ import_react.default.createElement(
               "line",
               {
+                x1: 8,
+                y1: 0,
+                x2: NODE_W - 8,
+                y2: 0,
+                stroke: "#252e3a",
+                strokeWidth: 0.5
+              }
+            ), /* @__PURE__ */ import_react.default.createElement("text", { x: 9, y: 14, fill: txtCol, fontSize: 9 }, dispLabel), active && /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement(
+              "line",
+              {
+                x1: NODE_W - 24,
+                y1: OUT_H / 2,
+                x2: NODE_W - 16,
+                y2: OUT_H / 2,
+                stroke: plugCol,
+                strokeWidth: 1
+              }
+            ), /* @__PURE__ */ import_react.default.createElement(
+              "rect",
+              {
+                x: NODE_W - 16,
+                y: OUT_H / 2 - 5,
+                width: 10,
+                height: 10,
+                rx: 1.5,
+                stroke: plugCol,
+                strokeWidth: 1.1,
+                fill: "none"
+              }
+            ), /* @__PURE__ */ import_react.default.createElement(
+              "line",
+              {
+                x1: NODE_W - 13,
+                y1: OUT_H / 2 - 5,
+                x2: NODE_W - 13,
+                y2: OUT_H / 2 - 8,
+                stroke: plugCol,
+                strokeWidth: 1.2,
+                strokeLinecap: "round"
+              }
+            ), /* @__PURE__ */ import_react.default.createElement(
+              "line",
+              {
+                x1: NODE_W - 9,
+                y1: OUT_H / 2 - 5,
+                x2: NODE_W - 9,
+                y2: OUT_H / 2 - 8,
+                stroke: plugCol,
+                strokeWidth: 1.2,
+                strokeLinecap: "round"
+              }
+            ), /* @__PURE__ */ import_react.default.createElement(
+              "line",
+              {
+                x1: NODE_W - 6,
+                y1: OUT_H / 2,
+                x2: NODE_W,
+                y2: OUT_H / 2,
+                stroke: plugCol,
+                strokeWidth: 1
+              }
+            ), /* @__PURE__ */ import_react.default.createElement("circle", { cx: NODE_W, cy: OUT_H / 2, r: 2.5, fill: plugCol })));
+          }),
+          fLines.length > 0 && /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(0,${footY})` }, /* @__PURE__ */ import_react.default.createElement(
+            "line",
+            {
+              x1: 8,
+              y1: 5,
+              x2: NODE_W - 8,
+              y2: 5,
+              stroke: "#2a3a2a",
+              strokeWidth: 0.7
+            }
+          ), fLines.map((ln, li) => /* @__PURE__ */ import_react.default.createElement(
+            "text",
+            {
+              key: li,
+              x: 9,
+              y: 15 + li * FOOT_PER,
+              fill: "#3a6a4a",
+              fontSize: 8
+            },
+            ln
+          )))
+        );
+      }),
+      instances.flatMap((inst) => {
+        const type = boxTypeById[inst.typeId];
+        const outlets = type?.outlets || [];
+        const pos = positions[inst.id];
+        if (!pos) return [];
+        const autoLeafX = pos.x + NODE_W + Math.round((COL_W - NODE_W) / 2);
+        const activeOutlets = outlets.filter((out) => (outletToPlacs[`${inst.id}__${out.id}`] || []).length > 0);
+        const avail = autoLeafX - pos.x - NODE_W - 6;
+        const laneGap = activeOutlets.length > 1 ? Math.min(8, Math.floor(avail / activeOutlets.length)) : 0;
+        return outlets.flatMap((out) => {
+          const placs = outletToPlacs[`${inst.id}__${out.id}`] || [];
+          if (!placs.length) return [];
+          const cKey = `${inst.id}__${out.id}`;
+          const oY = outletAbsY(inst.id, out.id);
+          const autoStackTop = consumerStackPositions[cKey] ?? oY - LEAF_H / 2;
+          const consOverride = schaltbildLayout?.consumerPositions?.[cKey];
+          const baseStackX = consOverride ? consOverride.x : autoLeafX;
+          const baseStackTop = consOverride ? consOverride.y : autoStackTop;
+          const isDraggingCons = dragState?.kind === "consumer" && dragState?.key === cKey;
+          const effectiveStackX = isDraggingCons && livePos ? livePos.x : baseStackX;
+          const effectiveStackTop = isDraggingCons && livePos ? livePos.y : baseStackTop;
+          const isMC = isMulticore(out.connector);
+          const activeIdx = activeOutlets.findIndex((o) => o.id === out.id);
+          const laneX = pos.x + NODE_W + 4 + activeIdx * laneGap;
+          const midYs = placs.map((_, pi) => effectiveStackTop + pi * (LEAF_H + LEAF_GAP) + LEAF_H / 2);
+          const trunkTop = Math.min(oY, ...midYs);
+          const trunkBottom = Math.max(oY, ...midYs);
+          const totalH = placs.length * (LEAF_H + LEAF_GAP) - LEAF_GAP;
+          const outLabel = out.label || (activeIdx >= 0 ? `Steckplatz ${activeIdx + 1}` : "");
+          return [
+            // Verbindungslinien (statisch, nicht im draggable-group)
+            /* @__PURE__ */ import_react.default.createElement("g", { key: `conn_${out.id}`, style: { pointerEvents: "none" } }, /* @__PURE__ */ import_react.default.createElement("line", { x1: pos.x + NODE_W, y1: oY, x2: laneX, y2: oY, stroke: "#3a5060", strokeWidth: 1.2 }), /* @__PURE__ */ import_react.default.createElement("line", { x1: laneX, y1: trunkTop, x2: laneX, y2: trunkBottom, stroke: "#3a5060", strokeWidth: 1.2 }), placs.map((_, pi) => /* @__PURE__ */ import_react.default.createElement(
+              "line",
+              {
+                key: pi,
                 x1: laneX,
-                y1: midY,
-                x2: leafX,
-                y2: midY,
+                y1: midYs[pi],
+                x2: effectiveStackX,
+                y2: midYs[pi],
                 stroke: "#3a5060",
                 strokeWidth: 1.2
               }
-            ), /* @__PURE__ */ import_react.default.createElement("g", { transform: `translate(${leafX},${leafY})` }, /* @__PURE__ */ import_react.default.createElement(
-              "rect",
+            ))),
+            // Draggable Verbraucher-Gruppe
+            /* @__PURE__ */ import_react.default.createElement(
+              "g",
               {
-                width: LEAF_W,
-                height: LEAF_H,
-                rx: 4,
-                fill: "#1a2530",
-                stroke: "#3a5060",
-                strokeWidth: 1
-              }
-            ), /* @__PURE__ */ import_react.default.createElement("text", { x: 8, y: 14, fill: "#6aaabf", fontSize: 9, fontWeight: "600" }, nameDisp), /* @__PURE__ */ import_react.default.createElement("text", { x: 8, y: 27, fill: "#3a6070", fontSize: 8 }, wattStr, ampStr), isMC && plac.mcSlot != null && /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement(
-              "rect",
-              {
-                x: LEAF_W - 30,
-                y: 4,
-                width: 26,
-                height: 13,
-                rx: 3,
-                fill: "#1e3a4a",
-                stroke: "#3a7a9a",
-                strokeWidth: 0.8
-              }
-            ), /* @__PURE__ */ import_react.default.createElement(
-              "text",
-              {
-                x: LEAF_W - 17,
-                y: 14,
-                textAnchor: "middle",
-                fill: "#b8ecff",
-                fontSize: 8,
-                fontWeight: "700"
+                key: `stack_${out.id}`,
+                transform: `translate(${effectiveStackX},${effectiveStackTop})`,
+                style: { cursor: tool === "move" ? isDraggingCons ? "grabbing" : "grab" : "default" },
+                onMouseDown: (e) => {
+                  if (tool !== "move") return;
+                  const pt = getSVGPoint(e);
+                  setDragState({ kind: "consumer", key: cKey, origX: effectiveStackX, origY: effectiveStackTop, svgStartX: pt.x, svgStartY: pt.y });
+                  e.stopPropagation();
+                  e.preventDefault();
+                }
               },
-              "Ch.",
-              plac.mcSlot
-            ))));
-          }).filter(Boolean)
-        ];
-      });
-    }))));
+              /* @__PURE__ */ import_react.default.createElement(
+                "rect",
+                {
+                  x: -GRP_PAD,
+                  y: -GRP_PAD,
+                  width: LEAF_W + GRP_PAD * 2,
+                  height: totalH + GRP_PAD * 2,
+                  rx: 7,
+                  fill: "#182430",
+                  stroke: isDraggingCons ? "#4a8ab8" : "#2a4558",
+                  strokeWidth: isDraggingCons ? 1.5 : 1
+                }
+              ),
+              /* @__PURE__ */ import_react.default.createElement("text", { x: 4, y: -GRP_PAD - 3, fill: "#4a7a96", fontSize: 8, fontWeight: "700" }, outLabel),
+              placs.map((plac, pi) => {
+                const load = loadById?.[plac.loadId];
+                if (!load) return null;
+                const leafY = pi * (LEAF_H + LEAF_GAP);
+                const wattStr = load.watt ? `${load.watt} W` : "";
+                const ampStr = load.watt ? ` \xB7 ${round2(load.watt / 230)} A` : "";
+                const maxName = isMC && plac.mcSlot != null ? 14 : 18;
+                const nameDisp = load.name && load.name.length > maxName ? load.name.slice(0, maxName - 1) + "\u2026" : load.name || "?";
+                return /* @__PURE__ */ import_react.default.createElement("g", { key: plac.id, transform: `translate(0,${leafY})` }, /* @__PURE__ */ import_react.default.createElement(
+                  "rect",
+                  {
+                    width: LEAF_W,
+                    height: LEAF_H,
+                    rx: 4,
+                    fill: "#1a2530",
+                    stroke: "#3a5060",
+                    strokeWidth: 1
+                  }
+                ), /* @__PURE__ */ import_react.default.createElement("text", { x: 8, y: 14, fill: "#6aaabf", fontSize: 9, fontWeight: "600" }, nameDisp), /* @__PURE__ */ import_react.default.createElement("text", { x: 8, y: 27, fill: "#3a6070", fontSize: 8 }, wattStr, ampStr), isMC && plac.mcSlot != null && /* @__PURE__ */ import_react.default.createElement("g", null, /* @__PURE__ */ import_react.default.createElement(
+                  "rect",
+                  {
+                    x: LEAF_W - 30,
+                    y: 4,
+                    width: 26,
+                    height: 13,
+                    rx: 3,
+                    fill: "#1e3a4a",
+                    stroke: "#3a7a9a",
+                    strokeWidth: 0.8
+                  }
+                ), /* @__PURE__ */ import_react.default.createElement(
+                  "text",
+                  {
+                    x: LEAF_W - 17,
+                    y: 14,
+                    textAnchor: "middle",
+                    fill: "#b8ecff",
+                    fontSize: 8,
+                    fontWeight: "700"
+                  },
+                  "Ch.",
+                  plac.mcSlot
+                )));
+              }).filter(Boolean)
+            )
+          ];
+        });
+      }),
+      annotations.map((a) => {
+        const isSelected = selectedAnnot === a.id;
+        const isDraggingAnnot = dragState?.kind === "annot" && dragState?.annotId === a.id;
+        const dx = isDraggingAnnot && livePos ? livePos.dx : 0;
+        const dy = isDraggingAnnot && livePos ? livePos.dy : 0;
+        const col = isSelected ? "#4a8ab8" : "#5a7a9a";
+        const annotCursor = tool === "move" ? isDraggingAnnot ? "grabbing" : "grab" : "pointer";
+        const onAnnotMouseDown = (e) => {
+          if (tool !== "move") return;
+          const pt = getSVGPoint(e);
+          setDragState({ kind: "annot", annotId: a.id, svgStartX: pt.x, svgStartY: pt.y });
+          e.stopPropagation();
+          e.preventDefault();
+        };
+        const onAnnotClick = (e) => {
+          setSelectedAnnot(isSelected ? null : a.id);
+          e.stopPropagation();
+        };
+        if (a.type === "text") return /* @__PURE__ */ import_react.default.createElement(
+          "text",
+          {
+            key: a.id,
+            x: a.x1 + dx,
+            y: a.y1 + dy,
+            fill: isSelected ? "#9dd5f5" : "#c0d0e0",
+            fontSize: 14,
+            style: { cursor: annotCursor },
+            onMouseDown: onAnnotMouseDown,
+            onClick: onAnnotClick
+          },
+          a.text
+        );
+        if (a.type === "rect") {
+          const rx = Math.min(a.x1, a.x2) + dx, ry = Math.min(a.y1, a.y2) + dy;
+          const rw = Math.abs(a.x2 - a.x1), rh = Math.abs(a.y2 - a.y1);
+          return /* @__PURE__ */ import_react.default.createElement("g", { key: a.id }, /* @__PURE__ */ import_react.default.createElement(
+            "rect",
+            {
+              x: rx,
+              y: ry,
+              width: rw,
+              height: rh,
+              rx: 3,
+              fill: "none",
+              stroke: "transparent",
+              strokeWidth: 14,
+              style: { cursor: annotCursor },
+              onMouseDown: onAnnotMouseDown,
+              onClick: onAnnotClick
+            }
+          ), /* @__PURE__ */ import_react.default.createElement(
+            "rect",
+            {
+              x: rx,
+              y: ry,
+              width: rw,
+              height: rh,
+              rx: 3,
+              fill: "none",
+              stroke: col,
+              strokeWidth: 1.5,
+              strokeDasharray: "6,3",
+              style: { pointerEvents: "none" }
+            }
+          ));
+        }
+        if (a.type === "line") return /* @__PURE__ */ import_react.default.createElement("g", { key: a.id }, /* @__PURE__ */ import_react.default.createElement(
+          "line",
+          {
+            x1: a.x1 + dx,
+            y1: a.y1 + dy,
+            x2: a.x2 + dx,
+            y2: a.y2 + dy,
+            stroke: "transparent",
+            strokeWidth: 14,
+            style: { cursor: annotCursor },
+            onMouseDown: onAnnotMouseDown,
+            onClick: onAnnotClick
+          }
+        ), /* @__PURE__ */ import_react.default.createElement(
+          "line",
+          {
+            x1: a.x1 + dx,
+            y1: a.y1 + dy,
+            x2: a.x2 + dx,
+            y2: a.y2 + dy,
+            stroke: col,
+            strokeWidth: 1.5,
+            strokeDasharray: "6,3",
+            strokeLinecap: "round",
+            style: { pointerEvents: "none" }
+          }
+        ));
+        return null;
+      }),
+      drawState && drawState.x2 !== void 0 && (drawState.type === "rect" ? /* @__PURE__ */ import_react.default.createElement(
+        "rect",
+        {
+          x: Math.min(drawState.x1, drawState.x2),
+          y: Math.min(drawState.y1, drawState.y2),
+          width: Math.abs(drawState.x2 - drawState.x1),
+          height: Math.abs(drawState.y2 - drawState.y1),
+          fill: "none",
+          stroke: "#4a8ab8",
+          strokeWidth: 1.5,
+          strokeDasharray: "6,3",
+          rx: 3,
+          opacity: 0.7
+        }
+      ) : /* @__PURE__ */ import_react.default.createElement(
+        "line",
+        {
+          x1: drawState.x1,
+          y1: drawState.y1,
+          x2: drawState.x2,
+          y2: drawState.y2,
+          stroke: "#4a8ab8",
+          strokeWidth: 1.5,
+          strokeDasharray: "6,3",
+          strokeLinecap: "round",
+          opacity: 0.7
+        }
+      ))
+    )));
   }
   var HelpContext = import_react.default.createContext(() => {
   });

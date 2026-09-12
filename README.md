@@ -23,6 +23,8 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Vertei
 
 Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen, um zu archivieren, oder um in einem anderem Projekt zu arbeiten und vorher den aktuellen Stand zu sichern.
 
+**Verteiler-Typen und Verbraucher** werden zusätzlich automatisch als Bibliothek in AppData gespeichert (`AppData\Stromplaner\Speicherstände\Bibliothek.json` auf Windows, `~/Library/Application Support/Stromplaner/Speicherstände/Bibliothek.json` auf macOS) und beim Start von dort geladen – sie bleiben also erhalten, auch wenn ein anderer Planungsstand geöffnet wird.
+
 **Updates** werden automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **↓ Update bereit**-Button, der einen Neustart-Dialog öffnet.
 
 ---
