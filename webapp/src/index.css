@@ -362,6 +362,45 @@ html, body {
   color: var(--muted);
 }
 
+.outlet-row--slot   { padding-left: 32px; min-height: 48px; }
+.outlet-row--static { cursor: default; }
+.outlet-row--static:active { background: none; }
+
+.outlet-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px 8px;
+  background: var(--dark);
+  border-bottom: 1px solid var(--line);
+}
+
+.consumer-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+}
+.consumer-stack .consumer-name {
+  white-space: normal;
+  text-align: right;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  max-width: 190px;
+}
+
+.consumer-kid {
+  font-size: 12px;
+  color: var(--accent);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ── Consumer picker ─────────────────────────────────────────────────────── */
 .picker-search { padding: 8px 16px; }
 
@@ -393,6 +432,33 @@ html, body {
 .picker-name { font-size: 15px; }
 .picker-meta { font-size: 13px; color: var(--muted); }
 .picker-empty { padding: 24px 16px; color: var(--muted); font-size: 14px; }
+
+.picker-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--line);
+}
+.picker-section .link-btn { text-transform: none; letter-spacing: 0; }
+
+.picker-actions { display: flex; align-items: center; gap: 12px; }
+.picker-remove {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 14px;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+}
+.picker-remove:active { background: var(--panel2); }
 
 /* ── Forms ───────────────────────────────────────────────────────────────── */
 .field-row { margin-bottom: 12px; }
