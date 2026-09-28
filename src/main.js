@@ -4,6 +4,8 @@ const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const http = require('http');
+const QRCode = require('qrcode');
 
 const root = app.getAppPath();
 
@@ -243,6 +245,48 @@ ipcMain.handle('export-inspection-pdf', async (_event, html) => {
     if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
   }
 });
+
+// ── Lokales Teilen per QR-Code ────────────────────────────────────────────────
+let localShareServer = null;
+
+ipcMain.handle('start-local-share', async (_event, { planJson, planName }) => {
+  if (localShareServer) { localShareServer.close(); localShareServer = null; }
+  const port = 4747;
+  localShareServer = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+    const safe = (planName||'plan').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,60)||'plan';
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Content-Disposition': `attachment; filename="${safe}.json"`,
+    });
+    res.end(planJson);
+  });
+  await new Promise(r => localShareServer.listen(port, '0.0.0.0', r));
+
+  const ips = [];
+  for (const iface of Object.values(os.networkInterfaces())) {
+    for (const alias of iface) {
+      if (alias.family === 'IPv4' && !alias.internal) ips.push(alias.address);
+    }
+  }
+  if (!ips.length) ips.push('127.0.0.1');
+
+  // QR für die erste IP; Renderer kann bei mehreren IPs umschalten
+  const makeQR = async (ip) => QRCode.toDataURL(`http://${ip}:${port}/plan.json`,
+    { width: 180, margin: 1, color: { dark: '#e8eaed', light: '#1b2026' } });
+
+  const qrDataUrl = await makeQR(ips[0]);
+  return { ips, port, activeIp: ips[0], url: `http://${ips[0]}:${port}/plan.json`, qrDataUrl };
+});
+
+ipcMain.handle('stop-local-share', () => {
+  if (localShareServer) { localShareServer.close(); localShareServer = null; }
+});
+
+ipcMain.handle('make-qr', async (_event, url) =>
+  QRCode.toDataURL(url, { width: 180, margin: 1, color: { dark: '#e8eaed', light: '#1b2026' } })
+);
 
 app.whenReady().then(createWindow);
 app.on('window-all-closed', () => app.quit());

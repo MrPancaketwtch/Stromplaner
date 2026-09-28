@@ -12,4 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRecents:          () => ipcRenderer.invoke('get-recents'),
   loadLibrary:         () => ipcRenderer.invoke('load-library'),
   saveLibrary:         (data) => ipcRenderer.invoke('save-library', data),
+  startLocalShare:     (args) => ipcRenderer.invoke('start-local-share', args),
+  stopLocalShare:      () => ipcRenderer.invoke('stop-local-share'),
+  makeQr:              (url) => ipcRenderer.invoke('make-qr', url),
 });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import jsQR from 'jsqr';
 
 /* ── Shared constants ────────────────────────────────────────────────────── */
 const CONN = {
@@ -450,10 +451,58 @@ function ProjektTab({ plan, setPlan }) {
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Sync Tab                                                                  */
 /* ══════════════════════════════════════════════════════════════════════════ */
+function QrScanner({ onResult, onClose }) {
+  const videoRef  = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef    = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        const scan = () => {
+          if (!active) return;
+          const v = videoRef.current, c = canvasRef.current;
+          if (v && c && v.readyState === v.HAVE_ENOUGH_DATA) {
+            c.width = v.videoWidth; c.height = v.videoHeight;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(v, 0, 0);
+            const img = ctx.getImageData(0, 0, c.width, c.height);
+            const code = jsQR(img.data, img.width, img.height);
+            if (code?.data) { onResult(code.data); return; }
+          }
+          rafRef.current = requestAnimationFrame(scan);
+        };
+        rafRef.current = requestAnimationFrame(scan);
+      })
+      .catch(() => { alert('Kamera nicht verfügbar'); onClose(); });
+    return () => {
+      active = false;
+      cancelAnimationFrame(rafRef.current);
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, []);
+
+  return (
+    <div style={{ position:'fixed',inset:0,zIndex:1000,background:'#000',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16 }}>
+      <video ref={videoRef} playsInline muted style={{ width:'100%',maxWidth:400,borderRadius:8 }} />
+      <canvas ref={canvasRef} style={{ display:'none' }} />
+      <div style={{ color:'#aaa',fontSize:13 }}>QR-Code in den Rahmen halten</div>
+      <button onClick={onClose} style={{ padding:'10px 32px',background:'#2a3140',border:'none',borderRadius:8,color:'#fff',fontSize:15,cursor:'pointer' }}>Abbrechen</button>
+    </div>
+  );
+}
+
 function SyncTab({ plan, setPlan, server, setServer, token, setToken }) {
-  const [plans,   setPlans]   = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [msg,     setMsg]     = useState('');
+  const [plans,       setPlans]       = useState(null);
+  const [loading,     setLoading]     = useState(false);
+  const [msg,         setMsg]         = useState('');
+  const [showScanner, setShowScanner] = useState(false);
 
   const apiUrl = (path) => server.replace(/\/$/, '') + path;
 
@@ -538,11 +587,43 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken }) {
     }
   };
 
+  const handleQr = async (url) => {
+    setShowScanner(false);
+    setLoading(true);
+    try {
+      // Direct plan download (from Desktop local-share)
+      const r = await fetch(url);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      if (data._format === 'stromplaner') {
+        setPlan(data);
+        status('Plan geladen: ' + (data.meta?.production || url));
+      } else {
+        // Treat as server URL
+        setServer(url.replace(/\/+$/, ''));
+        status('Server-URL gesetzt');
+      }
+    } catch {
+      // Fallback: use as server URL
+      setServer(url.replace(/\/+$/, ''));
+      status('Server-URL gesetzt');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
+    <>
+    {showScanner && <QrScanner onResult={handleQr} onClose={() => setShowScanner(false)} />}
     <div className="page">
       {/* ── Server config ── */}
       <div className="section">
         <div className="section-title">Sync-Server</div>
+        <button
+          className="btn btn--secondary"
+          style={{ width: '100%', marginBottom: 12 }}
+          onClick={() => setShowScanner(true)}
+        >📷 QR-Code scannen</button>
         <label className="field-label">Server-URL</label>
         <input
           className="field-input"
@@ -617,5 +698,6 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken }) {
         </div>
       )}
     </div>
+    </>
   );
 }
