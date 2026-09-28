@@ -1,12 +1,10 @@
-name: Android APK (manuell)
+name: Android APK
 
 on:
   workflow_dispatch:
-    inputs:
-      pwa_url:
-        description: 'URL der gehosteten PWA (für TWA)'
-        required: true
-        default: 'https://mrpancaketwtch.github.io/Stromplaner/'
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -14,50 +12,101 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: webapp/package-lock.json
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Install Bubblewrap
-        run: npm install -g @bubblewrap/cli
+      - name: Copy icon for PWA build
+        run: mkdir -p webapp/public && cp build/icon.png webapp/public/icon.png
 
-      - name: Initialize TWA project
+      - name: Install webapp dependencies
+        working-directory: webapp
+        run: npm ci
+
+      - name: Build PWA
+        working-directory: webapp
+        run: npm run build
+        env:
+          BASE_URL: /
+
+      - name: Add Capacitor Android platform
+        working-directory: webapp
+        run: npx cap add android
+
+      - name: Sync web assets into Android project
+        working-directory: webapp
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        working-directory: webapp/android
+        run: chmod +x gradlew
+
+      # ── Optional: Release signing via GitHub Secrets ──────────────────────
+      # Set these secrets to get a signed release APK:
+      #   ANDROID_KEYSTORE_BASE64  - base64-encoded .jks keystore
+      #   ANDROID_KEY_ALIAS        - key alias inside the keystore
+      #   ANDROID_KEY_PASSWORD     - key password
+      #   ANDROID_STORE_PASSWORD   - keystore password
+      - name: Prepare signing keystore
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+        working-directory: webapp/android
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.jks
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+      - name: Build release APK (signed)
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+        working-directory: webapp/android
         run: |
-          mkdir -p twa-build
-          cd twa-build
-          bubblewrap init \
-            --manifest "${{ github.event.inputs.pwa_url }}manifest.webmanifest" \
-            --directory . \
-            --skip-pwa-shell-update || true
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file="$PWD/release.jks" \
+            -Pandroid.injected.signing.store.password="$ANDROID_STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+        env:
+          ANDROID_KEYSTORE_BASE64:  ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD:   ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS:        ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD:     ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Build APK
-        working-directory: twa-build
-        run: bubblewrap build --skipPwaValidation
+      - name: Build debug APK (fallback, no signing secrets needed)
+        if: ${{ env.ANDROID_KEYSTORE_BASE64 == '' }}
+        working-directory: webapp/android
+        run: ./gradlew assembleDebug
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
-      - name: Upload APK artifact
+      # ── Locate built APK ──────────────────────────────────────────────────
+      - name: Find APK
+        id: find-apk
+        run: |
+          APK=$(find webapp/android/app/build/outputs/apk -name "*.apk" | head -1)
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "Found APK: $APK"
+
+      - name: Upload APK as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stromplaner-android
-          path: twa-build/app-release-unsigned.apk
-          if-no-files-found: warn
+          name: Stromplaner-Android
+          path: ${{ steps.find-apk.outputs.path }}
 
-      - name: Attach APK to latest release
-        if: github.ref == 'refs/heads/main'
+      - name: Attach APK to GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName')
-          if [ -n "$TAG" ] && [ -f twa-build/app-release-unsigned.apk ]; then
-            gh release upload "$TAG" twa-build/app-release-unsigned.apk \
-              --repo "${{ github.repository }}" \
-              --clobber
-            echo "APK zu Release $TAG hochgeladen."
-          fi
+          gh release upload "${{ github.ref_name }}" \
+            "${{ steps.find-apk.outputs.path }}" \
+            --repo "${{ github.repository }}" \
+            --clobber

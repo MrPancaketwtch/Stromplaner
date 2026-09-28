@@ -13,6 +13,9 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.0",
     "vite-plugin-pwa": "^0.21.0"
