@@ -14,5 +14,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveLibrary:         (data) => ipcRenderer.invoke('save-library', data),
   startLocalShare:     (args) => ipcRenderer.invoke('start-local-share', args),
   stopLocalShare:      () => ipcRenderer.invoke('stop-local-share'),
+  updateLocalShare:    (json) => ipcRenderer.invoke('update-local-share', json),
+  onLocalShareReceived: (cb) => {
+    const handler = (_, payload) => cb(payload);
+    ipcRenderer.on('local-share-received', handler);
+    return () => ipcRenderer.removeListener('local-share-received', handler);
+  },
   makeQr:              (url) => ipcRenderer.invoke('make-qr', url),
 });

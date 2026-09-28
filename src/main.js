@@ -8,6 +8,7 @@ const http = require('http');
 const QRCode = require('qrcode');
 
 const root = app.getAppPath();
+let mainWindow = null;
 
 function createWindow() {
   const splash = new BrowserWindow({
@@ -42,6 +43,7 @@ function createWindow() {
     },
   });
 
+  mainWindow = win;
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(root, 'app', 'Stromplaner.html'));
 
@@ -248,37 +250,117 @@ ipcMain.handle('export-inspection-pdf', async (_event, html) => {
 
 // ── Lokales Teilen per QR-Code ────────────────────────────────────────────────
 let localShareServer = null;
+let sharedPlanJson = '';
+let sharedPlanName = 'plan';
+let receiveDialogOpen = false;
+
+const MAX_UPLOAD = 25 * 1024 * 1024;
+// VPN-/virtuelle Adapter sind vom Handy aus meist nicht erreichbar → ans Ende der Auswahl
+const VIRTUAL_IFACE = /vpn|virtual|vethernet|hyper-v|vmware|virtualbox|vbox|docker|wsl|wireguard|nordlynx|tailscale|zerotier|hamachi|openvpn|\btap\b|\btun\b/i;
+
+const sendJson = (res, code, obj) => {
+  res.writeHead(code, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(obj));
+};
+
+const readBody = (req) => new Promise((resolve, reject) => {
+  const chunks = []; let size = 0;
+  req.on('data', (c) => {
+    size += c.length;
+    if (size > MAX_UPLOAD) { reject(new Error('too-large')); req.destroy(); return; }
+    chunks.push(c);
+  });
+  req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+  req.on('error', reject);
+});
+
+async function receivePlanFromPhone(req, res) {
+  let data;
+  try {
+    data = JSON.parse(await readBody(req));
+  } catch (e) {
+    return sendJson(res, e.message === 'too-large' ? 413 : 400, { ok: false, error: e.message === 'too-large' ? 'Plan zu groß' : 'Ungültige Daten' });
+  }
+  if (data?._format !== 'stromplaner') return sendJson(res, 400, { ok: false, error: 'Keine Stromplaner-Datei' });
+  if (!mainWindow || mainWindow.isDestroyed()) return sendJson(res, 503, { ok: false, error: 'Stromplaner ist am PC nicht geöffnet' });
+  if (receiveDialogOpen) return sendJson(res, 409, { ok: false, error: 'Am PC ist bereits eine Abfrage offen' });
+
+  receiveDialogOpen = true;
+  try {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+    const count = Object.keys(data.inspResults || {}).length;
+    const { response } = await dialog.showMessageBox(mainWindow, {
+      type: 'question',
+      title: 'Plan vom Handy',
+      message: `Plan „${data.meta?.production || 'ohne Namen'}“ vom Handy empfangen`,
+      detail: `Enthält Prüfergebnisse für ${count} Verteiler.\n\n„Nur Prüfergebnisse“ übernimmt Prüfungsdetails und Messwerte, die Planung am PC bleibt unverändert.\n„Ganzen Plan“ ersetzt den kompletten Plan am PC.`,
+      buttons: ['Nur Prüfergebnisse übernehmen', 'Ganzen Plan übernehmen', 'Abbrechen'],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+    });
+    if (response === 2) return sendJson(res, 409, { ok: false, error: 'Am PC abgelehnt' });
+    const mode = response === 0 ? 'insp' : 'full';
+    mainWindow.webContents.send('local-share-received', { data, mode });
+    sendJson(res, 200, { ok: true, mode });
+  } finally {
+    receiveDialogOpen = false;
+  }
+}
 
 ipcMain.handle('start-local-share', async (_event, { planJson, planName }) => {
   if (localShareServer) { localShareServer.close(); localShareServer = null; }
+  sharedPlanJson = planJson;
+  sharedPlanName = planName || 'plan';
   const port = 4747;
   localShareServer = http.createServer((req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
-    const safe = (planName||'plan').replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,60)||'plan';
+    res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    if (req.method === 'OPTIONS') {
+      if (req.headers['access-control-request-private-network']) res.setHeader('Access-Control-Allow-Private-Network', 'true');
+      res.writeHead(204); res.end(); return;
+    }
+    if (req.method === 'PUT' || req.method === 'POST') {
+      receivePlanFromPhone(req, res).catch(() => { if (!res.headersSent) sendJson(res, 500, { ok: false, error: 'Interner Fehler' }); });
+      return;
+    }
+    const safe = sharedPlanName.replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,60)||'plan';
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Content-Disposition': `attachment; filename="${safe}.json"`,
     });
-    res.end(planJson);
+    res.end(sharedPlanJson);
   });
-  await new Promise(r => localShareServer.listen(port, '0.0.0.0', r));
+  await new Promise((resolve, reject) => {
+    localShareServer.once('error', (e) => {
+      localShareServer = null;
+      reject(new Error(e.code === 'EADDRINUSE' ? `Port ${port} ist belegt – läuft Stromplaner schon ein zweites Mal?` : e.message));
+    });
+    localShareServer.listen(port, '0.0.0.0', resolve);
+  });
 
-  const ips = [];
-  for (const iface of Object.values(os.networkInterfaces())) {
-    for (const alias of iface) {
-      if (alias.family === 'IPv4' && !alias.internal) ips.push(alias.address);
+  const ifaces = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    for (const alias of list) {
+      if (alias.family === 'IPv4' && !alias.internal) ifaces.push({ ip: alias.address, name, virtual: VIRTUAL_IFACE.test(name) });
     }
   }
-  if (!ips.length) ips.push('127.0.0.1');
+  ifaces.sort((a, b) => a.virtual - b.virtual);
+  if (!ifaces.length) ifaces.push({ ip: '127.0.0.1', name: 'localhost', virtual: false });
+  const ips = ifaces.map(i => i.ip);
 
   // QR für die erste IP; Renderer kann bei mehreren IPs umschalten
   const makeQR = async (ip) => QRCode.toDataURL(`http://${ip}:${port}/plan.json`,
     { width: 180, margin: 1, color: { dark: '#e8eaed', light: '#1b2026' } });
 
   const qrDataUrl = await makeQR(ips[0]);
-  return { ips, port, activeIp: ips[0], url: `http://${ips[0]}:${port}/plan.json`, qrDataUrl };
+  return { ips, ifaces, port, activeIp: ips[0], url: `http://${ips[0]}:${port}/plan.json`, qrDataUrl };
 });
+
+ipcMain.handle('update-local-share', (_event, planJson) => { sharedPlanJson = planJson; });
 
 ipcMain.handle('stop-local-share', () => {
   if (localShareServer) { localShareServer.close(); localShareServer = null; }

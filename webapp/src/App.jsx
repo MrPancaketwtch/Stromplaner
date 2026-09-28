@@ -23,6 +23,7 @@ const now  = () => new Date().toISOString().slice(0, 10);
 const LS_KEY     = 'sp_mobile_v1';
 const SERVER_KEY = 'sp_sync_server';
 const TOKEN_KEY  = 'sp_sync_token';
+const PC_URL_KEY = 'sp_pc_share_url';
 
 /* ── Empty plan ──────────────────────────────────────────────────────────── */
 const newPlan = () => ({
@@ -50,6 +51,7 @@ export default function App() {
   const [plan,    setPlan]    = useState(null);
   const [server,  setServer]  = useState(() => localStorage.getItem(SERVER_KEY) || '');
   const [token,   setToken]   = useState(() => localStorage.getItem(TOKEN_KEY)  || '');
+  const [pcUrl,   setPcUrl]   = useState(() => localStorage.getItem(PC_URL_KEY) || '');
 
   /* load */
   useEffect(() => {
@@ -69,6 +71,7 @@ export default function App() {
   /* persist sync config */
   useEffect(() => { localStorage.setItem(SERVER_KEY, server); }, [server]);
   useEffect(() => { localStorage.setItem(TOKEN_KEY,  token);  }, [token]);
+  useEffect(() => { localStorage.setItem(PC_URL_KEY, pcUrl);  }, [pcUrl]);
 
   if (!plan) return <div className="loading">Laden…</div>;
 
@@ -84,7 +87,7 @@ export default function App() {
 
       <main className="app-main">
         {tab === 'pruefung' && (
-          <PruefungTab plan={plan} setPlan={setPlan} />
+          <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} />
         )}
         {tab === 'steckplan' && (
           <SteckplanTab plan={plan} setPlan={setPlan} />
@@ -97,6 +100,7 @@ export default function App() {
             plan={plan} setPlan={setPlan}
             server={server} setServer={setServer}
             token={token}  setToken={setToken}
+            pcUrl={pcUrl}  setPcUrl={setPcUrl}
           />
         )}
       </main>
@@ -644,7 +648,49 @@ function Segmented({ options, value, onChange }) {
   );
 }
 
-function PruefungTab({ plan, setPlan }) {
+function SendToPc({ plan, pcUrl }) {
+  const [busy, setBusy] = useState(false);
+  const [msg,  setMsg]  = useState(null);
+
+  const send = async () => {
+    setBusy(true);
+    setMsg({ text: 'Gesendet – bitte am PC bestätigen…', err: false });
+    try {
+      const r = await fetch(pcUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(plan),
+      });
+      const res = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(res.error || `HTTP ${r.status}`);
+      setMsg({ text: res.mode === 'insp' ? '✓ Prüfergebnisse am PC übernommen' : '✓ Plan am PC übernommen', err: false });
+    } catch (e) {
+      const offline = e instanceof TypeError;
+      setMsg({ text: offline ? 'PC nicht erreichbar. Läuft am PC „Lokal im WLAN teilen“ und ist das Handy im selben WLAN?' : e.message, err: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="section">
+      <div className="section-title">An PC zurücksenden</div>
+      {pcUrl ? (
+        <>
+          <button className="btn btn--primary" style={{ width: '100%' }} disabled={busy} onClick={send}>
+            {busy ? 'Warte auf PC…' : '⇪ An PC zurücksenden'}
+          </button>
+          <div className="meas-hint" style={{ marginTop: 6 }}>Ziel: {pcUrl.replace(/^https?:\/\//, '').replace(/\/plan\.json$/, '')}</div>
+        </>
+      ) : (
+        <div className="meas-hint">Zuerst am PC „Lokal im WLAN teilen“ starten und im Tab Sync den QR-Code scannen.</div>
+      )}
+      {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')} style={{ margin: '10px 0 0', padding: 0, background: 'none' }}>{msg.text}</div>}
+    </div>
+  );
+}
+
+function PruefungTab({ plan, setPlan, pcUrl }) {
   const [openId,   setOpenId]   = useState(null);
   const [metaOpen, setMetaOpen] = useState(false);
 
@@ -741,9 +787,10 @@ function PruefungTab({ plan, setPlan }) {
               );
             })}
           </div>
-          <div className="notice" style={{ marginTop: 16 }}>
-            Das Prüfprotokoll (PDF) wird am PC erstellt. Die Messwerte werden zusammen mit dem Plan synchronisiert.
+          <div style={{ marginTop: 16 }}>
+            <SendToPc plan={plan} pcUrl={pcUrl} />
           </div>
+          <div className="meas-hint" style={{ margin: '0 4px' }}>Das Prüfprotokoll (PDF) wird am PC erstellt.</div>
         </>
       )}
     </div>
@@ -1040,7 +1087,7 @@ function QrScanner({ onResult, onClose }) {
   );
 }
 
-function SyncTab({ plan, setPlan, server, setServer, token, setToken }) {
+function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, setPcUrl }) {
   const [plans,       setPlans]       = useState(null);
   const [loading,     setLoading]     = useState(false);
   const [msg,         setMsg]         = useState('');
@@ -1141,6 +1188,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken }) {
       if (data._format === 'stromplaner') {
         if (!confirmReplace(plan)) { status('Import abgebrochen', true); return; }
         setPlan(data);
+        setPcUrl(url);
         status('Plan geladen: ' + (data.meta?.production || url));
       } else {
         // Treat as server URL
@@ -1214,6 +1262,8 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken }) {
           </button>
         </div>
       </div>
+
+      <SendToPc plan={plan} pcUrl={pcUrl} />
 
       {/* ── Status message ── */}
       {msg && <div className={'sync-msg' + (msg.startsWith('⚠️') ? ' sync-msg--err' : '')}>{msg}</div>}

@@ -779,6 +779,27 @@ export default function App() {
     setLocalShare(null);
   };
 
+  useEffect(()=>window.electronAPI?.onLocalShareReceived?.(({data,mode})=>{
+    if(mode==="insp"){
+      if(data.inspMeta) setInspMeta(data.inspMeta);
+      setInspResults(data.inspResults||{});
+      setSyncStatus({msg:"✓ Prüfergebnisse vom Handy übernommen",err:false});
+    } else if(applyPlanData(data)){
+      setSyncStatus({msg:"✓ Plan vom Handy übernommen",err:false});
+    }
+  }),[]);
+
+  // Solange geteilt wird, liefert der Server immer den aktuellen Stand aus
+  useEffect(()=>{
+    if(!localShare||!window.electronAPI?.updateLocalShare) return;
+    const t=setTimeout(()=>{
+      const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,
+        instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout};
+      window.electronAPI.updateLocalShare(JSON.stringify(data,null,2));
+    },600);
+    return ()=>clearTimeout(t);
+  },[localShare,meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout]);
+
   const fileInputRef=useRef(null);
   const loadJSON=(e)=>{
     const file=e.target.files?.[0]; if(!file) return;
@@ -1112,15 +1133,21 @@ export default function App() {
                 {!localShare
                   ? <button disabled={syncBusy} onClick={startLocalShare} style={{width:"100%",...S.ghostBtn,fontSize:11}}>📱 QR-Code anzeigen</button>
                   : <div style={{textAlign:"center"}}>
-                      {localShare.ips?.length>1&&<div style={{display:"flex",flexWrap:"wrap",gap:4,justifyContent:"center",marginBottom:8}}>
-                        {localShare.ips.map(ip=><button key={ip} onClick={async()=>{
-                          const url=`http://${ip}:${localShare.port}/plan.json`;
-                          const qr=await window.electronAPI.makeQr(url);
-                          setLocalShare(s=>({...s,activeIp:ip,url,qrDataUrl:qr}));
-                        }} style={{...S.ghostBtn,fontSize:9,padding:"2px 6px",background:localShare.activeIp===ip?"#2a3a4a":"transparent"}}>{ip}</button>)}
-                      </div>}
+                      {localShare.ips?.length>1&&<>
+                        <div style={{fontSize:9,color:"#7c8794",marginBottom:4,textAlign:"left"}}>Netzwerk wählen, in dem auch das Handy ist – nicht den VPN-Adapter:</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:8}}>
+                          {(localShare.ifaces||localShare.ips.map(ip=>({ip,name:""}))).map(({ip,name,virtual})=><button key={ip} onClick={async()=>{
+                            const url=`http://${ip}:${localShare.port}/plan.json`;
+                            const qr=await window.electronAPI.makeQr(url);
+                            setLocalShare(s=>({...s,activeIp:ip,url,qrDataUrl:qr}));
+                          }} style={{...S.ghostBtn,fontSize:9,padding:"3px 6px",justifyContent:"space-between",opacity:virtual?0.6:1,background:localShare.activeIp===ip?"#2a3a4a":"transparent"}}>
+                            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}{virtual?" (VPN/virtuell)":""}</span><span>{ip}</span>
+                          </button>)}
+                        </div>
+                      </>}
                       <img src={localShare.qrDataUrl} alt="QR" style={{width:140,height:140,borderRadius:6,display:"block",margin:"0 auto 6px"}}/>
-                      <div style={{fontSize:9,color:"#7c8794",wordBreak:"break-all",marginBottom:6}}>{localShare.url}</div>
+                      <div style={{fontSize:9,color:"#7c8794",wordBreak:"break-all",marginBottom:4}}>{localShare.url}</div>
+                      <div style={{fontSize:9,color:"#7c8794",marginBottom:6}}>Das Handy kann den Plan über denselben Server zurücksenden.</div>
                       <button onClick={stopLocalShare} style={{...S.ghostBtn,fontSize:10,width:"100%"}}>✕ Server stoppen</button>
                     </div>
                 }
