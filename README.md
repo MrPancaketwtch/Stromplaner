@@ -29,6 +29,54 @@ Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speicher
 
 ---
 
+## 📱 Handy-App (Android)
+
+Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am PC, geprüft wird mit dem Handy am Verteiler, das Prüfprotokoll entsteht wieder am PC.
+
+### Installation
+- Die Datei `Stromplaner-x.x.x.apk` von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** aufs Handy laden und öffnen.
+- Android fragt beim ersten Mal, ob Apps aus dieser Quelle installiert werden dürfen → für Browser bzw. Dateimanager erlauben.
+- **Update:** Die APK ist derzeit nicht mit einem festen Schlüssel signiert. Android lehnt es deshalb ab, eine neue Version über die alte zu installieren – die alte App muss vorher deinstalliert werden. **Dabei werden alle Daten auf dem Handy gelöscht: offene Prüfergebnisse vorher an den PC senden!**
+- Alternativ läuft Stromplaner ohne Installation als Web-App unter **[mrpancaketwtch.github.io/Stromplaner](https://mrpancaketwtch.github.io/Stromplaner/)**. Der Datenaustausch im WLAN (Laden per QR-Code, An PC zurücksenden, Sync-Server über `http://`) funktioniert dort nicht, weil der Browser von einer HTTPS-Seite keine unverschlüsselten Verbindungen ins lokale Netz zulässt – für die Prüfung vor Ort die APK verwenden.
+
+### Tabs in der Handy-App
+| Tab | Inhalt |
+|-----|--------|
+| ✅ **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. |
+| 🔌 **Steckplan** | Verteiler und Steckungen ansehen und anpassen |
+| 📋 **Projekt** | Projektdaten |
+| ☁️ **Sync** | QR-Code scannen, Sync-Server, An PC zurücksenden |
+
+### Plan vom PC aufs Handy und zurück (WLAN)
+1. **PC:** Header → **☁ Sync** → **📱 QR-Code anzeigen**.
+2. **Netzwerk wählen:** Hat der PC mehrere Netzwerkadapter, erscheint eine Auswahl. Hier den **physischen Adapter (WLAN bzw. LAN) wählen, in dem auch das Handy ist – nicht das VPN-Interface.** Über die VPN-Adresse ist der PC vom Handy aus in der Regel nicht erreichbar, der Scan bzw. das Zurücksenden schlägt dann mit „Failed to fetch“ / „PC nicht erreichbar“ fehl. VPN- und virtuelle Adapter (ProtonVPN, WireGuard, Hyper-V, Docker …) werden grau und als letzte angeboten.
+3. **Handy:** Tab **Sync** → **📷 QR-Code scannen** → der Plan wird geladen.
+4. Prüfen.
+5. **Handy:** **⇪ An PC zurücksenden** (im Tab Prüfung ganz unten oder im Tab Sync).
+6. **PC:** Es erscheint eine Abfrage:
+   - **Nur Prüfergebnisse übernehmen** – übernimmt Prüfungsdetails und Messwerte, die Planung am PC bleibt unverändert *(empfohlen)*
+   - **Ganzen Plan übernehmen** – ersetzt den kompletten Plan am PC
+   - **Abbrechen**
+7. **PC:** Prüfprotokoll wie gewohnt als PDF exportieren.
+
+Das Teilen muss am PC während des Zurücksendens noch aktiv sein. Solange geteilt wird, liefert der PC immer den aktuellen Stand aus – ein erneuter Scan holt also auch zwischenzeitliche Änderungen.
+
+**Wenn es nicht klappt:**
+- Handy und PC im selben WLAN? (Gäste-WLANs trennen Geräte oft voneinander.)
+- Richtigen Netzwerkadapter gewählt – nicht das VPN? (siehe Schritt 2)
+- Die Windows-Firewall muss eingehende Verbindungen auf **Port 4747** für Stromplaner zulassen. Beim ersten Teilen fragt Windows nach – dort **Private Netzwerke** erlauben.
+- Meldung „Port 4747 ist belegt“: Stromplaner läuft vermutlich ein zweites Mal.
+
+### Sync-Server (optional)
+Für den Austausch ohne gemeinsames WLAN gibt es einen selbst-hostbaren Sync-Server im Ordner `server/`:
+```bash
+cd server
+docker-compose up -d
+```
+Der Server läuft dann auf Port 3001. Am PC unter **☁ Sync** und am Handy im Tab **Sync** die Server-URL (z. B. `http://192.168.1.10:3001`) eintragen, dann Pläne hoch- und herunterladen. Optional schützt die Umgebungsvariable `AUTH_TOKEN` den Server; derselbe Token wird dann in beiden Apps eingetragen.
+
+---
+
 ## Ordnerstruktur
 
 ```
@@ -50,6 +98,15 @@ Stromplaner/
 ├── build/
 │   ├── icon.png
 │   └── icon.ico
+├── webapp/                   ← Handy-App (React + Vite, als PWA und per Capacitor als Android-APK)
+│   ├── src/App.jsx           ← Quellcode Handy-App
+│   ├── assets/               ← App-Icon & Splash (Quelle für die Android-Icons)
+│   └── capacitor.config.json
+├── server/                   ← Optionaler Sync-Server (Express, Docker)
+├── .github/workflows/
+│   ├── release.yml           ← Windows + macOS bei Tag-Push
+│   ├── android.yml           ← Android-APK (bei Tag-Push oder manuell)
+│   └── webapp.yml            ← Web-App auf GitHub Pages bei Push auf main
 └── package.json
 ```
 
@@ -231,7 +288,9 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | Auto-Update | electron-updater via GitHub Releases |
 | Persistenz | localStorage (Autosave, 600 ms debounce) |
 | Diagramm | SVG (manuelles Layout, kein D3 o. ä.) |
-| CI/CD | GitHub Actions (baut Windows + macOS parallel bei Tag-Push) |
+| CI/CD | GitHub Actions (baut Windows + macOS + Android bei Tag-Push) |
+| Handy-App | React 18 + Vite, Capacitor 6 (Android-APK), PWA via GitHub Pages |
+| QR / Datenaustausch | `qrcode` (PC), `jsQR` (Handy), lokaler HTTP-Server auf Port 4747 |
 
 ### Build & Release
 
@@ -255,8 +314,16 @@ npm start
 1. CHANGELOG in `app/Stromplaner.jsx` aktualisieren
 2. `scripts\release.bat` ausführen und neue Versionsnummer eingeben
 3. Das Skript setzt die Version, baut, committet und pusht einen Git-Tag
-4. GitHub Actions baut automatisch Windows (`.exe`) und macOS (`.dmg`) und lädt beide als GitHub Release hoch
-5. Installierte Apps erkennen das Update beim nächsten Start automatisch
+4. GitHub Actions baut automatisch Windows (`.exe`) und macOS (`.dmg`) und lädt beide als GitHub Release hoch; die Android-APK wird einige Minuten später an dasselbe Release angehängt
+5. Installierte Desktop-Apps erkennen das Update beim nächsten Start automatisch
+
+**Handy-App lokal entwickeln:**
+```bash
+cd webapp
+npm install
+npm run dev
+```
+Eine Test-APK ohne Release baut der Workflow **Android APK** (Actions → *Run workflow*); die APK liegt danach unter *Artifacts*.
 
 **Lokalen Installer bauen (nur Windows, ohne GitHub-Release):**
 ```bash

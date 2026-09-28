@@ -74,9 +74,12 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 
 const CHANGELOG = {
   "1.2.0": [
-    "PWA: Stromplaner ist jetzt als Progressive Web App auf GitHub Pages verfügbar und auf Android installierbar",
-    "Sync-Server: selbst-hostbarer Express-Server (Docker) für die Synchronisation von Plänen zwischen Desktop und Handy",
-    "Android-APK: manuell auslösbarer GitHub-Actions-Workflow erstellt eine TWA-APK (android.yml)",
+    "Handy-App für Android (APK im Release): Errichtungsprüfung direkt am Verteiler – Sichtprüfung, Spannungen, Drehfeld, RCD-Prüfung und Schleifenimpedanz mit derselben Grenzwertprüfung wie am PC",
+    "Lokal im WLAN teilen: Plan per QR-Code aufs Handy holen und nach der Prüfung mit „An PC zurücksenden“ zurückholen – wahlweise nur die Prüfergebnisse oder den ganzen Plan",
+    "Netzwerkauswahl beim Teilen zeigt die Adapternamen; VPN- und virtuelle Adapter werden zuletzt angeboten",
+    "Handy-App: Steckplan nutzt dasselbe Datenformat wie der PC, Verteiler und Steckungen werden korrekt angezeigt",
+    "Sync-Server: selbst-hostbarer Express-Server (Docker) zum Austausch von Plänen zwischen PC und Handy",
+    "Stromplaner ist zusätzlich als Web-App (PWA) auf GitHub Pages verfügbar",
   ],
   "1.1.0": [
     "Speicherverzeichnis liegt jetzt im App-Ordner (AppData\\Stromplaner) statt in Dokumente",

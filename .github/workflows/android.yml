@@ -118,12 +118,17 @@ jobs:
           name: Stromplaner-Android
           path: ${{ steps.find-apk.outputs.path }}
 
+      # Das Release legt electron-builder im Workflow „Build & Release“ an – das dauert länger als dieser Build
       - name: Attach APK to GitHub release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.ref_name }}" \
-            "${{ steps.find-apk.outputs.path }}" \
-            --repo "${{ github.repository }}" \
-            --clobber
+          TAG="${{ github.ref_name }}"
+          for i in $(seq 1 60); do
+            gh release view "$TAG" --repo "${{ github.repository }}" > /dev/null 2>&1 && break
+            echo "Warte auf Release $TAG … ($i/60)"; sleep 30
+          done
+          APK="Stromplaner-${TAG#v}.apk"
+          cp "${{ steps.find-apk.outputs.path }}" "$APK"
+          gh release upload "$TAG" "$APK" --repo "${{ github.repository }}" --clobber

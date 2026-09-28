@@ -54,11 +54,12 @@ jobs:
           | 🪟 **Windows** | \`Stromplaner Setup ${V}.exe\` |
           | 🍎 **macOS (Apple Silicon / M-Series)** | \`Stromplaner-${V}-arm64.dmg\` |
           | 🍎 **macOS (Intel)** | \`Stromplaner-${V}.dmg\` |
-          | 🌐 **PWA (Web / Android)** | [Jetzt öffnen](https://mrpancaketwtch.github.io/Stromplaner/) |
+          | 🤖 **Android (Handy-App)** | \`Stromplaner-${V}.apk\` |
+          | 🌐 **PWA (Web)** | [Jetzt öffnen](https://mrpancaketwtch.github.io/Stromplaner/) |
 
           > **macOS-Hinweis:** Beim ersten Öffnen erscheint eine Warnung „Entwickler nicht verifiziert" — Rechtsklick auf die App → **Öffnen** → **Öffnen** umgeht das einmalig.
           >
-          > **Android:** Die PWA unter dem Link oben im Chrome öffnen → Menü → „Zum Startbildschirm hinzufügen". Ein nativer APK-Build ist über den Workflow **Android APK (manuell)** abrufbar.
+          > **Android:** Die APK wird einige Minuten nach den Desktop-Dateien angehängt. Zum Installieren „Installation aus unbekannten Quellen“ für den Browser bzw. Dateimanager erlauben.
 
           ---
 
