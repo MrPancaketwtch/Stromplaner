@@ -34,7 +34,7 @@ jobs:
         run: npm ci
 
       - name: Copy app icon for PWA
-        run: cp build/icon.png webapp/public/icon.png
+        run: mkdir -p webapp/public && cp build/icon.png webapp/public/icon.png
 
       - name: Build PWA
         working-directory: webapp
