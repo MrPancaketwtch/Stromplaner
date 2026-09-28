@@ -13,7 +13,7 @@ const CONN = {
   PL400:   { label: '400A Powerlock',  amp: 400,  phases: 3 },
   PL660:   { label: '660A Powerlock',  amp: 660,  phases: 3 },
   PL1000:  { label: '1000A Powerlock', amp: 1000, phases: 3 },
-  MC:      { label: 'Multicore',       amp: 16,   phases: 1 },
+  MC:      { label: 'Multicore',       amp: 16,   phases: 1, isMulticore: true },
   SCHUKO:  { label: 'Schuko',          amp: 16,   phases: 1 },
 };
 
@@ -46,7 +46,7 @@ const getConsumer = (inst, outId) => inst.consumers?.find(c => c.outId === outId
 /*  Root                                                                      */
 /* ══════════════════════════════════════════════════════════════════════════ */
 export default function App() {
-  const [tab,     setTab]     = useState('steckplan');
+  const [tab,     setTab]     = useState('pruefung');
   const [plan,    setPlan]    = useState(null);
   const [server,  setServer]  = useState(() => localStorage.getItem(SERVER_KEY) || '');
   const [token,   setToken]   = useState(() => localStorage.getItem(TOKEN_KEY)  || '');
@@ -83,6 +83,9 @@ export default function App() {
       </header>
 
       <main className="app-main">
+        {tab === 'pruefung' && (
+          <PruefungTab plan={plan} setPlan={setPlan} />
+        )}
         {tab === 'steckplan' && (
           <SteckplanTab plan={plan} setPlan={setPlan} />
         )}
@@ -100,6 +103,7 @@ export default function App() {
 
       <nav className="tab-bar">
         {[
+          { id: 'pruefung',  icon: '✅', label: 'Prüfung'   },
           { id: 'steckplan', icon: '🔌', label: 'Steckplan' },
           { id: 'projekt',   icon: '📋', label: 'Projekt'   },
           { id: 'sync',      icon: '☁️',  label: 'Sync'      },
@@ -449,6 +453,544 @@ function ProjektTab({ plan, setPlan }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
+/*  Prüfung Tab (Errichtungsprüfung) – Datenformat identisch zur Desktop-App   */
+/* ══════════════════════════════════════════════════════════════════════════ */
+const PHASES      = ['L1', 'L2', 'L3'];
+const SICHT_ITEMS = ['Schaltgeräte', 'Steckverbinder', 'Leitungen', 'Gehäuse', 'Kennzeichnung', 'Basisschutz'];
+const IK_FACTOR   = { B: 5, C: 10, D: 20, K: 14 };
+
+const inspMetaDef = () => ({ inspector: '', date: now(), time: '', equipment: '', address: '', location: '', netType: '' });
+const IR_DEF = { voltL1N: '', voltL2N: '', voltL3N: '', voltL1L2: '', voltL2L3: '', voltL1L3: '', voltNPE: '', voltL1PE: '', voltL2PE: '', voltL3PE: '', phaseRot: '', rPE: '', rIso: '', zs: '', ik: '', sicht: [null, null, null, null, null, null], bemerkung: '', bemerkungSchwere: 'bad', outlets: {} };
+const OR_DEF = { rcdT1: '', rcdIan: '', ok: false, zs: '', ik: '', zsL1: '', zsL2: '', zsL3: '', ikL1: '', ikL2: '', ikL3: '', notInUse: false, zsOverride: '', ikOverride: '', zsOverrideL1: '', zsOverrideL2: '', zsOverrideL3: '', ikOverrideL1: '', ikOverrideL2: '', ikOverrideL3: '', overrideActive: false, cableLen: '', cableA: '', cosPhi: '0.95' };
+
+const VOLT_GROUPS = [
+  [{ key: 'voltL1N',  label: 'L1–N',  min: 207, max: 244 }, { key: 'voltL2N',  label: 'L2–N',  min: 207, max: 244 }, { key: 'voltL3N',  label: 'L3–N',  min: 207, max: 244 }],
+  [{ key: 'voltL1L2', label: 'L1–L2', min: 360, max: 424 }, { key: 'voltL2L3', label: 'L2–L3', min: 360, max: 424 }, { key: 'voltL1L3', label: 'L1–L3', min: 360, max: 424 }],
+  [{ key: 'voltL1PE', label: 'L1–PE', min: 207, max: 244 }, { key: 'voltL2PE', label: 'L2–PE', min: 207, max: 244 }, { key: 'voltL3PE', label: 'L3–PE', min: 207, max: 244 }],
+  [{ key: 'voltNPE',  label: 'N–PE',  max: 1 }],
+];
+
+const is3ph       = (c) => (CONN[c]?.phases || 1) === 3;
+const isMulticore = (c) => !!CONN[c]?.isMulticore;
+const instName    = (i) => i?.name || i?.instName || '(kein Name)';
+const instTypeId  = (i) => i?.typeId || i?.box;
+const alphaSort   = (arr) => [...arr].sort((a, b) => instName(a).localeCompare(instName(b), 'de', { numeric: true, sensitivity: 'base' }));
+const sortOutlets = (outlets) => [...outlets].sort((a, b) => {
+  const as = a.connector === 'SCHUKO' ? 0 : 1, bs = b.connector === 'SCHUKO' ? 0 : 1;
+  if (as !== bs) return as - bs;
+  return (a.label || '').localeCompare(b.label || '', 'de', { numeric: true });
+});
+const fmtOhm    = (n) => n.toFixed(2).replace('.', ',');
+const rangeHint = (min, max, unit) => min !== undefined && max !== undefined ? `${min}–${max} ${unit}` : max !== undefined ? `≤ ${max} ${unit}` : `≥ ${min} ${unit}`;
+
+const chk = (val, min, max) => {
+  if (val === '' || val == null) return null;
+  const n = parseFloat(String(val).replace(',', '.'));
+  if (isNaN(n)) return null;
+  if (min !== undefined && n < min) return false;
+  if (max !== undefined && n > max) return false;
+  return true;
+};
+
+const hasInspData   = (plan) => Object.keys(plan?.inspResults || {}).length > 0;
+const confirmReplace = (plan) => !hasInspData(plan) ||
+  window.confirm('Auf dem Handy sind Prüfergebnisse gespeichert. Wirklich durch den neuen Plan ersetzen?');
+
+const irOf = (res, iid) => {
+  const sv = res[iid] || {};
+  return { ...IR_DEF, ...sv, sicht: sv.sicht ? [...sv.sicht] : [...IR_DEF.sicht], outlets: sv.outlets || {} };
+};
+const orOf = (res, iid, oid) => ({ ...OR_DEF, ...(irOf(res, iid).outlets[oid] || {}) });
+
+function sortTopo(instances) {
+  const out = [], seen = new Set();
+  const visit = (pid, depth) => alphaSort(instances.filter(i => (i.parentId || null) === pid)).forEach(i => {
+    if (seen.has(i.id)) return;
+    seen.add(i.id); out.push({ inst: i, depth }); visit(i.id, depth + 1);
+  });
+  visit(null, 0);
+  alphaSort(instances).forEach(i => {
+    if (seen.has(i.id)) return;
+    seen.add(i.id); out.push({ inst: i, depth: 0 }); visit(i.id, 1);
+  });
+  return out;
+}
+
+function buildRows(plan, inst) {
+  const type    = plan.boxTypes.find(b => b.id === instTypeId(inst));
+  const outlets = type ? sortOutlets(type.outlets || []) : [];
+  const kidsOf  = (oid) => plan.instances.filter(c => c.parentId === inst.id && c.parentOutletId === oid);
+
+  const rcdRows = (type?.rcds || []).map(rcd => ({ oid: `rcd_${rcd.id}`, label: rcd.label, isGroup: true, iAn: rcd.mA, prot: `RCD ${rcd.mA} mA` }));
+  outlets.filter(o => o.protection === 'RCBO').forEach(o => {
+    const mA = o.rcdMa ?? 30, prot = `RCBO ${o.amp}A / ${mA}mA`;
+    if (isMulticore(o.connector)) {
+      for (let s = 1; s <= (o.mcSlots || 6); s++) rcdRows.push({ oid: `${o.id}_s${s}`, label: `${o.label} – SP ${s} (${PHASES[(s - 1) % 3]})`, iAn: mA, prot });
+    } else {
+      rcdRows.push({ oid: o.id, label: o.label, iAn: mA, prot });
+    }
+  });
+
+  const loopRows = [];
+  outlets.forEach(o => {
+    const base = { hasRcd: o.protection === 'RCBO' || !!o.rcdId, breaker: o.breaker || 'C' };
+    if (isMulticore(o.connector)) {
+      for (let s = 1; s <= (o.mcSlots || 6); s++) {
+        const oid = `${o.id}_s${s}`;
+        loopRows.push({ ...base, oid, label: `${o.label} – SP ${s}`, sub: `${PHASES[(s - 1) % 3]} · ${o.amp}A`, amp: o.amp || 16, is3p: false, kids: kidsOf(oid) });
+      }
+    } else {
+      loopRows.push({ ...base, oid: o.id, label: o.label, sub: `${CONN[o.connector]?.label || o.connector} ${o.amp}A`, amp: o.amp || type?.feedAmp || 16, is3p: is3ph(o.connector), kids: kidsOf(o.id) });
+    }
+  });
+  loopRows.forEach(r => {
+    const f = IK_FACTOR[r.breaker] || 10;
+    r.ikLim = r.amp * f;
+    r.zsLim = r.hasRcd ? 2.0 : parseFloat((230 / (r.amp * f)).toFixed(2));
+  });
+  return { type, rcdRows, loopRows };
+}
+
+// Schlechteste Zs/Ik aus angeschlossenen Unterverteilern – rekursiv über alle Ebenen
+function childDerived(plan, res, childIds) {
+  const zs = [], ik = [];
+  childIds.forEach(cid => {
+    const ci = plan.instances.find(i => i.id === cid);
+    const t  = plan.boxTypes.find(b => b.id === instTypeId(ci));
+    (t?.outlets || []).forEach(co => {
+      const slots = isMulticore(co.connector)
+        ? Array.from({ length: co.mcSlots || 6 }, (_, k) => ({ oid: `${co.id}_s${k + 1}`, is3p: false }))
+        : [{ oid: co.id, is3p: is3ph(co.connector) }];
+      slots.forEach(({ oid, is3p }) => {
+        const gc = plan.instances.filter(x => x.parentId === cid && x.parentOutletId === oid);
+        if (gc.length) {
+          const d = childDerived(plan, res, gc.map(x => x.id));
+          if (d.zs) zs.push(Number(d.zs));
+          if (d.ik) ik.push(Number(d.ik));
+          return;
+        }
+        const or = orOf(res, cid, oid);
+        if (or.notInUse) return;
+        const zk = is3p ? ['zsL1', 'zsL2', 'zsL3'] : ['zs'];
+        const ikk = is3p ? ['ikL1', 'ikL2', 'ikL3'] : ['ik'];
+        zk.forEach(k => { if (or[k]) zs.push(Number(or[k])); });
+        ikk.forEach(k => { if (or[k]) ik.push(Number(or[k])); });
+      });
+    });
+  });
+  return { zs: zs.length ? Math.max(...zs).toFixed(2) : '', ik: ik.length ? Math.min(...ik).toFixed(0) : '' };
+}
+
+// Am Desktop nachgetragene Eingangswerte haben Vorrang vor der Ableitung
+function kidValues(plan, res, inst, row) {
+  const or = orOf(res, inst.id, row.oid);
+  const d  = childDerived(plan, res, row.kids.map(k => k.id));
+  const has = or.overrideActive || ['zsOverride', 'ikOverride', 'zsOverrideL1', 'zsOverrideL2', 'zsOverrideL3', 'ikOverrideL1', 'ikOverrideL2', 'ikOverrideL3'].some(k => or[k]);
+  if (!has) return { ...d, override: false };
+  const nums = (keys) => keys.map(k => or[k]).filter(v => v !== '' && v != null).map(Number);
+  const zsL = nums(['zsOverrideL1', 'zsOverrideL2', 'zsOverrideL3']);
+  const ikL = nums(['ikOverrideL1', 'ikOverrideL2', 'ikOverrideL3']);
+  return {
+    zs: (row.is3p && zsL.length ? Math.max(...zsL).toFixed(2) : or.zsOverride) || d.zs,
+    ik: (row.is3p && ikL.length ? Math.min(...ikL).toFixed(0) : or.ikOverride) || d.ik,
+    override: true,
+  };
+}
+
+function evalInst(plan, res, inst) {
+  const ir = irOf(res, inst.id);
+  const { rcdRows, loopRows } = buildRows(plan, inst);
+  const r = [];
+  VOLT_GROUPS.flat().forEach(f => r.push(chk(ir[f.key], f.min, f.max)));
+  rcdRows.forEach(row => {
+    const or = orOf(res, inst.id, row.oid);
+    r.push(chk(or.rcdIan, row.iAn / 2, row.iAn), chk(or.rcdT1, undefined, 300));
+  });
+  loopRows.forEach(row => {
+    const or = orOf(res, inst.id, row.oid);
+    if (row.kids.length || or.notInUse) return;
+    (row.is3p ? ['zsL1', 'zsL2', 'zsL3'] : ['zs']).forEach(k => r.push(chk(or[k], undefined, row.zsLim)));
+    (row.is3p ? ['ikL1', 'ikL2', 'ikL3'] : ['ik']).forEach(k => r.push(chk(or[k], row.ikLim, undefined)));
+  });
+  return {
+    sichtOk: ir.sicht.filter(v => v === true).length,
+    bad:     r.filter(x => x === false).length,
+    filled:  r.filter(x => x !== null).length,
+    remark:  ir.bemerkung ? (ir.bemerkungSchwere || 'bad') : null,
+  };
+}
+
+function NumInput({ value, ok, onChange }) {
+  return (
+    <input
+      className={'num-input' + (ok === true ? ' num-input--ok' : ok === false ? ' num-input--bad' : '')}
+      type="text"
+      inputMode="decimal"
+      enterKeyHint="next"
+      placeholder="–"
+      value={value || ''}
+      onChange={e => onChange(e.target.value.replace(/,/g, '.'))}
+    />
+  );
+}
+
+function Segmented({ options, value, onChange }) {
+  return (
+    <div className="seg">
+      {options.map(([v, l]) => (
+        <button key={v} type="button" className={'seg-btn' + (value === v ? ' seg-btn--on' : '')} onClick={() => onChange(v)}>{l}</button>
+      ))}
+    </div>
+  );
+}
+
+function PruefungTab({ plan, setPlan }) {
+  const [openId,   setOpenId]   = useState(null);
+  const [metaOpen, setMetaOpen] = useState(false);
+
+  const res    = plan.inspResults || {};
+  const meta   = { ...inspMetaDef(), ...(plan.inspMeta || {}) };
+  const sorted = sortTopo(plan.instances);
+
+  const updMeta = (patch) => setPlan(p => ({ ...p, inspMeta: { ...inspMetaDef(), ...(p.inspMeta || {}), ...patch } }));
+  const setRes  = (fn) => setPlan(p => ({ ...p, inspResults: fn(p.inspResults || {}) }));
+
+  const idx = openId ? sorted.findIndex(s => s.inst.id === openId) : -1;
+  if (idx >= 0) {
+    return (
+      <InspDetail
+        key={openId}
+        plan={plan} inst={sorted[idx].inst} res={res} setRes={setRes}
+        pos={idx + 1} total={sorted.length}
+        onBack={() => setOpenId(null)}
+        onPrev={idx > 0 ? () => setOpenId(sorted[idx - 1].inst.id) : null}
+        onNext={idx < sorted.length - 1 ? () => setOpenId(sorted[idx + 1].inst.id) : null}
+      />
+    );
+  }
+
+  const evals    = sorted.map(({ inst }) => evalInst(plan, res, inst));
+  const started  = evals.filter(e => e.filled > 0 || e.sichtOk > 0).length;
+  const totalBad = evals.reduce((n, e) => n + e.bad + (e.remark === 'bad' ? 1 : 0), 0);
+
+  const metaFields = [
+    { key: 'inspector', label: 'Prüfer',                 type: 'text' },
+    { key: 'date',      label: 'Datum',                  type: 'date' },
+    { key: 'time',      label: 'Uhrzeit',                type: 'time' },
+    { key: 'equipment', label: 'Prüfmittel / Messgerät', type: 'text' },
+    { key: 'address',   label: 'Adresse',                type: 'text' },
+    { key: 'location',  label: 'Ort des Anschlusses',    type: 'text' },
+  ];
+
+  return (
+    <div className="page">
+      <div className="section">
+        <button className="collapse-head" onClick={() => setMetaOpen(o => !o)}>
+          <span className="section-title" style={{ margin: 0 }}>Prüfungsdetails</span>
+          <span className="collapse-sum">{meta.inspector || 'Prüfer fehlt'} · {meta.date}</span>
+          <span className="collapse-arrow">{metaOpen ? '▴' : '▾'}</span>
+        </button>
+        {metaOpen && (
+          <div style={{ marginTop: 12 }}>
+            {metaFields.map(f => (
+              <div key={f.key} className="field-row">
+                <label className="field-label">{f.label}</label>
+                <input className="field-input" type={f.type} value={meta[f.key] || ''} onChange={e => updMeta({ [f.key]: e.target.value })} />
+              </div>
+            ))}
+            <label className="field-label">Netzform</label>
+            <Segmented
+              options={[['TN-S', 'TN-S'], ['TN-C-S', 'TN-C-S'], ['TT', 'TT'], ['IT', 'IT']]}
+              value={meta.netType || ''}
+              onChange={v => updMeta({ netType: meta.netType === v ? '' : v })}
+            />
+          </div>
+        )}
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="notice">Keine Verteiler im Plan.{'\n'}Plan am PC über „Lokales Teilen“ freigeben und im Tab <strong>Sync</strong> den QR-Code scannen.</div>
+      ) : (
+        <>
+          <div className="insp-summary">
+            {started}/{sorted.length} Verteiler begonnen · {totalBad ? <span className="txt-bad">{totalBad} Mängel</span> : 'keine Mängel'}
+          </div>
+          <div className="inst-list">
+            {sorted.map(({ inst, depth }, i) => {
+              const ev   = evals[i];
+              const type = plan.boxTypes.find(b => b.id === instTypeId(inst));
+              const ind  = Math.min(depth, 4) * 14;
+              return (
+                <button
+                  key={inst.id}
+                  className={'inst-card' + (ev.bad ? ' inst-card--bad' : '')}
+                  style={{ marginLeft: ind, width: `calc(100% - ${ind}px)` }}
+                  onClick={() => setOpenId(inst.id)}
+                >
+                  <div className="inst-name">{depth > 0 && <span className="insp-branch">↳ </span>}{instName(inst)}</div>
+                  <div className="inst-meta">
+                    <span className="inst-type">{type?.name || '?'}</span>
+                    <span className="insp-badges">
+                      <span className={'badge' + (ev.sichtOk === SICHT_ITEMS.length ? ' badge--ok' : '')}>Sicht {ev.sichtOk}/{SICHT_ITEMS.length}</span>
+                      <span className="badge">{ev.filled} Werte</span>
+                      {ev.bad > 0 && <span className="badge badge--bad">✕ {ev.bad}</span>}
+                      {ev.remark && <span className={'badge ' + (ev.remark === 'warn' ? 'badge--warn' : 'badge--bad')}>{ev.remark === 'warn' ? '! Hinweis' : '✕ Mangel'}</span>}
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="notice" style={{ marginTop: 16 }}>
+            Das Prüfprotokoll (PDF) wird am PC erstellt. Die Messwerte werden zusammen mit dem Plan synchronisiert.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function InspDetail({ plan, inst, res, setRes, pos, total, onBack, onPrev, onNext }) {
+  const rootRef = useRef(null);
+  useEffect(() => { rootRef.current?.closest('.app-main')?.scrollTo(0, 0); }, []);
+
+  const ir = irOf(res, inst.id);
+  const { type, rcdRows, loopRows } = buildRows(plan, inst);
+
+  const updIR = (patch) => setRes(r => ({ ...r, [inst.id]: { ...irOf(r, inst.id), ...patch } }));
+  const updOR = (oid, patch) => setRes(r => {
+    const cur = irOf(r, inst.id);
+    return { ...r, [inst.id]: { ...cur, outlets: { ...cur.outlets, [oid]: { ...orOf(r, inst.id, oid), ...patch } } } };
+  });
+  const setSicht = (fn) => setRes(r => {
+    const cur = irOf(r, inst.id);
+    return { ...r, [inst.id]: { ...cur, sicht: fn(cur.sicht) } };
+  });
+
+  // Enter / „Weiter“ auf der Tastatur springt ins nächste Messfeld
+  const onKeyDown = (e) => {
+    if (e.key !== 'Enter' || !e.target.classList?.contains('num-input')) return;
+    e.preventDefault();
+    const all = [...rootRef.current.querySelectorAll('input.num-input')];
+    const i = all.indexOf(e.target);
+    if (i >= 0 && i < all.length - 1) all[i + 1].focus(); else e.target.blur();
+  };
+
+  const allSichtOk = ir.sicht.every(v => v === true);
+
+  return (
+    <div className="page" ref={rootRef} onKeyDown={onKeyDown}>
+      <div className="insp-top">
+        <button className="btn btn--small btn--secondary" onClick={onBack}>‹ Übersicht</button>
+        <span className="insp-pos">{pos} / {total}</span>
+      </div>
+      <div className="insp-title">{instName(inst)}</div>
+      <div className="insp-sub">
+        {type?.name || '?'} · Einspeisung {CONN[type?.feedConnector]?.label || type?.feedConnector || ''} {type?.feedAmp || ''}A
+      </div>
+
+      {/* ── Sichtprüfung ── */}
+      <div className="section">
+        <div className="section-head">
+          <span className="section-title" style={{ margin: 0 }}>Sichtprüfung</span>
+          <button className="link-btn" onClick={() => setSicht(s => s.map(() => (allSichtOk ? null : true)))}>
+            {allSichtOk ? 'Zurücksetzen' : 'Alle OK'}
+          </button>
+        </div>
+        <div className="sicht-grid">
+          {SICHT_ITEMS.map((label, i) => (
+            <button
+              key={i}
+              className={'sicht-item' + (ir.sicht[i] === true ? ' sicht-item--ok' : '')}
+              onClick={() => setSicht(s => s.map((v, k) => (k === i ? (v === true ? null : true) : v)))}
+            >
+              <span className="sicht-box">{ir.sicht[i] === true ? '✓' : ''}</span>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Spannungen + Drehfeld ── */}
+      <div className="section">
+        <div className="section-title">Spannungsmessung (V)</div>
+        {VOLT_GROUPS.map((g, gi) => (
+          <div key={gi} className="meas-grid">
+            {g.map(f => (
+              <label key={f.key} className="meas-cell">
+                <span className="meas-label">{f.label}</span>
+                <NumInput value={ir[f.key]} ok={chk(ir[f.key], f.min, f.max)} onChange={v => updIR({ [f.key]: v })} />
+                <span className="meas-hint">{rangeHint(f.min, f.max, 'V')}</span>
+              </label>
+            ))}
+          </div>
+        ))}
+        <label className="field-label" style={{ marginTop: 8 }}>Drehfeld</label>
+        <Segmented
+          options={[['rechts', 'Rechts'], ['links', 'Links'], ['', 'nicht geprüft']]}
+          value={ir.phaseRot || ''}
+          onChange={v => updIR({ phaseRot: v })}
+        />
+      </div>
+
+      {/* ── Schleife am Eingang ── */}
+      <div className="section">
+        <div className="section-title">Schleifenimpedanz Eingang</div>
+        <div className="meas-grid meas-grid--2">
+          <label className="meas-cell">
+            <span className="meas-label">Z_s (Ω)</span>
+            <NumInput value={ir.zs} onChange={v => updIR({ zs: v })} />
+          </label>
+          <label className="meas-cell">
+            <span className="meas-label">I_k (A)</span>
+            <NumInput value={ir.ik} onChange={v => updIR({ ik: v })} />
+          </label>
+        </div>
+        <div className="meas-hint">Nur nötig, wenn die Zuleitung höher abgesichert ist als alle Abgänge.</div>
+      </div>
+
+      {/* ── RCD ── */}
+      {rcdRows.length > 0 && (
+        <div className="section">
+          <div className="section-title">RCD-Prüfung</div>
+          {rcdRows.map(row => {
+            const or = orOf(res, inst.id, row.oid);
+            return (
+              <div key={row.oid} className="sub-row">
+                <div className="sub-head">
+                  <span className={'sub-label' + (row.isGroup ? ' sub-label--group' : '')}>{row.label}</span>
+                  <span className="meas-hint">{row.prot}</span>
+                </div>
+                <div className="meas-grid meas-grid--2">
+                  <label className="meas-cell">
+                    <span className="meas-label">I_Δn (mA)</span>
+                    <NumInput value={or.rcdIan} ok={chk(or.rcdIan, row.iAn / 2, row.iAn)} onChange={v => updOR(row.oid, { rcdIan: v })} />
+                    <span className="meas-hint">{row.iAn / 2}–{row.iAn} mA</span>
+                  </label>
+                  <label className="meas-cell">
+                    <span className="meas-label">t_A (ms)</span>
+                    <NumInput value={or.rcdT1} ok={chk(or.rcdT1, undefined, 300)} onChange={v => updOR(row.oid, { rcdT1: v })} />
+                    <span className="meas-hint">≤ 300 ms</span>
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Schleifenimpedanz je Abgang ── */}
+      {loopRows.length > 0 && (
+        <div className="section">
+          <div className="section-title">Schleifenimpedanz & Kurzschluss</div>
+          {loopRows.map(row => {
+            const or   = orOf(res, inst.id, row.oid);
+            const lim  = `Z_s ≤ ${fmtOhm(row.zsLim)} Ω${row.hasRcd ? ' (RCD)' : ''} · I_k ≥ ${row.ikLim} A`;
+            const head = (action) => (
+              <div className="sub-head">
+                <span className="sub-label">{row.label} <span className="meas-hint">{row.sub}</span></span>
+                {action}
+              </div>
+            );
+
+            if (row.kids.length) {
+              const v   = kidValues(plan, res, inst, row);
+              const okZ = v.zs ? chk(v.zs, undefined, row.zsLim) : null;
+              const okI = v.ik ? chk(v.ik, row.ikLim, undefined) : null;
+              return (
+                <div key={row.oid} className={'sub-row loop-kid' + (okZ === false || okI === false ? ' sub-row--bad' : '')}>
+                  {head(null)}
+                  <div className="meas-hint">↳ {row.kids.map(instName).join(', ')} · {v.override ? 'am PC nachgetragener Wert' : 'schlechtester Wert aus Unterverteilung'}</div>
+                  <div className="kid-vals">
+                    Z_s <strong className={okZ === false ? 'txt-bad' : okZ ? 'txt-ok' : ''}>{v.zs || '–'} Ω</strong>
+                    {' · '}
+                    I_k <strong className={okI === false ? 'txt-bad' : okI ? 'txt-ok' : ''}>{v.ik || '–'} A</strong>
+                  </div>
+                  <div className="meas-hint">{lim}</div>
+                </div>
+              );
+            }
+
+            if (or.notInUse) {
+              return (
+                <div key={row.oid} className="sub-row sub-row--off">
+                  {head(<button className="link-btn" onClick={() => updOR(row.oid, { notInUse: false })}>Reaktivieren</button>)}
+                  <div className="meas-hint">Nicht in Betrieb / nicht gemessen</div>
+                </div>
+              );
+            }
+
+            const offBtn = <button className="link-btn link-btn--muted" onClick={() => updOR(row.oid, { notInUse: true })}>Nicht in Betrieb</button>;
+
+            if (row.is3p) {
+              return (
+                <div key={row.oid} className="sub-row">
+                  {head(offBtn)}
+                  <div className="phase-grid">
+                    <span />
+                    <span className="meas-label">Z_s (Ω)</span>
+                    <span className="meas-label">I_k (A)</span>
+                    {PHASES.map(ph => (
+                      <React.Fragment key={ph}>
+                        <span className="phase-label">{ph}</span>
+                        <NumInput value={or[`zs${ph}`]} ok={chk(or[`zs${ph}`], undefined, row.zsLim)} onChange={v => updOR(row.oid, { [`zs${ph}`]: v })} />
+                        <NumInput value={or[`ik${ph}`]} ok={chk(or[`ik${ph}`], row.ikLim, undefined)} onChange={v => updOR(row.oid, { [`ik${ph}`]: v })} />
+                      </React.Fragment>
+                    ))}
+                  </div>
+                  <div className="meas-hint">{lim}</div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={row.oid} className="sub-row">
+                {head(offBtn)}
+                <div className="meas-grid meas-grid--2">
+                  <label className="meas-cell">
+                    <span className="meas-label">Z_s (Ω)</span>
+                    <NumInput value={or.zs} ok={chk(or.zs, undefined, row.zsLim)} onChange={v => updOR(row.oid, { zs: v })} />
+                  </label>
+                  <label className="meas-cell">
+                    <span className="meas-label">I_k (A)</span>
+                    <NumInput value={or.ik} ok={chk(or.ik, row.ikLim, undefined)} onChange={v => updOR(row.oid, { ik: v })} />
+                  </label>
+                </div>
+                <div className="meas-hint">{lim}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Bemerkung ── */}
+      <div className="section">
+        <div className="section-title">Bemerkung / Auflage</div>
+        <textarea
+          className="field-input"
+          rows={3}
+          placeholder="Optional: Hinweis oder Mangel eintragen…"
+          value={ir.bemerkung || ''}
+          onChange={e => updIR({ bemerkung: e.target.value })}
+        />
+        <div style={{ marginTop: 8 }}>
+          <Segmented
+            options={[['bad', '✕ Mangel'], ['warn', '! Hinweis']]}
+            value={ir.bemerkungSchwere || 'bad'}
+            onChange={v => updIR({ bemerkungSchwere: v })}
+          />
+        </div>
+      </div>
+
+      <div className="insp-nav">
+        <button className="btn btn--secondary" disabled={!onPrev} onClick={onPrev || undefined}>‹ Vorheriger</button>
+        <button className="btn btn--primary" onClick={onNext || onBack}>{onNext ? 'Nächster ›' : 'Fertig'}</button>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
 /*  Sync Tab                                                                  */
 /* ══════════════════════════════════════════════════════════════════════════ */
 function QrScanner({ onResult, onClose }) {
@@ -556,6 +1098,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken }) {
       const r = await fetch(apiUrl(`/api/plans/${id}`), { headers: headers() });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
+      if (!confirmReplace(plan)) { status('Laden abgebrochen', true); return; }
       setPlan(data);
       status('Geladen: ' + (data.meta?.production || id));
     } catch (e) {
@@ -596,6 +1139,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken }) {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       if (data._format === 'stromplaner') {
+        if (!confirmReplace(plan)) { status('Import abgebrochen', true); return; }
         setPlan(data);
         status('Plan geladen: ' + (data.meta?.production || url));
       } else {
