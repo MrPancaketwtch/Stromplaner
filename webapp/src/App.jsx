@@ -41,7 +41,47 @@ const newPlan = () => ({
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 const getBoxType  = (plan, id)    => plan.boxTypes.find(b => b.id === id);
 const getLoad     = (plan, id)    => plan.loads.find(l => l.id === id);
-const getConsumer = (inst, outId) => inst.consumers?.find(c => c.outId === outId);
+
+// Ältere Handy-Pläne (instName/box/consumers) ins Desktop-Format (name/typeId + placements) überführen
+const migratePlan = (p) => {
+  const placements = [...(p.placements || [])];
+  const instances  = (p.instances || []).map(i => {
+    if (!('instName' in i || 'box' in i || 'consumers' in i)) return i;
+    const { instName: oldName, box, consumers, ...rest } = i;
+    (consumers || []).forEach(c => placements.push({ id: c.id || uid(), instanceId: i.id, outletId: c.outId || '', mcSlot: null, loadId: c.loadId || '' }));
+    return { parentId: null, parentOutletId: null, mainConnectionId: null, ...rest, name: rest.name ?? oldName ?? '', typeId: rest.typeId ?? box };
+  });
+  return { ...p, instances, placements };
+};
+
+// Steckplätze wie am Desktop: normale Anschlüsse 1:1, Multicore je Steckplatz (mcSlot 1…n, Id `${outletId}_s${n}`)
+const slotGroups = (bt) => sortOutlets(bt?.outlets || []).map(o => ({
+  outlet: o,
+  slots: isMulticore(o.connector)
+    ? Array.from({ length: o.mcSlots || 6 }, (_, k) => ({ key: `${o.id}_s${k + 1}`, outlet: o, mcSlot: k + 1, label: `SP ${k + 1}`, sub: `${PHASES[k % 3]} · ${o.amp}A` }))
+    : [{ key: o.id, outlet: o, mcSlot: null, label: o.label, sub: `${CONN[o.connector]?.label || o.connector}${o.amp ? ` · ${o.amp}A` : ''}` }],
+}));
+const slotPlacements = (plan, instId, slot) => plan.placements.filter(p =>
+  p.instanceId === instId && p.outletId === slot.outlet.id && (slot.mcSlot == null || p.mcSlot === slot.mcSlot));
+const slotKids = (plan, instId, key) => plan.instances.filter(c => c.parentId === instId && c.parentOutletId === key);
+
+// Steckungen, die keinem Steckplatz zugeordnet sind (am Desktop noch ohne Anschluss / Steckplatz)
+const unslottedPlacements = (plan, inst, bt) => plan.placements.filter(p => {
+  if (p.instanceId !== inst.id) return false;
+  const o = bt?.outlets?.find(x => x.id === p.outletId);
+  if (!o) return true;
+  return isMulticore(o.connector) && !(p.mcSlot >= 1 && p.mcSlot <= (o.mcSlots || 6));
+});
+
+// „2× MAC One, Cobra“
+const loadSummary = (plan, pls) => {
+  const groups = [];
+  pls.forEach(p => {
+    const g = groups.find(x => x.loadId === p.loadId);
+    if (g) g.n++; else groups.push({ loadId: p.loadId, n: 1 });
+  });
+  return groups.map(g => (g.n > 1 ? `${g.n}× ` : '') + (getLoad(plan, g.loadId)?.name || (g.loadId ? '(unbekannt)' : '(leer)'))).join(', ');
+};
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Root                                                                      */
@@ -57,7 +97,7 @@ export default function App() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      setPlan(raw ? JSON.parse(raw) : newPlan());
+      setPlan(raw ? migratePlan(JSON.parse(raw)) : newPlan());
     } catch {
       setPlan(newPlan());
     }
@@ -131,32 +171,41 @@ export default function App() {
 /* ══════════════════════════════════════════════════════════════════════════ */
 function SteckplanTab({ plan, setPlan }) {
   const [modal, setModal] = useState(null);
-  // modal: null | {kind:'add'} | {kind:'inst', instId} | {kind:'pick', instId, outId}
+  // modal: null | {kind:'add'} | {kind:'inst', instId} | {kind:'pick', instId, slotKey}
 
   const hasLibrary = plan.boxTypes.length > 0;
 
-  const addInstance = (boxId, name) => {
-    const inst = { id: uid(), instName: name, box: boxId, consumers: [] };
-    setPlan(p => ({ ...p, instances: [...p.instances, inst] }));
+  // Datenmodell wie am Desktop (addInstance / removeInstance / addPlacement / removePlacement)
+  const addInstance = (typeId, name) => {
+    const type = getBoxType(plan, typeId);
+    if (!type) return;
+    const count = plan.instances.filter(i => i.typeId === typeId).length;
+    const inst = {
+      id: uid(), typeId,
+      name: name.trim() || (count > 0 ? `${type.name} #${count + 1}` : type.name),
+      parentId: null, parentOutletId: null, mainConnectionId: null,
+    };
+    setPlan(p => ({ ...p, instances: [inst, ...p.instances] }));
     setModal({ kind: 'inst', instId: inst.id });
   };
 
-  const updateConsumer = (instId, outId, loadId) => {
-    setPlan(p => {
-      const instances = p.instances.map(inst => {
-        if (inst.id !== instId) return inst;
-        const consumers = inst.consumers.filter(c => c.outId !== outId);
-        if (loadId) consumers.push({ id: uid(), outId, loadId });
-        return { ...inst, consumers };
-      });
-      return { ...p, instances };
-    });
-  };
+  const updateInstance = (id, patch) =>
+    setPlan(p => ({ ...p, instances: p.instances.map(i => i.id === id ? { ...i, ...patch } : i) }));
 
-  const deleteInstance = (instId) => {
-    setPlan(p => ({ ...p, instances: p.instances.filter(i => i.id !== instId) }));
+  const removeInstance = (id) => {
+    setPlan(p => ({
+      ...p,
+      instances:  p.instances.filter(i => i.id !== id).map(i => i.parentId === id ? { ...i, parentId: null, parentOutletId: null } : i),
+      placements: p.placements.filter(pl => pl.instanceId !== id),
+    }));
     setModal(null);
   };
+
+  const addPlacement = (instanceId, outletId, mcSlot, loadId) =>
+    setPlan(p => ({ ...p, placements: [...p.placements, { id: uid(), instanceId, outletId, mcSlot, loadId }] }));
+
+  const removePlacements = (ids) =>
+    setPlan(p => ({ ...p, placements: p.placements.filter(pl => !ids.includes(pl.id)) }));
 
   return (
     <div className="page">
@@ -173,18 +222,19 @@ function SteckplanTab({ plan, setPlan }) {
 
       <div className="inst-list">
         {plan.instances.map(inst => {
-          const bt = getBoxType(plan, inst.box);
-          const assigned = inst.consumers?.length || 0;
-          const total    = bt?.outlets?.length || 0;
+          const bt    = getBoxType(plan, inst.typeId);
+          const slots = slotGroups(bt).flatMap(g => g.slots);
+          const assigned = slots.filter(s => slotPlacements(plan, inst.id, s).length || slotKids(plan, inst.id, s.key).length).length;
+          const total    = slots.length;
           return (
             <button
               key={inst.id}
               className="inst-card"
               onClick={() => setModal({ kind: 'inst', instId: inst.id })}
             >
-              <div className="inst-name">{inst.instName || '(kein Name)'}</div>
+              <div className="inst-name">{instName(inst)}</div>
               <div className="inst-meta">
-                <span className="inst-type">{bt?.name || inst.box}</span>
+                <span className="inst-type">{bt?.name || inst.typeId || '?'}</span>
                 <span className={'inst-fill' + (assigned === total && total > 0 ? ' full' : '')}>
                   {assigned}/{total} belegt
                 </span>
@@ -201,7 +251,7 @@ function SteckplanTab({ plan, setPlan }) {
       {/* ── Add instance modal ── */}
       {modal?.kind === 'add' && (
         <AddInstModal
-          boxTypes={plan.boxTypes}
+          plan={plan}
           onAdd={addInstance}
           onClose={() => setModal(null)}
         />
@@ -211,15 +261,12 @@ function SteckplanTab({ plan, setPlan }) {
       {modal?.kind === 'inst' && (() => {
         const inst = plan.instances.find(i => i.id === modal.instId);
         if (!inst) return null;
-        const bt = getBoxType(plan, inst.box);
         return (
           <InstSheet
-            inst={inst} bt={bt} plan={plan}
-            onPickLoad={(outId) => setModal({ kind: 'pick', instId: inst.id, outId })}
-            onRename={(name) => {
-              setPlan(p => ({ ...p, instances: p.instances.map(i => i.id === inst.id ? { ...i, instName: name } : i) }));
-            }}
-            onDelete={() => deleteInstance(inst.id)}
+            inst={inst} bt={getBoxType(plan, inst.typeId)} plan={plan}
+            onPickSlot={(slotKey) => setModal({ kind: 'pick', instId: inst.id, slotKey })}
+            onRename={(name) => updateInstance(inst.id, { name })}
+            onDelete={() => removeInstance(inst.id)}
             onClose={() => setModal(null)}
           />
         );
@@ -228,19 +275,20 @@ function SteckplanTab({ plan, setPlan }) {
       {/* ── Consumer picker sheet ── */}
       {modal?.kind === 'pick' && (() => {
         const inst = plan.instances.find(i => i.id === modal.instId);
-        const bt   = getBoxType(plan, inst?.box);
-        const out  = bt?.outlets?.find(o => o.outId === modal.outId || o.id === modal.outId);
-        const cur  = getConsumer(inst, modal.outId);
+        const slot = slotGroups(getBoxType(plan, inst?.typeId)).flatMap(g => g.slots).find(s => s.key === modal.slotKey);
+        if (!inst || !slot) return null;
+        const pls  = slotPlacements(plan, inst.id, slot);
+        const back = () => setModal({ kind: 'inst', instId: inst.id });
         return (
           <PickerSheet
-            loads={plan.loads}
-            outlet={out}
-            currentLoadId={cur?.loadId}
-            onPick={(loadId) => {
-              updateConsumer(modal.instId, modal.outId, loadId);
-              setModal({ kind: 'inst', instId: modal.instId });
-            }}
-            onClose={() => setModal({ kind: 'inst', instId: modal.instId })}
+            plan={plan}
+            title={slot.mcSlot ? `${slot.outlet.label} – ${slot.label}` : slot.label}
+            threePhase={is3ph(slot.outlet.connector)}
+            placements={pls}
+            onAdd={(loadId) => { addPlacement(inst.id, slot.outlet.id, slot.mcSlot, loadId); back(); }}
+            onRemove={(id) => removePlacements([id])}
+            onClear={() => removePlacements(pls.map(p => p.id))}
+            onClose={back}
           />
         );
       })()}
@@ -249,9 +297,14 @@ function SteckplanTab({ plan, setPlan }) {
 }
 
 /* ── Add instance modal ──────────────────────────────────────────────────── */
-function AddInstModal({ boxTypes, onAdd, onClose }) {
+function AddInstModal({ plan, onAdd, onClose }) {
+  const boxTypes = plan.boxTypes;
   const [boxId, setBoxId] = useState(boxTypes[0]?.id || '');
   const [name,  setName]  = useState('');
+
+  const type  = boxTypes.find(b => b.id === boxId);
+  const count = plan.instances.filter(i => i.typeId === boxId).length;
+  const defaultName = type ? (count > 0 ? `${type.name} #${count + 1}` : type.name) : '';
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -271,7 +324,7 @@ function AddInstModal({ boxTypes, onAdd, onClose }) {
           <input
             className="field-input"
             value={name}
-            placeholder="z.B. Bühne Links"
+            placeholder={defaultName || 'z.B. Bühne Links'}
             autoFocus
             onChange={e => setName(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && boxId && onAdd(boxId, name)}
@@ -289,13 +342,42 @@ function AddInstModal({ boxTypes, onAdd, onClose }) {
 }
 
 /* ── Instance detail sheet ───────────────────────────────────────────────── */
-function InstSheet({ inst, bt, plan, onPickLoad, onRename, onDelete, onClose }) {
+function InstSheet({ inst, bt, plan, onPickSlot, onRename, onDelete, onClose }) {
   const [editing, setEditing] = useState(false);
-  const [nameVal, setNameVal] = useState(inst.instName);
+  const [nameVal, setNameVal] = useState(inst.name || '');
 
   const commitRename = () => {
     setEditing(false);
-    if (nameVal !== inst.instName) onRename(nameVal);
+    if (nameVal !== (inst.name || '')) onRename(nameVal);
+  };
+
+  const parent = plan.instances.find(i => i.id === inst.parentId);
+  const loose  = unslottedPlacements(plan, inst, bt);
+
+  const slotRow = (slot) => {
+    const pls    = slotPlacements(plan, inst.id, slot);
+    const kids   = slotKids(plan, inst.id, slot.key);
+    const filled = pls.length > 0 || kids.length > 0;
+    return (
+      <button
+        key={slot.key}
+        className={'outlet-row' + (filled ? ' outlet-row--filled' : '') + (slot.mcSlot ? ' outlet-row--slot' : '')}
+        onClick={() => onPickSlot(slot.key)}
+      >
+        <div className="outlet-info">
+          <span className="outlet-label">{slot.label}</span>
+          <span className="outlet-type">{slot.sub}</span>
+        </div>
+        <div className="outlet-consumer">
+          <div className="consumer-stack">
+            {kids.length > 0 && <span className="consumer-kid">↳ {kids.map(instName).join(', ')}</span>}
+            {pls.length > 0 && <span className="consumer-name">{loadSummary(plan, pls)}</span>}
+            {!filled && <span className="consumer-empty">Leer</span>}
+          </div>
+          <span className="outlet-arrow">›</span>
+        </div>
+      </button>
+    );
   };
 
   return (
@@ -314,42 +396,56 @@ function InstSheet({ inst, bt, plan, onPickLoad, onRename, onDelete, onClose }) 
             />
           ) : (
             <span className="sheet-title" onClick={() => setEditing(true)}>
-              {inst.instName || '(kein Name)'} ✏️
+              {instName(inst)} ✏️
             </span>
           )}
           <button className="sheet-close" onClick={onClose}>✕</button>
         </div>
-        <div className="sheet-sub">{bt?.name} · {bt?.feedConnector} {bt?.feedAmp}A</div>
+        <div className="sheet-sub">
+          {bt?.name || '?'} · {CONN[bt?.feedConnector]?.label || bt?.feedConnector || ''} {bt?.feedAmp}A
+          {parent && ` · an ${instName(parent)}`}
+        </div>
 
         <div className="outlet-list">
-          {(bt?.outlets || []).map(out => {
-            const cons = getConsumer(inst, out.id);
-            const load = cons ? getLoad(plan, cons.loadId) : null;
+          {slotGroups(bt).map(({ outlet, slots }) => {
+            if (!isMulticore(outlet.connector)) return slotRow(slots[0]);
+            const kids = slotKids(plan, inst.id, outlet.id);
             return (
-              <button
-                key={out.id}
-                className={'outlet-row' + (load ? ' outlet-row--filled' : '')}
-                onClick={() => onPickLoad(out.id)}
-              >
-                <div className="outlet-info">
-                  <span className="outlet-label">{out.label}</span>
-                  <span className="outlet-type">{CONN[out.connector]?.label || out.connector}</span>
+              <React.Fragment key={outlet.id}>
+                <div className="outlet-group">
+                  <span className="outlet-label">{outlet.label}</span>
+                  <span className="outlet-type">Multicore · {slots.length} Steckplätze</span>
+                  {kids.length > 0 && <span className="consumer-kid">↳ {kids.map(instName).join(', ')}</span>}
                 </div>
-                <div className="outlet-consumer">
-                  {load
-                    ? <span className="consumer-name">{load.name}</span>
-                    : <span className="consumer-empty">Leer</span>
-                  }
-                  <span className="outlet-arrow">›</span>
-                </div>
-              </button>
+                {slots.map(slotRow)}
+              </React.Fragment>
             );
           })}
+
+          {loose.length > 0 && (
+            <>
+              <div className="outlet-group">
+                <span className="outlet-label">Ohne Anschluss / Steckplatz</span>
+                <span className="outlet-type">Am PC im Steckplan zuordnen</span>
+              </div>
+              {loose.map(p => {
+                const o = bt?.outlets?.find(x => x.id === p.outletId);
+                return (
+                  <div key={p.id} className="outlet-row outlet-row--static">
+                    <div className="outlet-info">
+                      <span className="outlet-label">{getLoad(plan, p.loadId)?.name || '(leer)'}</span>
+                      <span className="outlet-type">{o ? `${o.label} · kein Steckplatz` : 'kein Anschluss'}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </>
+          )}
         </div>
 
         <div className="sheet-footer sheet-footer--danger">
           <button className="btn btn--danger" onClick={() => {
-            if (window.confirm(`"${inst.instName}" wirklich löschen?`)) onDelete();
+            if (window.confirm(`"${instName(inst)}" wirklich löschen? Alle Steckungen dieses Verteilers gehen verloren.`)) onDelete();
           }}>
             Löschen
           </button>
@@ -360,18 +456,23 @@ function InstSheet({ inst, bt, plan, onPickLoad, onRename, onDelete, onClose }) 
 }
 
 /* ── Consumer picker sheet ───────────────────────────────────────────────── */
-function PickerSheet({ loads, outlet, currentLoadId, onPick, onClose }) {
+function PickerSheet({ plan, title, threePhase, placements, onAdd, onRemove, onClear, onClose }) {
   const [search, setSearch] = useState('');
+  // Wie am Desktop: 3-phasige Verbraucher nur an 3-phasige Anschlüsse und umgekehrt
+  const loads = plan.loads
+    .filter(l => !!l.threePhase === threePhase)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de', { numeric: true, sensitivity: 'base' }));
   const filtered = loads.filter(l =>
-    !search || l.name.toLowerCase().includes(search.toLowerCase())
+    !search || (l.name || '').toLowerCase().includes(search.toLowerCase())
   );
+  const countOf = (loadId) => placements.filter(p => p.loadId === loadId).length;
 
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet sheet--bottom sheet--tall" onClick={e => e.stopPropagation()}>
         <div className="sheet-handle" />
         <div className="sheet-header">
-          <span className="sheet-title">Verbraucher — {outlet?.label}</span>
+          <span className="sheet-title">Verbraucher — {title}</span>
           <button className="sheet-close" onClick={onClose}>✕</button>
         </div>
         <div className="picker-search">
@@ -384,23 +485,50 @@ function PickerSheet({ loads, outlet, currentLoadId, onPick, onClose }) {
           />
         </div>
         <div className="picker-list">
-          <button
-            className={'picker-item' + (!currentLoadId ? ' picker-item--selected' : '')}
-            onClick={() => onPick(null)}
-          >
-            <span className="picker-name">Leer</span>
-          </button>
-          {filtered.map(l => (
-            <button
-              key={l.id}
-              className={'picker-item' + (l.id === currentLoadId ? ' picker-item--selected' : '')}
-              onClick={() => onPick(l.id)}
-            >
-              <span className="picker-name">{l.name}</span>
-              <span className="picker-meta">{l.watt} W</span>
+          {placements.length > 0 && (
+            <>
+              <div className="picker-section">
+                <span>Gesteckt ({placements.length})</span>
+                <button className="link-btn link-btn--muted" onClick={onClear}>Alle entfernen</button>
+              </div>
+              {placements.map(p => {
+                const l = getLoad(plan, p.loadId);
+                return (
+                  <div key={p.id} className="picker-item picker-item--selected">
+                    <span className="picker-name">{l?.name || '(unbekannt)'}</span>
+                    <span className="picker-actions">
+                      {l && <span className="picker-meta">{l.watt || '?'} W{l.threePhase ? ' 3ph' : ''}</span>}
+                      <button className="picker-remove" aria-label="Entfernen" onClick={() => onRemove(p.id)}>✕</button>
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="picker-section"><span>Weiteren Verbraucher stecken</span></div>
+            </>
+          )}
+          {placements.length === 0 && (
+            <button className="picker-item picker-item--selected" onClick={onClose}>
+              <span className="picker-name">Leer</span>
             </button>
-          ))}
-          {filtered.length === 0 && <div className="picker-empty">Keine Treffer</div>}
+          )}
+          {filtered.map(l => {
+            const n = countOf(l.id);
+            return (
+              <button
+                key={l.id}
+                className="picker-item"
+                onClick={() => onAdd(l.id)}
+              >
+                <span className="picker-name">{l.name}</span>
+                <span className="picker-meta">{n > 0 && `${n}× gesteckt · `}{l.watt || '?'} W{l.threePhase ? ' 3ph' : ''}</span>
+              </button>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div className="picker-empty">
+              {loads.length ? 'Keine Treffer' : `Keine ${threePhase ? '3-phasigen' : '1-phasigen'} Verbraucher in der Bibliothek`}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1146,7 +1274,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       if (!confirmReplace(plan)) { status('Laden abgebrochen', true); return; }
-      setPlan(data);
+      setPlan(migratePlan(data));
       status('Geladen: ' + (data.meta?.production || id));
     } catch (e) {
       status('Download fehlgeschlagen: ' + e.message, true);
@@ -1187,7 +1315,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
       const data = await r.json();
       if (data._format === 'stromplaner') {
         if (!confirmReplace(plan)) { status('Import abgebrochen', true); return; }
-        setPlan(data);
+        setPlan(migratePlan(data));
         setPcUrl(url);
         status('Plan geladen: ' + (data.meta?.production || url));
       } else {
