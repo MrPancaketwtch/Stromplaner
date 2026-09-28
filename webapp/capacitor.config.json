@@ -1,8 +1,8 @@
 {
-  "appId": "dev.stromplaner.mobile",
+  "appId": "dev.stromplaner",
   "appName": "Stromplaner",
   "webDir": "dist",
-  "server": {
-    "androidScheme": "https"
+  "android": {
+    "allowMixedContent": true
   }
 }
