@@ -73,6 +73,11 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.2.0": [
+    "PWA: Stromplaner ist jetzt als Progressive Web App auf GitHub Pages verfügbar und auf Android installierbar",
+    "Sync-Server: selbst-hostbarer Express-Server (Docker) für die Synchronisation von Plänen zwischen Desktop und Handy",
+    "Android-APK: manuell auslösbarer GitHub-Actions-Workflow erstellt eine TWA-APK (android.yml)",
+  ],
   "1.1.0": [
     "Speicherverzeichnis liegt jetzt im App-Ordner (AppData\\Stromplaner) statt in Dokumente",
     "release.bat: call-Direktive und enabledelayedexpansion für zuverlässigeren Release-Ablauf",
