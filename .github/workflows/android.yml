@@ -54,6 +54,13 @@ jobs:
           grep -q 'android.permission.CAMERA' "$MANIFEST" || \
             sed -i 's|    <application|    <uses-permission android:name="android.permission.CAMERA" />\n    <application|' "$MANIFEST"
 
+      - name: Generate app icon and splash screen
+        working-directory: webapp
+        run: >
+          npx @capacitor/assets generate --android
+          --iconBackgroundColor '#1c2127' --iconBackgroundColorDark '#1c2127'
+          --splashBackgroundColor '#15191e' --splashBackgroundColorDark '#15191e'
+
       - name: Sync web assets into Android project
         working-directory: webapp
         run: npx cap sync android
