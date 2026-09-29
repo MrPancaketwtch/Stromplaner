@@ -22,6 +22,14 @@ function Find-Keytool {
   return $null
 }
 
+# PowerShell 5.1 macht aus umgeleiteter stderr-Ausgabe nativer Programme einen Abbruchfehler
+function Invoke-NativeQuiet([scriptblock]$Command) {
+  $old = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try { & $Command *> $null } finally { $ErrorActionPreference = $old }
+  return $LASTEXITCODE
+}
+
 function Read-Secret([string]$prompt) {
   $s = Read-Host $prompt -AsSecureString
   $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
@@ -90,12 +98,11 @@ try {
 
   $viaGh = $false
   if (Get-Command gh -ErrorAction SilentlyContinue) {
-    gh auth status *> $null
-    if ($LASTEXITCODE -eq 0) {
+    if ((Invoke-NativeQuiet { gh auth status }) -eq 0) {
       $viaGh = $true
       foreach ($name in $secrets.Keys) {
-        gh secret set $name --repo $Repo --body $secrets[$name] *> $null
-        if ($LASTEXITCODE -ne 0) { $viaGh = $false; break }
+        $value = $secrets[$name]
+        if ((Invoke-NativeQuiet { gh secret set $name --repo $Repo --body $value }) -ne 0) { $viaGh = $false; break }
         Write-Host "Secret gesetzt: $name" -ForegroundColor Green
       }
       if (-not $viaGh) { Write-Host 'gh darf keine Secrets setzen - weiter per Hand ueber die Webseite.' -ForegroundColor Yellow }
