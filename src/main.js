@@ -91,12 +91,18 @@ function createWindow() {
   });
 }
 
+// macOS tauscht die App nur aus, wenn sie mit Apple-Developer-ID signiert ist – das ist sie nicht.
+// Dort daher nur auf neue Versionen hinweisen und die Download-Seite öffnen.
+const MANUAL_UPDATE = process.platform === 'darwin';
+const RELEASES_URL = 'https://github.com/MrPancaketwtch/Stromplaner/releases/latest';
+
 function setupAutoUpdater(win) {
   const send = (type, payload) => {
     if (!win.isDestroyed()) win.webContents.send('update-status', { type, ...payload });
   };
 
   let updateReady = false;
+  if (MANUAL_UPDATE) autoUpdater.autoDownload = false;
 
   autoUpdater.on('checking-for-update',  () => send('checking'));
   autoUpdater.on('update-not-available', () => send('up-to-date'));
@@ -108,7 +114,7 @@ function setupAutoUpdater(win) {
     send('downloading', { percent: Math.round(p.percent) })
   );
   autoUpdater.on('update-available', (info) =>
-    send('available', { version: info.version })
+    send('available', { version: info.version, manual: MANUAL_UPDATE })
   );
   autoUpdater.on('update-downloaded', (info) => {
     updateReady = true;
@@ -124,6 +130,7 @@ function setupAutoUpdater(win) {
   });
 
   ipcMain.handle('install-update', () => {
+    if (MANUAL_UPDATE) { shell.openExternal(RELEASES_URL); return; }
     autoUpdater.quitAndInstall();
   });
 

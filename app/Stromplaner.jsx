@@ -73,6 +73,9 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.2.1": [
+    "macOS: Updates werden nicht mehr automatisch installiert (schlug mit „ZIP file not provided“ fehl). Stattdessen zeigt Stromplaner neue Versionen an und öffnet die Download-Seite.",
+  ],
   "1.2.0": [
     "Handy-App für Android (APK im Release): Errichtungsprüfung direkt am Verteiler – Sichtprüfung, Spannungen, Drehfeld, RCD-Prüfung und Schleifenimpedanz mit derselben Grenzwertprüfung wie am PC",
     "Lokal im WLAN teilen: Plan per QR-Code aufs Handy holen und nach der Prüfung mit „An PC zurücksenden“ zurückholen – wahlweise nur die Prüfergebnisse oder den ganzen Plan",
@@ -1261,13 +1264,19 @@ function UpdateModal({status,onClose,onCheck,onInstall,setStatus}){
         {status.type==='idle'&&<p style={{color:'#aab',margin:0}}>Auf neue Version prüfen?</p>}
         {status.type==='checking'&&<p style={{color:'#aab',margin:0}}>Suche nach Updates…</p>}
         {status.type==='up-to-date'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Du hast bereits die neueste Version.</p>}
-        {status.type==='available'&&<p style={{color:'#f5a623',margin:0}}>Version {status.version} verfügbar – wird heruntergeladen…</p>}
+        {status.type==='available'&&!status.manual&&<p style={{color:'#f5a623',margin:0}}>Version {status.version} verfügbar – wird heruntergeladen…</p>}
+        {status.type==='available'&&status.manual&&<>
+          <p style={{color:'#f5a623',margin:'0 0 8px'}}>Version {status.version} ist verfügbar.</p>
+          <p style={{color:'#aab',margin:0,fontSize:12,lineHeight:1.5}}>Auf dem Mac bitte manuell aktualisieren: Auf der Download-Seite die passende <strong>.dmg</strong> laden (Apple Silicon: <em>-arm64.dmg</em>, Intel: ohne Zusatz), öffnen und Stromplaner in den Programme-Ordner ziehen. Deine Daten bleiben erhalten.</p>
+        </>}
         {status.type==='downloading'&&<p style={{color:'#5bb8f5',margin:0}}>Wird heruntergeladen… {status.percent!=null?status.percent+'%':''}</p>}
         {status.type==='downloaded'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Version {status.version||''} bereit. Nach dem Neustart wird die neue Version installiert.</p>}
         {status.type==='error'&&<p style={{color:'#e06c75',margin:0}}>Fehler: {status.message||'Update konnte nicht geprüft werden.'}</p>}
         <div style={row}>
           {status.type==='downloaded'
             ?<button style={btn({background:'#3a7bd5',color:'#fff'})} onClick={onInstall}>Jetzt neu starten</button>
+            :status.type==='available'&&status.manual
+            ?<button style={btn({background:'#3a7bd5',color:'#fff'})} onClick={onInstall}>Download-Seite öffnen</button>
             :<button style={btn({background:'#3a7bd5',color:'#fff',opacity:busy?0.6:1})} disabled={busy} onClick={()=>{setStatus({type:'checking'});onCheck();}}>Nach Updates suchen</button>
           }
           <button style={btn({background:'#2a3547',color:'#aab'})} onClick={onClose}>Schließen</button>

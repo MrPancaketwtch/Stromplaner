@@ -25,7 +25,9 @@ Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speicher
 
 **Verteiler-Typen und Verbraucher** werden zusätzlich automatisch als Bibliothek in AppData gespeichert (`AppData\Stromplaner\Speicherstände\Bibliothek.json` auf Windows, `~/Library/Application Support/Stromplaner/Speicherstände/Bibliothek.json` auf macOS) und beim Start von dort geladen – sie bleiben also erhalten, auch wenn ein anderer Planungsstand geöffnet wird.
 
-**Updates** werden automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **↓ Update bereit**-Button, der einen Neustart-Dialog öffnet.
+**Updates** werden unter Windows automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **↓ Update bereit**-Button, der einen Neustart-Dialog öffnet.
+
+Auf **macOS** ist die App nicht mit einem Apple-Entwicklerzertifikat signiert, deshalb kann sie sich nicht selbst austauschen. Stromplaner zeigt eine neue Version mit **↑ Update verfügbar** an. **Download-Seite öffnen** führt zum Release: dort die passende `.dmg` laden, öffnen und Stromplaner in den Programme-Ordner ziehen. Pläne, Bibliothek und Einstellungen bleiben erhalten.
 
 ---
 
