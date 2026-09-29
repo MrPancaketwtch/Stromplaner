@@ -38,7 +38,8 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 ### Installation
 - Die Datei `Stromplaner-x.x.x.apk` von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** aufs Handy laden und öffnen.
 - Android fragt beim ersten Mal, ob Apps aus dieser Quelle installiert werden dürfen → für Browser bzw. Dateimanager erlauben.
-- **Update:** Die APK ist derzeit nicht mit einem festen Schlüssel signiert. Android lehnt es deshalb ab, eine neue Version über die alte zu installieren – die alte App muss vorher deinstalliert werden. **Dabei werden alle Daten auf dem Handy gelöscht: offene Prüfergebnisse vorher an den PC senden!**
+- **Update:** Die neue APK einfach über die installierte App installieren – Pläne und Prüfergebnisse bleiben erhalten.
+- **Einmalig beim Umstieg von einer älteren Test-Version** (bis 1.2.1, mit wechselndem Debug-Schlüssel signiert): Android verweigert das Update mit „App nicht installiert“. Dann die alte App deinstallieren und neu installieren. **Dabei werden die Daten auf dem Handy gelöscht – offene Prüfergebnisse vorher an den PC senden!**
 - Alternativ läuft Stromplaner ohne Installation als Web-App unter **[mrpancaketwtch.github.io/Stromplaner](https://mrpancaketwtch.github.io/Stromplaner/)**. Der Datenaustausch im WLAN (Laden per QR-Code, An PC zurücksenden, Sync-Server über `http://`) funktioniert dort nicht, weil der Browser von einer HTTPS-Seite keine unverschlüsselten Verbindungen ins lokale Netz zulässt – für die Prüfung vor Ort die APK verwenden.
 
 ### Tabs in der Handy-App
@@ -326,6 +327,12 @@ npm install
 npm run dev
 ```
 Eine Test-APK ohne Release baut der Workflow **Android APK** (Actions → *Run workflow*); die APK liegt danach unter *Artifacts*.
+
+**Android-Signierung:** Die APK wird mit einem festen Schlüssel signiert, der als GitHub-Secret hinterlegt ist (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, `ANDROID_STORE_PASSWORD`). Eingerichtet wird er einmalig mit
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup-android-signing.ps1
+```
+Das Skript installiert bei Bedarf Java, erzeugt den Schlüssel außerhalb des Projekts und setzt die Secrets. Schlüsseldatei und Passwort sicher aufbewahren – ohne sie lassen sich keine Updates mehr über die installierte App installieren. Fehlen die Secrets, baut der Workflow eine Debug-APK mit wechselndem Schlüssel. Die `versionCode` der APK ist die fortlaufende Workflow-Nummer, `versionName` die Version aus `package.json`.
 
 **Lokalen Installer bauen (nur Windows, ohne GitHub-Release):**
 ```bash

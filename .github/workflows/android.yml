@@ -12,6 +12,9 @@ permissions:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    # Secrets lassen sich in `if:` nicht direkt abfragen – daher als Job-Variable
+    env:
+      HAS_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -69,40 +72,40 @@ jobs:
         working-directory: webapp/android
         run: chmod +x gradlew
 
-      # ── Optional: Release signing via GitHub Secrets ──────────────────────
-      # Set these secrets to get a signed release APK:
-      #   ANDROID_KEYSTORE_BASE64  - base64-encoded .jks keystore
-      #   ANDROID_KEY_ALIAS        - key alias inside the keystore
-      #   ANDROID_KEY_PASSWORD     - key password
-      #   ANDROID_STORE_PASSWORD   - keystore password
-      - name: Prepare signing keystore
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
-        working-directory: webapp/android
-        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > release.jks
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-
-      - name: Build release APK (signed)
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 != '' }}
+      # Android installiert ein Update nur, wenn versionCode steigt
+      - name: Set app version
         working-directory: webapp/android
         run: |
+          VERSION=$(node -p "require('../../package.json').version")
+          sed -i "s/versionCode 1\b/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"$VERSION\"/" app/build.gradle
+          grep -E "versionCode|versionName" app/build.gradle
+
+      # ── Signierung (Secrets einrichten: scripts/setup-android-signing.ps1) ──
+      #   ANDROID_KEYSTORE_BASE64  - base64-codierter Keystore
+      #   ANDROID_KEY_ALIAS        - Alias des Schlüssels
+      #   ANDROID_KEY_PASSWORD     - Passwort des Schlüssels
+      #   ANDROID_STORE_PASSWORD   - Passwort des Keystores
+      - name: Build release APK (signed)
+        if: env.HAS_SIGNING == 'true'
+        working-directory: webapp/android
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file="$PWD/release.jks" \
+            -Pandroid.injected.signing.store.file="$RUNNER_TEMP/release.keystore" \
             -Pandroid.injected.signing.store.password="$ANDROID_STORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
             -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+          rm -f "$RUNNER_TEMP/release.keystore"
         env:
           ANDROID_KEYSTORE_BASE64:  ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_STORE_PASSWORD:   ${{ secrets.ANDROID_STORE_PASSWORD }}
           ANDROID_KEY_ALIAS:        ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD:     ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Build debug APK (fallback, no signing secrets needed)
-        if: ${{ env.ANDROID_KEYSTORE_BASE64 == '' }}
+      - name: Build debug APK (keine Signier-Secrets hinterlegt)
+        if: env.HAS_SIGNING != 'true'
         working-directory: webapp/android
         run: ./gradlew assembleDebug
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
       # ── Locate built APK ──────────────────────────────────────────────────
       - name: Find APK

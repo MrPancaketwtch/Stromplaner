@@ -30,6 +30,10 @@ twa-build/
 webapp/android/
 apk-download/
 
+# Android-Signierschluessel – niemals committen
+*.keystore
+*.jks
+
 # Windows
 Thumbs.db
 desktop.ini
