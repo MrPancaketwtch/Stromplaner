@@ -21,10 +21,6 @@ webapp/dist/
 webapp/node_modules/
 webapp/public/icon.png
 
-# server data
-server/data/
-server/node_modules/
-
 # TWA / Android build output (Capacitor-Projekt wird in der CI frisch erzeugt)
 twa-build/
 webapp/android/

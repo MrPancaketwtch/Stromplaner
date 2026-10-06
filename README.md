@@ -71,12 +71,32 @@ Das Teilen muss am PC während des Zurücksendens noch aktiv sein. Solange getei
 - Meldung „Port 4747 ist belegt“: Stromplaner läuft vermutlich ein zweites Mal.
 
 ### Sync-Server (optional)
-Für den Austausch ohne gemeinsames WLAN gibt es einen selbst-hostbaren Sync-Server im Ordner `server/`:
+Für den Austausch ohne gemeinsames WLAN nutzt Stromplaner den **[Planer-Server](https://github.com/Nomisimo/Planer-Server)**, den gemeinsamen, selbst-hostbaren Server der Planer-Familie (Stromplaner, Netzwerkplaner). Er ist auch die Grundlage für das gemeinsame Arbeiten in Echtzeit.
+
+**Einrichten (Docker):**
 ```bash
-cd server
-docker-compose up -d
+git clone --recurse-submodules https://github.com/Nomisimo/Planer-Server.git
+cd Planer-Server
+mkdir -p data && sudo chown -R 1000:1000 data   # Server läuft im Container als Benutzer „node“ (UID 1000)
+docker compose up -d --build
+curl http://localhost:3001/health                # → {"ok":true,…}
 ```
-Der Server läuft dann auf Port 3001. Am PC unter **☁ Sync** und am Handy im Tab **Sync** die Server-URL (z. B. `http://192.168.1.10:3001`) eintragen, dann Pläne hoch- und herunterladen. Optional schützt die Umgebungsvariable `AUTH_TOKEN` den Server; derselbe Token wird dann in beiden Apps eingetragen.
+Ohne den `chown`-Schritt legt Docker unter Linux den Datenordner als `root` an, und der Server kann nicht speichern. Unter Docker Desktop (Windows/macOS) ist er nicht nötig.
+
+Der Server läuft auf Port 3001. Am PC unter **☁ Sync** und am Handy im Tab **Sync** die Server-URL (z. B. `http://192.168.1.10:3001`) eintragen, dann Pläne hoch- und herunterladen. Optional schützt `AUTH_TOKEN` (in der `docker-compose.yml`) den Server; derselbe Token wird dann in beiden Apps eingetragen. Ohne HTTPS ist der Server nur fürs eigene Netz gedacht – aus dem Internet nur hinter einem Reverse-Proxy mit HTTPS erreichbar machen.
+
+**Umstieg vom bisherigen Stromplaner-Sync-Server** (Ordner `server/` bis Version 1.2.x): Die Apps sprechen mit dem Planer-Server genau wie bisher, nur der Ablageort der Pläne ist ein anderer.
+```bash
+# 1. Alten Server stoppen (im Ordner des alten Servers)
+docker compose down
+# 2. Pläne in den Planer-Server übernehmen (im Planer-Server-Ordner)
+mkdir -p data/stromplaner/plans
+cp /pfad/zum/alten/server/data/plans/*.json data/stromplaner/plans/
+sudo chown -R 1000:1000 data
+# 3. Planer-Server starten – einen bisherigen AUTH_TOKEN vorher in dessen docker-compose.yml eintragen
+docker compose up -d --build
+```
+Server-URL und Token in den Apps bleiben unverändert.
 
 ---
 
@@ -105,7 +125,6 @@ Stromplaner/
 │   ├── src/App.jsx           ← Quellcode Handy-App
 │   ├── assets/               ← App-Icon & Splash (Quelle für die Android-Icons)
 │   └── capacitor.config.json
-├── server/                   ← Optionaler Sync-Server (Express, Docker)
 ├── .github/workflows/
 │   ├── release.yml           ← Windows + macOS bei Tag-Push
 │   ├── android.yml           ← Android-APK (bei Tag-Push oder manuell)
