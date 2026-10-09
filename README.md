@@ -107,6 +107,7 @@ Stromplaner/
 ├── app/
 │   ├── Stromplaner.html      ← Gebündelte App (Output von build.js)
 │   ├── Stromplaner.jsx       ← Quellcode (React 18)
+│   ├── sync/                 ← Gemeinsam arbeiten (Anbindung an den Planer-Server)
 │   └── Standard.json         ← Vorgeladene Verteiler-Typen & Verbraucher
 ├── dist/                     ← NSIS-Installer (gitignoriert – wird via GitHub Releases verteilt)
 ├── Speicherstände/           ← Eigene Planungen (.json) ablegen
@@ -268,6 +269,26 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 | **📋 Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
 | **🖨 PDF** | Druckbaren Stromplan als PDF öffnen |
 | **↓ Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
+| **👥 Gemeinsam** / **● 2 online** | Gemeinsam mit anderen am selben Plan arbeiten (siehe unten); in einer Sitzung zeigt der Knopf Status und Teilnehmerzahl |
+| **☁ Sync** | Plan auf den Sync-Server hoch-/herunterladen, lokal im WLAN per QR-Code teilen |
+
+---
+
+## 👥 Gemeinsam arbeiten
+
+Mehrere Personen bearbeiten denselben Plan gleichzeitig, jede Änderung erscheint sofort bei allen. Voraussetzung ist ein erreichbarer [Planer-Server](#sync-server-optional) und dieselbe Stromplaner-Version bei allen.
+
+1. Header → **👥 Gemeinsam** → Server-Adresse (z. B. `192.168.1.10` oder `http://server:3001`), ggf. Server-Token und den eigenen Namen eintragen.
+2. **Sitzung starten:** Name vergeben, optional einen Sitzungscode – der aktuelle Plan wird zum gemeinsamen Plan.
+3. **Beitreten:** Die anderen wählen die Sitzung aus der Liste (ggf. mit Code). Ihr bisheriger Plan wird dabei durch den Stand der Sitzung ersetzt – vorher speichern, falls nötig.
+
+**Gut zu wissen:**
+- Wer in einem Textfeld tippt, sperrt es kurz für die anderen; wer gleichzeitig dasselbe Feld ändern will, bekommt einen Hinweis und seine Eingabe wird zurückgenommen.
+- Ändern zwei Personen dasselbe Feld kurz nacheinander, gilt die letzte Änderung; die andere Person bekommt einen Hinweis.
+- Bricht die Verbindung ab, arbeitet man weiter – die Änderungen werden beim Wiederverbinden nachgeschickt.
+- **↥ Laden**, **↺ Neu** und „Von Server laden“ ersetzen in einer Sitzung den Plan für alle (mit Rückfrage).
+- Verteiler-Typen und Verbraucher der Sitzung landen – wie beim Laden eines Plans – auch in der eigenen Bibliothek.
+- **Verlassen:** Man kann später wieder beitreten, der Plan bleibt lokal erhalten. **Für alle beenden** löscht die Sitzung auf dem Server; die anderen behalten ihren Stand als lokalen Plan.
 
 ---
 
@@ -313,6 +334,7 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | CI/CD | GitHub Actions (baut Windows + macOS + Android bei Tag-Push) |
 | Handy-App | React 18 + Vite, Capacitor 6 (Android-APK), PWA via GitHub Pages |
 | QR / Datenaustausch | `qrcode` (PC), `jsQR` (Handy), lokaler HTTP-Server auf Port 4747 |
+| Gemeinsam arbeiten | WebSocket zum [Planer-Server](https://github.com/Nomisimo/Planer-Server); Client in `app/sync/` (`sync-client.js`, `ops.js` unverändert aus dem Planer-Server übernommen, Apache 2.0 – siehe `app/sync/LICENSE` und `NOTICE`; Änderungen dort pflegen und hierher kopieren) |
 
 ### Build & Release
 

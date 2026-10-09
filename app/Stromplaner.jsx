@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
+import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 
 const PHASES = ["L1","L2","L3"];
 const VOLT   = 230;
@@ -73,6 +74,10 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
 const CHANGELOG = {
+  "1.3.0": [
+    "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → 👥 Gemeinsam)",
+    "Eigener Dialog statt Windows-Meldungen: Textfelder bleiben nach Hinweisen, Speichern- und Öffnen-Dialogen wieder bedienbar",
+  ],
   "1.2.1": [
     "macOS: Updates werden nicht mehr automatisch installiert (schlug mit „ZIP file not provided“ fehl). Stattdessen zeigt Stromplaner neue Versionen an und öffnet die Download-Seite.",
   ],
@@ -579,6 +584,26 @@ export default function App() {
     return ()=>clearTimeout(saveTimer.current);
   },[meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout,loaded]);
 
+  /* ── Gemeinsam arbeiten (Planer-Server) ────────────────────────────────── */
+  const [toasts,      setToasts]      = useState([]);
+  const notify=useCallback((text,art="info")=>{
+    const id=uid();
+    setToasts(t=>[...t.slice(-3),{id,text,art}]);
+    setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),art==="err"?8000:5000);
+  },[]);
+  const [showSitzung, setShowSitzung] = useState(false);
+  const sitzungDoc=useMemo(()=>({_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout}),
+    [meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout]);
+  const sitzungSetters=useMemo(()=>({meta:setMeta,mainConns:setMainConns,boxTypes:setBoxTypes,loads:setLoads,instances:setInstances,placements:setPlacements,
+    inspMeta:setInspMeta,inspResults:setInspResults,cableCalcs:setCableCalcs,voltCalcs:setVoltCalcs,schaltbildLayout:setSchaltbildLayout}),[]);
+  const sitzungDefaults=useMemo(()=>({meta:()=>DEFAULT_META,mainConns:()=>[],boxTypes:()=>[],loads:()=>[],instances:()=>[],placements:()=>[],
+    inspMeta:()=>({inspector:"",date:new Date().toISOString().slice(0,10),time:"",equipment:"",address:"",location:"",netType:""}),
+    inspResults:()=>({}),cableCalcs:()=>[],voltCalcs:()=>[],schaltbildLayout:()=>({positions:{},consumerPositions:{},annotations:[]})}),[]);
+  const sitzung=useSitzung({doc:sitzungDoc,setters:sitzungSetters,defaults:sitzungDefaults,notify,
+    version:typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"});
+  // Laden/Neu in einer Sitzung ersetzt den Plan für alle
+  const ersetzenErlaubt=async()=>!sitzung.aktiv||await uiConfirm("Du bist in einer gemeinsamen Sitzung. Der neue Stand ersetzt den Plan für alle Teilnehmer.\n\nFortfahren?");
+
   /* ── Derived ───────────────────────────────────────────────────────────── */
   const boxTypeById  = useMemo(()=>{ const m={}; boxTypes.forEach(b=>m[b.id]=b);   return m; },[boxTypes]);
   const loadById     = useMemo(()=>{ const m={}; loads.forEach(l=>m[l.id]=l);       return m; },[loads]);
@@ -712,7 +737,7 @@ export default function App() {
 
   /* ── Reset ─────────────────────────────────────────────────────────────── */
   const resetAll=async()=>{
-    if(!await uiConfirm("Alles zurücksetzen? Alle Verteiler, Steckungen und Produktionsdaten werden gelöscht. Verteiler-Typen und Verbraucher bleiben erhalten.")) return;
+    if(!await uiConfirm(`Alles zurücksetzen? Alle Verteiler, Steckungen und Produktionsdaten werden gelöscht. Verteiler-Typen und Verbraucher bleiben erhalten.${sitzung.aktiv?"\n\nDu bist in einer gemeinsamen Sitzung – das gilt für alle Teilnehmer.":""}`)) return;
     setMeta(DEFAULT_META);
     setMainConns([]);
     setInstances([]);
@@ -755,6 +780,7 @@ export default function App() {
   };
 
   const openPlan=async()=>{
+    if(!await ersetzenErlaubt()) return;
     if(window.electronAPI?.openPlan){
       const result=await window.electronAPI.openPlan();
       if(!result) return;
@@ -767,6 +793,7 @@ export default function App() {
 
   const openRecent=async(filePath)=>{
     setShowRecents(false);
+    if(!await ersetzenErlaubt()) return;
     const result=await window.electronAPI?.openRecent?.(filePath);
     if(result.error==="not-found"){ uiAlert("Datei nicht gefunden – wurde sie verschoben oder gelöscht?"); if(result.recents) setRecents(result.recents); return; }
     if(result.error){ uiAlert("Fehler: "+result.error); return; }
@@ -813,6 +840,7 @@ export default function App() {
   };
 
   const syncPullPlan=async(id)=>{
+    if(!await ersetzenErlaubt()) return;
     const base=syncServer.replace(/\/+$/,"");
     setSyncBusy(true); setSyncStatus({msg:`Lade „${id}"…`,err:false});
     try{
@@ -1177,6 +1205,13 @@ export default function App() {
             }
           </div>}
         </div>}
+        {(()=>{
+          const z=sitzung.zustand;
+          const farbe=!z?null:z.veraltet?"#e67e22":z.status==="online"?"#2ecc71":"#f5a623";
+          return <button style={{...S.ghostBtn,padding:"4px 7px",...(z?{borderColor:farbe}:{})}} title={z?`Sitzung „${z.info?.name||""}“ – ${z.veraltet?"beendet":z.status==="online"?"verbunden":"verbindet …"}`:"Gemeinsam mit anderen am Plan arbeiten"} onClick={()=>setShowSitzung(true)}>
+            {z?<><span style={{color:farbe}}>●</span> {z.veraltet?"Sitzung beendet":`${z.users?.length||0} online`}</>:"👥 Gemeinsam"}
+          </button>;
+        })()}
         <div style={{position:"relative"}}>
           <button style={{...S.ghostBtn,padding:"4px 7px"}} title="Mit Server synchronisieren" onClick={()=>{setShowSyncPanel(v=>!v);setSyncPlans(null);setSyncStatus({msg:"",err:false});}}>☁ Sync</button>
           {showSyncPanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}} onMouseLeave={()=>{}}>
@@ -1298,6 +1333,9 @@ export default function App() {
       {changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
       {showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
       {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus}/>}
+      {showSitzung&&<SitzungDialog sitzung={sitzung} server={syncServer} setServer={setSyncServer} token={syncToken} setToken={setSyncToken}
+        projektName={meta.production} version={typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"} onClose={()=>setShowSitzung(false)}/>}
+      <ToastHost toasts={toasts}/>
       <DialogHost/>
       {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);goTab("help");}}/>}
     </div>
@@ -1340,6 +1378,160 @@ function UpdateModal({status,onClose,onCheck,onInstall,setStatus}){
       </div>
     </div>
   );
+}
+
+function ToastHost({toasts}){
+  if(!toasts.length) return null;
+  const farbe={err:"#e06c75",warn:"#f5a623",info:"#5bb8f5"};
+  return(
+    <div style={{position:"fixed",right:16,bottom:16,zIndex:1500,display:"flex",flexDirection:"column",gap:8,maxWidth:380}}>
+      {toasts.map(t=><div key={t.id} role="status" style={{background:"#1e2530",border:"1px solid #2e3a4a",borderLeft:`4px solid ${farbe[t.art]||farbe.info}`,borderRadius:6,padding:"10px 12px",fontSize:12,color:"#e8eaf0",boxShadow:"0 8px 24px rgba(0,0,0,.4)",lineHeight:1.45}}>{t.text}</div>)}
+    </div>
+  );
+}
+
+/* ── Gemeinsam arbeiten ──────────────────────────────────────────────────── */
+const SZ={
+  label:  {fontSize:10,color:"#7c8794",letterSpacing:.5,textTransform:"uppercase",margin:"18px 0 8px"},
+  muted:  {fontSize:11,color:"#7c8794"},
+  fehler: {fontSize:12,color:"#e06c75",marginTop:8},
+  row:    {display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:"8px 0",borderTop:"1px solid #2e3640"},
+  danger: {background:"#3a1c1c",color:"#f0a0a0",border:"1px solid #6a2e2e",borderRadius:6,padding:"8px 12px",fontWeight:600,cursor:"pointer",fontSize:12},
+};
+
+function SitzungDialog({ sitzung, onClose, ...rest }){
+  const overlay={position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'};
+  const box={background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:10,padding:'22px 26px',width:580,maxWidth:'calc(100vw - 32px)',maxHeight:'calc(100vh - 48px)',overflowY:'auto',color:'#e8eaf0',fontFamily:'inherit',boxSizing:'border-box'};
+  return(
+    <div style={overlay} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div style={box} role="dialog" aria-modal="true" aria-label="Gemeinsam arbeiten">
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <div style={{fontSize:16,fontWeight:700,color:'#fff'}}>👥 Gemeinsam arbeiten</div>
+          <button onClick={onClose} aria-label="Schließen" style={{background:'none',border:'none',color:'#9aa4af',fontSize:16,cursor:'pointer'}}>✕</button>
+        </div>
+        {sitzung.zustand
+          ?<SitzungAktiv sitzung={sitzung} onClose={onClose}/>
+          :<SitzungVerbinden sitzung={sitzung} onClose={onClose} {...rest}/>}
+      </div>
+    </div>
+  );
+}
+
+function SitzungVerbinden({ sitzung, server, setServer, token, setToken, projektName, version, onClose }){
+  const [name,setName]=useState(ladeName);
+  const [liste,setListe]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [fehler,setFehler]=useState("");
+  const [neu,setNeu]=useState({name:projektName||"",code:""});
+  const [abfrage,setAbfrage]=useState(null); // Code-Eingabe für eine Sitzung: { id, code, fehler }
+  useEffect(()=>{ speichereName(name); },[name]);
+  const serverOk=!!serverBasis(server);
+  const bereit=serverOk&&!!name.trim();
+  const api=()=>serverApi(server,token);
+
+  const laden=async()=>{
+    setBusy(true); setFehler("");
+    try{ setListe(await api().liste()); }
+    catch(e){ setFehler(e.message); setListe(null); }
+    setBusy(false);
+  };
+  useEffect(()=>{ if(serverOk) laden(); },[]);
+
+  const beitreten=async(s,code)=>{
+    if(s.codeNoetig){
+      try{ await api().pruefeCode(s.id,code); }
+      catch(e){ setAbfrage(a=>({...a,fehler:e.message})); return; }
+    }
+    const b=beitrittMoeglich(s,version);
+    if(!await uiConfirm(`Beim Beitreten wird dein aktueller Plan durch den Stand der Sitzung „${s.name}“ ersetzt. Vorher speichern, falls nötig.${b.umstellen?"\n\n"+b.grund:""}\n\nBeitreten?`)) return;
+    sitzung.verbinden({server,token,session:s.id,code:code||undefined,name:name.trim(),info:s});
+    onClose();
+  };
+
+  const anlegen=async()=>{
+    setBusy(true); setFehler("");
+    try{ await sitzung.erstellen({server,token,name:name.trim(),sitzungsName:neu.name.trim()||"Sitzung",code:neu.code.trim()}); onClose(); }
+    catch(e){ setFehler(`Sitzung konnte nicht angelegt werden: ${e.message}`); setBusy(false); }
+  };
+
+  return(<>
+    <p style={{...SZ.muted,fontSize:12,lineHeight:1.5,margin:"0 0 12px"}}>Alle Teilnehmer bearbeiten denselben Plan gleichzeitig, Änderungen erscheinen sofort bei allen. Dafür braucht es einen erreichbaren <strong>Planer-Server</strong> (siehe README, Abschnitt „Sync-Server“). Alle brauchen dieselbe Stromplaner-Version.</p>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Field label="Server-Adresse"><input style={S.inputSm} value={server} onChange={e=>setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" spellCheck={false}/></Field>
+      <Field label="Server-Token (optional)"><input style={S.inputSm} type="password" value={token} onChange={e=>setToken(e.target.value)} spellCheck={false}/></Field>
+      <Field label="Dein Name (sehen die anderen)"><input style={S.inputSm} value={name} onChange={e=>setName(e.target.value)} placeholder="z. B. Anna"/></Field>
+      <div style={{display:"flex",alignItems:"flex-end"}}>
+        <button style={{...S.ghostBtn,width:"100%",justifyContent:"center",opacity:serverOk?1:.5}} disabled={busy||!serverOk} onClick={laden}>{busy?"Lade …":"↻ Sitzungen laden"}</button>
+      </div>
+    </div>
+    {fehler&&<div style={SZ.fehler}>{fehler}</div>}
+
+    {liste&&<>
+      <div style={SZ.label}>Laufende Sitzungen</div>
+      {!liste.length&&<div style={{...SZ.muted,fontStyle:"italic"}}>Noch keine Sitzung auf diesem Server.</div>}
+      {liste.map(s=>{
+        const b=beitrittMoeglich(s,version);
+        const offen=abfrage?.id===s.id;
+        return(
+          <div key={s.id} style={SZ.row}>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{fontWeight:600,fontSize:13}}>{s.name}{s.codeNoetig&&<span title="Sitzungscode nötig"> 🔒</span>}</div>
+              <div style={SZ.muted}>{s.users?`${s.users} online`:"niemand online"} · Version {s.appVersion||"?"}</div>
+              {!b.ok&&<div style={{...SZ.muted,color:"#e67e22",marginTop:2}}>{b.grund}</div>}
+            </div>
+            {offen
+              ?<form style={{display:"flex",gap:6,alignItems:"center"}} onSubmit={e=>{e.preventDefault(); if(abfrage.code.trim()) beitreten(s,abfrage.code.trim());}}>
+                  <input autoFocus style={{...S.inputSm,width:120}} placeholder="Sitzungscode" value={abfrage.code} onChange={e=>setAbfrage({...abfrage,code:e.target.value,fehler:""})}/>
+                  <button type="submit" style={S.primaryBtn} disabled={!abfrage.code.trim()}>Beitreten</button>
+                  <button type="button" style={S.ghostBtn} onClick={()=>setAbfrage(null)}>✕</button>
+                </form>
+              :<button style={{...S.primaryBtn,...(!bereit||!b.ok?{opacity:.4,cursor:"not-allowed"}:{})}} disabled={!bereit||!b.ok}
+                  title={!b.ok?b.grund:!bereit?"Server-Adresse und Namen eintragen":""}
+                  onClick={()=>s.codeNoetig?setAbfrage({id:s.id,code:"",fehler:""}):beitreten(s)}>Beitreten</button>}
+            {offen&&abfrage.fehler&&<div style={{...SZ.fehler,flexBasis:"100%",marginTop:0}}>{abfrage.fehler}</div>}
+          </div>
+        );
+      })}
+    </>}
+
+    <div style={SZ.label}>Neue Sitzung mit dem aktuellen Plan</div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 150px auto",gap:8,alignItems:"end"}}>
+      <Field label="Name der Sitzung"><input style={S.inputSm} value={neu.name} onChange={e=>setNeu(n=>({...n,name:e.target.value}))}/></Field>
+      <Field label="Sitzungscode (optional)"><input style={S.inputSm} value={neu.code} onChange={e=>setNeu(n=>({...n,code:e.target.value}))} placeholder="z. B. 4711"/></Field>
+      <button style={{...S.primaryBtn,...(!bereit||busy?{opacity:.4,cursor:"not-allowed"}:{})}} disabled={!bereit||busy} title={!bereit?"Server-Adresse und Namen eintragen":""} onClick={anlegen}>Sitzung starten</button>
+    </div>
+  </>);
+}
+
+function SitzungAktiv({ sitzung, onClose }){
+  const z=sitzung.zustand;
+  const statusText={online:"verbunden",verbinden:"verbindet …","neu-verbinden":"verbindet neu …",offline:"offline – Änderungen werden nachgeschickt",beendet:"beendet",fehler:"Fehler"}[z.status]||z.status;
+  const farbe=z.veraltet?"#e67e22":z.status==="online"?"#2ecc71":"#f5a623";
+  const users=z.users||[];
+  const andere=users.filter(u=>u.id!==z.you?.id).length;
+  const verlassen=()=>{ sitzung.verlassen(); onClose(); };
+  const beenden=async()=>{
+    if(andere&&!await uiConfirm(`${andere===1?"1 Person ist":`${andere} Personen sind`} noch in der Sitzung. Sie bekommen einen Hinweis und behalten ihren Stand als lokalen Plan.\n\nSitzung wirklich für alle beenden?`)) return;
+    try{ await sitzung.beenden(); onClose(); }
+    catch(e){ uiAlert(`Beenden fehlgeschlagen: ${e.message}`); }
+  };
+  return(<>
+    <div style={{fontWeight:700,fontSize:15}}>{z.info?.name||"Sitzung"}</div>
+    <div style={{...SZ.muted,marginTop:3}}><span style={{color:farbe}}>●</span> {statusText}{z.ausstehend>0&&!z.veraltet?` · ${z.ausstehend} Änderung${z.ausstehend===1?"":"en"} unterwegs`:""}</div>
+    {z.veraltet&&<div style={{background:"#3a2a1a",border:"1px solid #e67e22",borderRadius:6,padding:"8px 10px",fontSize:12,marginTop:12,lineHeight:1.5}}>Die Sitzung ist beendet. Dein Stand ist jetzt ein normaler lokaler Plan – Änderungen anderer kommen nicht mehr an. Bei Bedarf mit 💾 speichern.</div>}
+    <div style={SZ.label}>Teilnehmer</div>
+    {users.length===0&&<div style={SZ.muted}>—</div>}
+    {users.map(u=><div key={u.id} style={{fontSize:13,padding:"3px 0"}}><span style={{color:u.farbe}}>●</span> {u.name}{u.id===z.you?.id&&<span style={SZ.muted}> (du)</span>}</div>)}
+    <div style={{display:"flex",gap:8,marginTop:18,flexWrap:"wrap"}}>
+      {z.veraltet
+        ?<button style={S.primaryBtn} onClick={verlassen}>Schließen</button>
+        :<>
+          <button style={S.ghostBtn} onClick={verlassen}>Nur ich verlasse die Sitzung</button>
+          <button style={{...SZ.danger,...(z.status!=="online"?{opacity:.4,cursor:"not-allowed"}:{})}} disabled={z.status!=="online"} title={z.status!=="online"?"Nur mit Verbindung zum Server möglich":""} onClick={beenden}>Sitzung für alle beenden{andere?` (${andere} weitere online)`:""}</button>
+        </>}
+    </div>
+    {!z.veraltet&&<div style={{...SZ.muted,marginTop:8,lineHeight:1.5}}>Wer nur verlässt, kann später wieder beitreten; der Plan bleibt bei dir als lokaler Plan erhalten. „Für alle beenden“ löscht die Sitzung auf dem Server.</div>}
+  </>);
 }
 
 function ChangelogModal({ version, onClose }) {
