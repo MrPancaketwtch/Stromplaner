@@ -10,6 +10,7 @@
   --muted:   #9aa4af;
   --danger:  #e05252;
   --success: #4caf50;
+  --warn:    #e67e22;
   --tab-h:   56px;
   --safe-b:  env(safe-area-inset-bottom, 0px);
 }
@@ -57,7 +58,7 @@ html, body {
   z-index: 10;
 }
 
-.logo { display: inline-flex; color: var(--accent); }
+.logo { font-size: 20px; line-height: 1; }
 
 .header-title {
   font-size: 18px;
@@ -736,6 +737,60 @@ textarea.field-input { resize: vertical; font-family: inherit; }
 .sync-msg svg { flex-shrink: 0; }
 .inline-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; flex-shrink: 0; }
 .sheet-title .inline-icon { margin: 0 0 0 4px; color: var(--muted); }
+
+/* ── Sitzung ─────────────────────────────────────────────────────────────── */
+.header-sitzung {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 4px 10px;
+  background: var(--panel);
+  border: 1px solid currentColor;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sitzung-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.code-form { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; }
+.code-form .field-input { flex: 1; min-width: 0; min-height: 36px; padding: 6px 10px; }
+
+.toasts {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--tab-h) + var(--safe-b) + 12px);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  background: var(--panel2);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
+.toast--err  { border-left-color: var(--danger); }
+.toast--warn { border-left-color: var(--warn); }
+.toast--info { border-left-color: var(--success); }
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }

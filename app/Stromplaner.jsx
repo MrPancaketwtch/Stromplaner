@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
-import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, Cloud, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode, TriangleAlert, Plug, Lightbulb, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info } from "lucide-react";
+import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode, Share2, TriangleAlert, Plug, Lightbulb, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info } from "lucide-react";
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 
 const PHASES = ["L1","L2","L3"];
@@ -78,7 +78,9 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
   "1.3.0": [
-    "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → Gemeinsam)",
+    "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → Sitzung); auch die Android-App kann beitreten",
+    "Android-App: neuer Tab „Sitzung“ – Prüfwerte vom Handy erscheinen live am PC",
+    "„Sync“ (Pläne über den Server hoch-/herunterladen) entfernt – ersetzt durch Sitzungen. Das Teilen per QR-Code im WLAN heißt jetzt „Teilen“ (PC und Handy)",
     "Update-Kanal wählbar (Updates → Stabil / Beta): Wer möchte, bekommt Beta-Versionen zum Testen direkt als In-App-Update",
     "Header mit einheitlichen Icons statt Emojis",
     "Schaltbild: Multicore-Steckungen zeigen ihren Steckplatz deutlich als „SP 1“, „SP 2“ … (fehlt die Zuordnung, erscheint „SP ?“)",
@@ -496,11 +498,10 @@ export default function App() {
   /* ── Sync ──────────────────────────────────────────────────────────────── */
   const [syncServer,      setSyncServer]      = useState(()=>localStorage.getItem("sp_sync_server")||"");
   const [syncToken,       setSyncToken]       = useState(()=>localStorage.getItem("sp_sync_token")||"");
-  const [showSyncPanel,   setShowSyncPanel]   = useState(false);
+  const [showSharePanel,   setShowSharePanel]   = useState(false);
   const [localShare,      setLocalShare]      = useState(null);
-  const [syncStatus,      setSyncStatus]      = useState({ msg:"", err:false });
-  const [syncPlans,       setSyncPlans]       = useState(null);
-  const [syncBusy,        setSyncBusy]        = useState(false);
+  const [shareStatus,      setShareStatus]      = useState({ msg:"", err:false });
+  const [shareBusy,        setShareBusy]        = useState(false);
   useEffect(()=>{ localStorage.setItem("sp_sync_server", syncServer); },[syncServer]);
   useEffect(()=>{ localStorage.setItem("sp_sync_token",  syncToken);  },[syncToken]);
 
@@ -814,67 +815,17 @@ export default function App() {
     catch(err){ uiAlert("Fehler: "+err.message); }
   };
 
-  /* ── Sync-Funktionen ───────────────────────────────────────────────────── */
-  const syncHeaders=()=>{
-    const h={"Content-Type":"application/json"};
-    if(syncToken) h["Authorization"]="Bearer "+syncToken;
-    return h;
-  };
-  const syncId=()=>(meta.production||"plan").replace(/[^a-zA-Z0-9_-]/g,"_").slice(0,64)||"plan";
-
-  const syncPush=async()=>{
-    const base=syncServer.replace(/\/+$/,"");
-    if(!base){ setSyncStatus({msg:"Bitte Server-URL eingeben.",err:true}); return; }
-    setSyncBusy(true); setSyncStatus({msg:"Lade hoch…",err:false});
-    try{
-      const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,
-        instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout};
-      const id=syncId();
-      const r=await fetch(`${base}/api/plans/${encodeURIComponent(id)}`,
-        {method:"PUT",headers:syncHeaders(),body:JSON.stringify(data)});
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      setSyncStatus({msg:`✓ Hochgeladen als „${id}"`,err:false});
-    } catch(e){ setSyncStatus({msg:"Fehler: "+e.message,err:true}); }
-    setSyncBusy(false);
-  };
-
-  const syncFetchList=async()=>{
-    const base=syncServer.replace(/\/+$/,"");
-    if(!base){ setSyncStatus({msg:"Bitte Server-URL eingeben.",err:true}); return; }
-    setSyncBusy(true); setSyncStatus({msg:"Lade Planliste…",err:false}); setSyncPlans(null);
-    try{
-      const r=await fetch(`${base}/api/plans`,{headers:syncHeaders()});
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const json=await r.json();
-      setSyncPlans(json.plans||json||[]);
-      setSyncStatus({msg:"",err:false});
-    } catch(e){ setSyncStatus({msg:"Fehler: "+e.message,err:true}); }
-    setSyncBusy(false);
-  };
-
-  const syncPullPlan=async(id)=>{
-    if(!await ersetzenErlaubt()) return;
-    const base=syncServer.replace(/\/+$/,"");
-    setSyncBusy(true); setSyncStatus({msg:`Lade „${id}"…`,err:false});
-    try{
-      const r=await fetch(`${base}/api/plans/${encodeURIComponent(id)}`,{headers:syncHeaders()});
-      if(!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data=await r.json();
-      if(applyPlanData(data)){ setSyncStatus({msg:`✓ Plan „${id}" geladen`,err:false}); setShowSyncPanel(false); }
-    } catch(e){ setSyncStatus({msg:"Fehler: "+e.message,err:true}); }
-    setSyncBusy(false);
-  };
-
+  /* ── Teilen per QR-Code im WLAN ──────────────────────────────────────────── */
   const startLocalShare=async()=>{
     const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,
       instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout};
-    setSyncBusy(true); setSyncStatus({msg:"Starte lokalen Server…",err:false});
+    setShareBusy(true); setShareStatus({msg:"Starte lokalen Server…",err:false});
     try{
       const result=await window.electronAPI.startLocalShare({planJson:JSON.stringify(data,null,2),planName:meta.production||"plan"});
       setLocalShare(result);
-      setSyncStatus({msg:"",err:false});
-    } catch(e){ setSyncStatus({msg:"Fehler: "+e.message,err:true}); }
-    setSyncBusy(false);
+      setShareStatus({msg:"",err:false});
+    } catch(e){ setShareStatus({msg:"Fehler: "+e.message,err:true}); }
+    setShareBusy(false);
   };
   const stopLocalShare=async()=>{
     await window.electronAPI?.stopLocalShare?.();
@@ -885,9 +836,9 @@ export default function App() {
     if(mode==="insp"){
       if(data.inspMeta) setInspMeta(data.inspMeta);
       setInspResults(data.inspResults||{});
-      setSyncStatus({msg:"✓ Prüfergebnisse vom Handy übernommen",err:false});
+      notify("Prüfergebnisse vom Handy übernommen.","info");
     } else if(applyPlanData(data)){
-      setSyncStatus({msg:"✓ Plan vom Handy übernommen",err:false});
+      notify("Plan vom Handy übernommen.","info");
     }
   }),[]);
 
@@ -1198,7 +1149,7 @@ export default function App() {
     <div style={S.app}>
       <style>{`@keyframes tabSlideR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}@keyframes tabSlideL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}`}</style>
       <header style={S.header}>
-        <div style={{...S.logo,display:"flex",alignItems:"center",gap:6}}><Zap size={18} fill={ACCENT} strokeWidth={1.5} aria-hidden="true"/>STROMPLANER</div>
+        <div style={S.logo}>⚡ STROMPLANER</div>
         {corpLogo&&<img src={corpLogo} alt="Logo" style={{height:26,maxWidth:100,objectFit:"contain",display:"block",marginLeft:6}}/>}
         <label style={{...S.ghostBtn,padding:"3px 7px",fontSize:9,cursor:"pointer"}} title={corpLogo?"Logo ersetzen":"Firmenlogo hochladen"}>
           {corpLogo?<Pencil size={11} aria-hidden="true"/>:<ImagePlus size={11} aria-hidden="true"/>}Logo<input type="file" accept="image/*" style={{display:"none"}} onChange={uploadLogo}/>
@@ -1209,7 +1160,7 @@ export default function App() {
         <input ref={fileInputRef} type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/>
         <button style={S.ghostBtn} onClick={openPlan}><FolderOpen size={14} aria-hidden="true"/>Laden</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
-          <button style={{...S.ghostBtn,padding:"4px 6px"}} title="Zuletzt geöffnet" aria-label="Zuletzt geöffnet" onClick={()=>setShowRecents(v=>!v)}><History size={14}/></button>
+          <button style={S.ghostBtn} onClick={()=>setShowRecents(v=>!v)}><History size={14} aria-hidden="true"/>Zuletzt geöffnet</button>
           {showRecents&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",minWidth:280,maxWidth:380,marginTop:4}} onMouseLeave={()=>setShowRecents(false)}>
             <div style={{padding:"6px 10px",fontSize:10,color:"#7c8794",borderBottom:"1px solid #2e3640",letterSpacing:.5,textTransform:"uppercase"}}>Zuletzt geöffnet</div>
             {recents.length===0
@@ -1224,61 +1175,40 @@ export default function App() {
         {(()=>{
           const z=sitzung.zustand;
           const farbe=!z?null:z.veraltet?"#e67e22":z.status==="online"?"#2ecc71":"#f5a623";
-          return <button style={{...S.ghostBtn,padding:"4px 7px",...(z?{borderColor:farbe}:{})}} title={z?`Sitzung „${z.info?.name||""}“ – ${z.veraltet?"beendet":z.status==="online"?"verbunden":"verbindet …"}`:"Gemeinsam mit anderen am Plan arbeiten"} onClick={()=>setShowSitzung(true)}>
-            {z?<><Users size={14} color={farbe} aria-hidden="true"/>{z.veraltet?"Sitzung beendet":`${z.users?.length||0} online`}</>:<><Users size={14} aria-hidden="true"/>Gemeinsam</>}
+          return <button style={{...S.ghostBtn,padding:"4px 7px",...(z?{borderColor:farbe}:{})}} title={z?`Sitzung „${z.info?.name||""}“ – ${z.veraltet?"beendet":z.status==="online"?"verbunden":"verbindet …"}`:"Mit anderen gleichzeitig am selben Plan arbeiten"} onClick={()=>setShowSitzung(true)}>
+            {z?<><Users size={14} color={farbe} aria-hidden="true"/>{z.veraltet?"Sitzung beendet":`${z.users?.length||0} online`}</>:<><Users size={14} aria-hidden="true"/>Sitzung</>}
           </button>;
         })()}
-        <div style={{position:"relative"}}>
-          <button style={{...S.ghostBtn,padding:"4px 7px"}} title="Mit Server synchronisieren" onClick={()=>{setShowSyncPanel(v=>!v);setSyncPlans(null);setSyncStatus({msg:"",err:false});}}><Cloud size={14} aria-hidden="true"/>Sync</button>
-          {showSyncPanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}} onMouseLeave={()=>{}}>
-            <div style={{fontSize:10,color:"#7c8794",marginBottom:8,letterSpacing:.5,textTransform:"uppercase"}}>Cloud-Sync</div>
-            <input value={syncServer} onChange={e=>setSyncServer(e.target.value)} placeholder="http://server:3001" style={{width:"100%",boxSizing:"border-box",background:"#10141a",border:"1px solid #2e3640",borderRadius:5,color:"#e8eaed",padding:"5px 8px",fontSize:11,marginBottom:6}} spellCheck={false}/>
-            <input value={syncToken} onChange={e=>setSyncToken(e.target.value)} placeholder="Auth-Token (optional)" type="password" style={{width:"100%",boxSizing:"border-box",background:"#10141a",border:"1px solid #2e3640",borderRadius:5,color:"#e8eaed",padding:"5px 8px",fontSize:11,marginBottom:8}} spellCheck={false}/>
-            <div style={{display:"flex",gap:6,marginBottom:8}}>
-              <button disabled={syncBusy} onClick={syncPush} style={{flex:1,...S.ghostBtn,background:"#1c2e1c",borderColor:"#2d4a2d",color:"#7ecf7e",fontSize:11,justifyContent:"center"}}><Upload size={12} aria-hidden="true"/>Hochladen</button>
-              <button disabled={syncBusy} onClick={syncFetchList} style={{flex:1,...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Download size={12} aria-hidden="true"/>Von Server laden</button>
-            </div>
-            {syncStatus.msg&&<div style={{fontSize:10,color:syncStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{syncStatus.msg}</div>}
-            {window.electronAPI&&<>
-              <div style={{borderTop:"1px solid #2e3640",paddingTop:8,marginTop:4}}>
-                <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Lokal im WLAN teilen</div>
-                {!localShare
-                  ? <button disabled={syncBusy} onClick={startLocalShare} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><QrCode size={12} aria-hidden="true"/>QR-Code anzeigen</button>
-                  : <div style={{textAlign:"center"}}>
-                      {localShare.ips?.length>1&&<>
-                        <div style={{fontSize:9,color:"#7c8794",marginBottom:4,textAlign:"left"}}>Netzwerk wählen, in dem auch das Handy ist – nicht den VPN-Adapter:</div>
-                        <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:8}}>
-                          {(localShare.ifaces||localShare.ips.map(ip=>({ip,name:""}))).map(({ip,name,virtual})=><button key={ip} onClick={async()=>{
-                            const url=`http://${ip}:${localShare.port}/plan.json`;
-                            const qr=await window.electronAPI.makeQr(url);
-                            setLocalShare(s=>({...s,activeIp:ip,url,qrDataUrl:qr}));
-                          }} style={{...S.ghostBtn,fontSize:9,padding:"3px 6px",justifyContent:"space-between",opacity:virtual?0.6:1,background:localShare.activeIp===ip?"#2a3a4a":"transparent"}}>
-                            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}{virtual?" (VPN/virtuell)":""}</span><span>{ip}</span>
-                          </button>)}
-                        </div>
-                      </>}
-                      <img src={localShare.qrDataUrl} alt="QR" style={{width:140,height:140,borderRadius:6,display:"block",margin:"0 auto 6px"}}/>
-                      <div style={{fontSize:9,color:"#7c8794",wordBreak:"break-all",marginBottom:4}}>{localShare.url}</div>
-                      <div style={{fontSize:9,color:"#7c8794",marginBottom:6}}>Das Handy kann den Plan über denselben Server zurücksenden.</div>
-                      <button onClick={stopLocalShare} style={{...S.ghostBtn,fontSize:10,width:"100%",justifyContent:"center"}}><X size={12} aria-hidden="true"/>Server stoppen</button>
+        {window.electronAPI&&<div style={{position:"relative"}}>
+          <button style={S.ghostBtn} title="Plan per QR-Code im WLAN aufs Handy holen" onClick={()=>{setShowSharePanel(v=>!v);setShareStatus({msg:"",err:false});}}><Share2 size={14} aria-hidden="true"/>Teilen</button>
+          {showSharePanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}}>
+            <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Lokal im WLAN teilen</div>
+            <div style={{fontSize:10,color:"#7c8794",marginBottom:8,lineHeight:1.5}}>QR-Code mit der Stromplaner-App auf dem Handy scannen (Tab „Teilen“). Funktioniert ohne Server, Handy und PC müssen im selben WLAN sein.</div>
+            {shareStatus.msg&&<div style={{fontSize:10,color:shareStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{shareStatus.msg}</div>}
+            {!localShare
+              ? <button disabled={shareBusy} onClick={startLocalShare} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><QrCode size={12} aria-hidden="true"/>QR-Code anzeigen</button>
+              : <div style={{textAlign:"center"}}>
+                  {localShare.ips?.length>1&&<>
+                    <div style={{fontSize:9,color:"#7c8794",marginBottom:4,textAlign:"left"}}>Netzwerk wählen, in dem auch das Handy ist – nicht den VPN-Adapter:</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:8}}>
+                      {(localShare.ifaces||localShare.ips.map(ip=>({ip,name:""}))).map(({ip,name,virtual})=><button key={ip} onClick={async()=>{
+                        const url=`http://${ip}:${localShare.port}/plan.json`;
+                        const qr=await window.electronAPI.makeQr(url);
+                        setLocalShare(s=>({...s,activeIp:ip,url,qrDataUrl:qr}));
+                      }} style={{...S.ghostBtn,fontSize:9,padding:"3px 6px",justifyContent:"space-between",opacity:virtual?0.6:1,background:localShare.activeIp===ip?"#2a3a4a":"transparent"}}>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}{virtual?" (VPN/virtuell)":""}</span><span>{ip}</span>
+                      </button>)}
                     </div>
-                }
-              </div>
-            </>}
-            {syncPlans&&(syncPlans.length===0
-              ? <div style={{fontSize:11,color:"#7c8794",fontStyle:"italic"}}>Keine Pläne auf dem Server.</div>
-              : <div style={{maxHeight:160,overflowY:"auto",borderTop:"1px solid #2e3640",paddingTop:6}}>
-                  {syncPlans.map(p=>{const id=typeof p==="string"?p:p.id||p.name; return(
-                    <button key={id} onClick={()=>syncPullPlan(id)} disabled={syncBusy}
-                      style={{display:"block",width:"100%",textAlign:"left",background:"none",border:"none",borderBottom:"1px solid #1f2730",padding:"6px 4px",cursor:"pointer",color:"#c8d0d8",fontSize:11}}
-                      onMouseEnter={e=>e.currentTarget.style.background="#232a33"} onMouseLeave={e=>e.currentTarget.style.background="none"}>
-                      {id}{typeof p==="object"&&p.updated&&<span style={{fontSize:9,color:"#7c8794",marginLeft:6}}>{new Date(p.updated).toLocaleDateString("de-DE")}</span>}
-                    </button>);})}
+                  </>}
+                  <img src={localShare.qrDataUrl} alt="QR" style={{width:140,height:140,borderRadius:6,display:"block",margin:"0 auto 6px"}}/>
+                  <div style={{fontSize:9,color:"#7c8794",wordBreak:"break-all",marginBottom:4}}>{localShare.url}</div>
+                  <div style={{fontSize:9,color:"#7c8794",marginBottom:6}}>Solange geteilt wird, kann das Handy seine Prüfergebnisse mit „An PC zurücksenden“ zurückschicken.</div>
+                  <button onClick={stopLocalShare} style={{...S.ghostBtn,fontSize:10,width:"100%",justifyContent:"center"}}><X size={12} aria-hidden="true"/>Teilen beenden</button>
                 </div>
-            )}
-            <button onClick={()=>setShowSyncPanel(false)} style={{marginTop:8,width:"100%",background:"none",border:"none",color:"#7c8794",cursor:"pointer",fontSize:10}}>Schließen</button>
+            }
+            <button onClick={()=>setShowSharePanel(false)} style={{marginTop:8,width:"100%",background:"none",border:"none",color:"#7c8794",cursor:"pointer",fontSize:10}}>Schließen</button>
           </div>}
-        </div>
+        </div>}
         <button style={S.ghostBtn} onClick={saveJSON}><Save size={14} aria-hidden="true"/>Speichern</button>
         <button style={S.ghostBtn} onClick={resetAll}><FilePlus2 size={14} aria-hidden="true"/>Neu</button>
         <button style={S.ghostBtn} onClick={()=>setChangelogVersion(Object.keys(CHANGELOG)[0])} title="Was ist neu?"><ScrollText size={14} aria-hidden="true"/>Changelog</button>
@@ -1444,9 +1374,9 @@ function SitzungDialog({ sitzung, onClose, ...rest }){
   const box={background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:10,padding:'22px 26px',width:580,maxWidth:'calc(100vw - 32px)',maxHeight:'calc(100vh - 48px)',overflowY:'auto',color:'#e8eaf0',fontFamily:'inherit',boxSizing:'border-box'};
   return(
     <div style={overlay} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={box} role="dialog" aria-modal="true" aria-label="Gemeinsam arbeiten">
+      <div style={box} role="dialog" aria-modal="true" aria-label="Sitzung">
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-          <div style={{fontSize:16,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',gap:8}}><Users size={18} color={ACCENT} aria-hidden="true"/>Gemeinsam arbeiten</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',gap:8}}><Users size={18} color={ACCENT} aria-hidden="true"/>Sitzung</div>
           <button onClick={onClose} aria-label="Schließen" style={{background:'none',border:'none',color:'#9aa4af',fontSize:16,cursor:'pointer'}}><X size={14} aria-hidden="true"/></button>
         </div>
         {sitzung.zustand
@@ -1495,7 +1425,7 @@ function SitzungVerbinden({ sitzung, server, setServer, token, setToken, projekt
   };
 
   return(<>
-    <p style={{...SZ.muted,fontSize:12,lineHeight:1.5,margin:"0 0 12px"}}>Alle Teilnehmer bearbeiten denselben Plan gleichzeitig, Änderungen erscheinen sofort bei allen. Dafür braucht es einen erreichbaren <strong>Planer-Server</strong> (siehe README, Abschnitt „Sync-Server“). Alle brauchen dieselbe Stromplaner-Version.</p>
+    <p style={{...SZ.muted,fontSize:12,lineHeight:1.5,margin:"0 0 12px"}}>Alle Teilnehmer bearbeiten denselben Plan gleichzeitig, Änderungen erscheinen sofort bei allen. Dafür braucht es einen erreichbaren <strong>Planer-Server</strong> (siehe README, Abschnitt „Planer-Server“). Die Android-App kann ebenfalls beitreten. Alle brauchen dieselbe Stromplaner-Version.</p>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
       <Field label="Server-Adresse"><input style={S.inputSm} value={server} onChange={e=>setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" spellCheck={false}/></Field>
       <Field label="Server-Token (optional)"><input style={S.inputSm} type="password" value={token} onChange={e=>setToken(e.target.value)} spellCheck={false}/></Field>

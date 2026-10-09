@@ -1,11 +1,23 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const base = process.env.BASE_URL ?? (process.env.GITHUB_PAGES ? '/Stromplaner/' : '/');
+// Gleiche Versionsnummer wie die Desktop-App – der Planer-Server lässt nur gleiche Versionen in eine Sitzung
+const appVersion = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 
 export default defineConfig({
   base,
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
+  resolve: {
+    // Sitzungslogik wird mit der Desktop-App geteilt (app/sync); React muss trotzdem nur einmal vorkommen
+    alias: { '@sync': fileURLToPath(new URL('../app/sync', import.meta.url)) },
+    dedupe: ['react', 'react-dom'],
+  },
+  server: { fs: { allow: [repoRoot] } },
   plugins: [
     react(),
     VitePWA({

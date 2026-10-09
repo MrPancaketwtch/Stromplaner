@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import jsQR from 'jsqr';
-import { Zap, ClipboardCheck, Plug, ClipboardList, Cloud, X, Pencil, CornerDownRight, MonitorUp, Check, TriangleAlert, QrCode, Upload, Download, Trash2, CircleCheck, CircleAlert } from 'lucide-react';
+import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, MonitorUp, Check, TriangleAlert, QrCode, CircleCheck, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut } from 'lucide-react';
+import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from '@sync/sitzung.js';
+
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
 /* ── Shared constants ────────────────────────────────────────────────────── */
 const CONN = {
@@ -27,16 +30,26 @@ const TOKEN_KEY  = 'sp_sync_token';
 const PC_URL_KEY = 'sp_pc_share_url';
 
 /* ── Empty plan ──────────────────────────────────────────────────────────── */
+// Alle Teile eines Plans wie in der Desktop-App. Fehlt einer, würde ihn der Abgleich in einer Sitzung für alle löschen.
+const PLAN_TEILE = {
+  meta:             () => ({ production: '', creator: '', version: '1', date: now() }),
+  mainConns:        () => [],
+  boxTypes:         () => [],
+  loads:            () => [],
+  instances:        () => [],
+  placements:       () => [],
+  inspMeta:         () => ({ inspector: '', date: now(), time: '', equipment: '', address: '', location: '', netType: '' }),
+  inspResults:      () => ({}),
+  cableCalcs:       () => [],
+  voltCalcs:        () => [],
+  schaltbildLayout: () => ({ positions: {}, consumerPositions: {}, annotations: [] }),
+};
+const SITZUNG_KEYS = Object.keys(PLAN_TEILE);
+
 const newPlan = () => ({
-  _format:   'stromplaner',
-  _version:  4,
-  _syncId:   uid() + uid(),
-  meta:      { production: '', creator: '', version: '1', date: now() },
-  mainConns: [],
-  boxTypes:  [],
-  loads:     [],
-  instances: [],
-  placements: [],
+  _format:  'stromplaner',
+  _version: 4,
+  ...Object.fromEntries(SITZUNG_KEYS.map(k => [k, PLAN_TEILE[k]()])),
 });
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
@@ -52,7 +65,8 @@ const migratePlan = (p) => {
     (consumers || []).forEach(c => placements.push({ id: c.id || uid(), instanceId: i.id, outletId: c.outId || '', mcSlot: null, loadId: c.loadId || '' }));
     return { parentId: null, parentOutletId: null, mainConnectionId: null, ...rest, name: rest.name ?? oldName ?? '', typeId: rest.typeId ?? box };
   });
-  return { ...p, instances, placements };
+  const fehlend = Object.fromEntries(SITZUNG_KEYS.filter(k => p[k] == null).map(k => [k, PLAN_TEILE[k]()]));
+  return { _format: 'stromplaner', _version: 4, ...p, ...fehlend, instances, placements };
 };
 
 // Steckplätze wie am Desktop: normale Anschlüsse 1:1, Multicore je Steckplatz (mcSlot 1…n, Id `${outletId}_s${n}`)
@@ -93,6 +107,7 @@ export default function App() {
   const [server,  setServer]  = useState(() => localStorage.getItem(SERVER_KEY) || '');
   const [token,   setToken]   = useState(() => localStorage.getItem(TOKEN_KEY)  || '');
   const [pcUrl,   setPcUrl]   = useState(() => localStorage.getItem(PC_URL_KEY) || '');
+  const [toasts,  setToasts]  = useState([]);
 
   /* load */
   useEffect(() => {
@@ -109,26 +124,51 @@ export default function App() {
     if (plan) localStorage.setItem(LS_KEY, JSON.stringify(plan));
   }, [plan]);
 
-  /* persist sync config */
+  /* persist config */
   useEffect(() => { localStorage.setItem(SERVER_KEY, server); }, [server]);
   useEffect(() => { localStorage.setItem(TOKEN_KEY,  token);  }, [token]);
   useEffect(() => { localStorage.setItem(PC_URL_KEY, pcUrl);  }, [pcUrl]);
 
+  const notify = useCallback((text, art = 'info') => {
+    const id = uid();
+    setToasts(t => [...t.slice(-2), { id, text, art }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), art === 'err' ? 8000 : 5000);
+  }, []);
+
+  /* Sitzung (Planer-Server) – dieselbe Logik wie in der Desktop-App */
+  const sitzungDoc = useMemo(() => plan && ({
+    _format: 'stromplaner', _version: 4,
+    ...Object.fromEntries(SITZUNG_KEYS.map(k => [k, plan[k]])),
+  }), [plan]);
+  const sitzungSetters = useMemo(() => Object.fromEntries(SITZUNG_KEYS.map(k => [k,
+    (upd) => setPlan(p => ({ ...p, [k]: typeof upd === 'function' ? upd(p[k]) : upd })),
+  ])), []);
+  const sitzung = useSitzung({ doc: sitzungDoc, setters: sitzungSetters, defaults: PLAN_TEILE, notify, version: APP_VERSION });
+
   if (!plan) return <div className="loading">Laden…</div>;
+
+  const z = sitzung.zustand;
+  const zFarbe = !z ? null : z.veraltet ? 'var(--warn)' : z.status === 'online' ? 'var(--success)' : 'var(--accent)';
 
   return (
     <div className="app">
       <header className="app-header">
-        <span className="logo"><Zap size={20} fill="currentColor" strokeWidth={1.5} aria-hidden="true" /></span>
+        <span className="logo" aria-hidden="true">⚡</span>
         <span className="header-title">Stromplaner</span>
         {plan.meta.production && (
           <span className="header-sub">{plan.meta.production}</span>
+        )}
+        {z && (
+          <button className="header-sitzung" style={{ color: zFarbe }} onClick={() => setTab('sitzung')}
+            aria-label={`Sitzung: ${z.veraltet ? 'beendet' : `${z.users?.length || 0} online`}`}>
+            <Users size={15} aria-hidden="true" />{z.veraltet ? '–' : z.users?.length || 0}
+          </button>
         )}
       </header>
 
       <main className="app-main">
         {tab === 'pruefung' && (
-          <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} />
+          <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} sitzungAktiv={sitzung.aktiv} />
         )}
         {tab === 'steckplan' && (
           <SteckplanTab plan={plan} setPlan={setPlan} />
@@ -136,22 +176,27 @@ export default function App() {
         {tab === 'projekt' && (
           <ProjektTab plan={plan} setPlan={setPlan} />
         )}
-        {tab === 'sync' && (
-          <SyncTab
-            plan={plan} setPlan={setPlan}
-            server={server} setServer={setServer}
-            token={token}  setToken={setToken}
-            pcUrl={pcUrl}  setPcUrl={setPcUrl}
-          />
+        {tab === 'teilen' && (
+          <TeilenTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} setPcUrl={setPcUrl} sitzungAktiv={sitzung.aktiv} />
+        )}
+        {tab === 'sitzung' && (
+          <SitzungTab sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} />
         )}
       </main>
+
+      {toasts.length > 0 && (
+        <div className="toasts">
+          {toasts.map(t => <div key={t.id} role="status" className={'toast toast--' + t.art}>{t.text}</div>)}
+        </div>
+      )}
 
       <nav className="tab-bar">
         {[
           { id: 'pruefung',  Icon: ClipboardCheck, label: 'Prüfung'   },
           { id: 'steckplan', Icon: Plug,           label: 'Steckplan' },
           { id: 'projekt',   Icon: ClipboardList,  label: 'Projekt'   },
-          { id: 'sync',      Icon: Cloud,          label: 'Sync'      },
+          { id: 'teilen',    Icon: Share2,         label: 'Teilen'    },
+          { id: 'sitzung',   Icon: Users,          label: 'Sitzung'   },
         ].map(t => (
           <button
             key={t.id}
@@ -795,7 +840,7 @@ function SendToPc({ plan, pcUrl }) {
       setMsg({ text: res.mode === 'insp' ? 'Prüfergebnisse am PC übernommen' : 'Plan am PC übernommen', err: false });
     } catch (e) {
       const offline = e instanceof TypeError;
-      setMsg({ text: offline ? 'PC nicht erreichbar. Läuft am PC „Lokal im WLAN teilen“ und ist das Handy im selben WLAN?' : e.message, err: true });
+      setMsg({ text: offline ? 'PC nicht erreichbar. Läuft am PC noch „Teilen“ und ist das Handy im selben WLAN?' : e.message, err: true });
     } finally {
       setBusy(false);
     }
@@ -812,14 +857,14 @@ function SendToPc({ plan, pcUrl }) {
           <div className="meas-hint" style={{ marginTop: 6 }}>Ziel: {pcUrl.replace(/^https?:\/\//, '').replace(/\/plan\.json$/, '')}</div>
         </>
       ) : (
-        <div className="meas-hint">Zuerst am PC „Lokal im WLAN teilen“ starten und im Tab Sync den QR-Code scannen.</div>
+        <div className="meas-hint">Zuerst am PC „Teilen“ öffnen und im Tab „Teilen“ den QR-Code scannen.</div>
       )}
       {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')} style={{ margin: '10px 0 0', padding: 0, background: 'none' }}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
     </div>
   );
 }
 
-function PruefungTab({ plan, setPlan, pcUrl }) {
+function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv }) {
   const [openId,   setOpenId]   = useState(null);
   const [metaOpen, setMetaOpen] = useState(false);
 
@@ -884,7 +929,7 @@ function PruefungTab({ plan, setPlan, pcUrl }) {
       </div>
 
       {sorted.length === 0 ? (
-        <div className="notice">Keine Verteiler im Plan.{'\n'}Plan am PC über „Lokales Teilen“ freigeben und im Tab <strong>Sync</strong> den QR-Code scannen.</div>
+        <div className="notice">Keine Verteiler im Plan.{'\n'}Plan am PC über „Teilen“ freigeben und im Tab <strong>Teilen</strong> den QR-Code scannen – oder im Tab <strong>Sitzung</strong> einer Sitzung beitreten.</div>
       ) : (
         <>
           <div className="insp-summary">
@@ -917,7 +962,9 @@ function PruefungTab({ plan, setPlan, pcUrl }) {
             })}
           </div>
           <div style={{ marginTop: 16 }}>
-            <SendToPc plan={plan} pcUrl={pcUrl} />
+            {sitzungAktiv
+              ? <div className="sync-msg"><Users size={16} aria-hidden="true" />Du bist in einer Sitzung – deine Werte erscheinen sofort am PC.</div>
+              : <SendToPc plan={plan} pcUrl={pcUrl} />}
           </div>
           <div className="meas-hint" style={{ margin: '0 4px' }}>Das Prüfprotokoll (PDF) wird am PC erstellt.</div>
         </>
@@ -1169,140 +1216,21 @@ function InspDetail({ plan, inst, res, setRes, pos, total, onBack, onPrev, onNex
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Sync Tab                                                                  */
 /* ══════════════════════════════════════════════════════════════════════════ */
-function QrScanner({ onResult, onClose }) {
-  const videoRef  = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const rafRef    = useRef(null);
-
-  useEffect(() => {
-    let active = true;
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then(stream => {
-        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        const scan = () => {
-          if (!active) return;
-          const v = videoRef.current, c = canvasRef.current;
-          if (v && c && v.readyState === v.HAVE_ENOUGH_DATA) {
-            c.width = v.videoWidth; c.height = v.videoHeight;
-            const ctx = c.getContext('2d');
-            ctx.drawImage(v, 0, 0);
-            const img = ctx.getImageData(0, 0, c.width, c.height);
-            const code = jsQR(img.data, img.width, img.height);
-            if (code?.data) { onResult(code.data); return; }
-          }
-          rafRef.current = requestAnimationFrame(scan);
-        };
-        rafRef.current = requestAnimationFrame(scan);
-      })
-      .catch(() => { alert('Kamera nicht verfügbar'); onClose(); });
-    return () => {
-      active = false;
-      cancelAnimationFrame(rafRef.current);
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    };
-  }, []);
-
-  return (
-    <div style={{ position:'fixed',inset:0,zIndex:1000,background:'#000',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16 }}>
-      <video ref={videoRef} playsInline muted style={{ width:'100%',maxWidth:400,borderRadius:8 }} />
-      <canvas ref={canvasRef} style={{ display:'none' }} />
-      <div style={{ color:'#aaa',fontSize:13 }}>QR-Code in den Rahmen halten</div>
-      <button onClick={onClose} style={{ padding:'10px 32px',background:'#2a3140',border:'none',borderRadius:8,color:'#fff',fontSize:15,cursor:'pointer' }}>Abbrechen</button>
-    </div>
-  );
-}
-
-function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, setPcUrl }) {
-  const [plans,       setPlans]       = useState(null);
+/*  Teilen Tab – Plan per QR-Code vom PC holen und zurücksenden (ohne Server)  */
+/* ══════════════════════════════════════════════════════════════════════════ */
+function TeilenTab({ plan, setPlan, pcUrl, setPcUrl, sitzungAktiv }) {
   const [loading,     setLoading]     = useState(false);
-  const [msg,         setMsg]         = useState('');
+  const [msg,         setMsg]         = useState(null);
   const [showScanner, setShowScanner] = useState(false);
-
-  const apiUrl = (path) => server.replace(/\/$/, '') + path;
-
-  const headers = () => {
-    const h = { 'Content-Type': 'application/json' };
-    if (token) h['Authorization'] = `Bearer ${token}`;
-    return h;
-  };
-
-  const status = (text, isErr = false) => setMsg({ text, err: isErr });
-
-  const fetchPlans = async () => {
-    if (!server) return;
-    setLoading(true);
-    try {
-      const r = await fetch(apiUrl('/api/plans'), { headers: headers() });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setPlans(await r.json());
-      setMsg(null);
-    } catch (e) {
-      status('Verbindung fehlgeschlagen: ' + e.message, true);
-      setPlans(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const push = async () => {
-    if (!server) return;
-    setLoading(true);
-    try {
-      const id = plan._syncId || uid() + uid();
-      const body = JSON.stringify({ ...plan, _syncId: id });
-      const r = await fetch(apiUrl(`/api/plans/${id}`), {
-        method: 'PUT', headers: headers(), body,
-      });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      setPlan(p => ({ ...p, _syncId: id }));
-      status('Hochgeladen: ' + (plan.meta.production || id));
-      fetchPlans();
-    } catch (e) {
-      status('Upload fehlgeschlagen: ' + e.message, true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const pull = async (id) => {
-    setLoading(true);
-    try {
-      const r = await fetch(apiUrl(`/api/plans/${id}`), { headers: headers() });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      if (!confirmReplace(plan)) { status('Laden abgebrochen', true); return; }
-      setPlan(migratePlan(data));
-      status('Geladen: ' + (data.meta?.production || id));
-    } catch (e) {
-      status('Download fehlgeschlagen: ' + e.message, true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const del = async (id, name) => {
-    if (!window.confirm(`"${name}" auf dem Server löschen?`)) return;
-    setLoading(true);
-    try {
-      const r = await fetch(apiUrl(`/api/plans/${id}`), { method: 'DELETE', headers: headers() });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      status('Gelöscht: ' + name);
-      fetchPlans();
-    } catch (e) {
-      status('Fehler: ' + e.message, true);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const status = (text, err = false) => setMsg({ text, err });
+  const ersetzenOk = () => !sitzungAktiv ||
+    window.confirm('Du bist in einer Sitzung. Der neue Plan ersetzt den Plan für alle Teilnehmer. Fortfahren?');
 
   const newLocal = () => {
+    if (!ersetzenOk()) return;
     if (window.confirm('Lokalen Plan verwerfen und neu beginnen?')) {
       setPlan(newPlan());
-      setMsg({ text: 'Neuer Plan erstellt.', err: false });
+      status('Neuer Plan erstellt.');
     }
   };
 
@@ -1310,24 +1238,18 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
     setShowScanner(false);
     setLoading(true);
     try {
-      // Direct plan download (from Desktop local-share)
       const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
-      if (data._format === 'stromplaner') {
-        if (!confirmReplace(plan)) { status('Import abgebrochen', true); return; }
-        setPlan(migratePlan(data));
-        setPcUrl(url);
-        status('Plan geladen: ' + (data.meta?.production || url));
-      } else {
-        // Treat as server URL
-        setServer(url.replace(/\/+$/, ''));
-        status('Server-URL gesetzt');
-      }
-    } catch {
-      // Fallback: use as server URL
-      setServer(url.replace(/\/+$/, ''));
-      status('Server-URL gesetzt');
+      if (data._format !== 'stromplaner') throw new Error('Der QR-Code enthält keinen Stromplaner-Plan.');
+      if (!confirmReplace(plan) || !ersetzenOk()) { status('Import abgebrochen', true); return; }
+      setPlan(migratePlan(data));
+      setPcUrl(url);
+      status('Plan geladen: ' + (data.meta?.production || url));
+    } catch (e) {
+      status(e instanceof TypeError
+        ? 'PC nicht erreichbar. Läuft am PC „Teilen“ und ist das Handy im selben WLAN (nicht über VPN)?'
+        : e.message, true);
     } finally {
       setLoading(false);
     }
@@ -1337,41 +1259,16 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
     <>
     {showScanner && <QrScanner onResult={handleQr} onClose={() => setShowScanner(false)} />}
     <div className="page">
-      {/* ── Server config ── */}
       <div className="section">
-        <div className="section-title">Sync-Server</div>
-        <button
-          className="btn btn--secondary"
-          style={{ width: '100%', marginBottom: 12 }}
-          onClick={() => setShowScanner(true)}
-        ><QrCode size={18} aria-hidden="true" />QR-Code scannen</button>
-        <label className="field-label">Server-URL</label>
-        <input
-          className="field-input"
-          type="url"
-          placeholder="http://192.168.1.10:3001"
-          value={server}
-          onChange={e => setServer(e.target.value)}
-        />
-        <label className="field-label" style={{ marginTop: 12 }}>API-Token (optional)</label>
-        <input
-          className="field-input"
-          type="password"
-          placeholder="Token leer lassen wenn kein Auth"
-          value={token}
-          onChange={e => setToken(e.target.value)}
-        />
-        <button
-          className="btn btn--primary"
-          style={{ marginTop: 12, width: '100%' }}
-          disabled={!server || loading}
-          onClick={fetchPlans}
-        >
-          {loading ? 'Verbinde…' : 'Verbinden & Pläne laden'}
+        <div className="section-title">Plan vom PC holen</div>
+        <p className="meas-hint" style={{ marginBottom: 12 }}>Am PC „Teilen“ öffnen und den QR-Code scannen. Funktioniert ohne Server – Handy und PC müssen im selben WLAN sein.</p>
+        <button className="btn btn--primary" style={{ width: '100%' }} disabled={loading} onClick={() => setShowScanner(true)}>
+          <QrCode size={18} aria-hidden="true" />{loading ? 'Lade …' : 'QR-Code scannen'}
         </button>
       </div>
 
-      {/* ── Current plan actions ── */}
+      {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
+
       <div className="section">
         <div className="section-title">Aktueller Plan</div>
         <div className="stat-row">
@@ -1379,48 +1276,131 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
           <strong>{plan.meta.production || '—'}</strong>
         </div>
         <div className="stat-row">
-          <span>Instanzen</span>
+          <span>Verteiler</span>
           <strong>{plan.instances.length}</strong>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button className="btn btn--primary" style={{ flex: 1 }} disabled={!server || loading} onClick={push}>
-            <Upload size={16} aria-hidden="true" />Hochladen
-          </button>
-          <button className="btn btn--secondary" style={{ flex: 1 }} onClick={newLocal}>
-            Neu
-          </button>
-        </div>
+        <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} onClick={newLocal}>
+          <FilePlus2 size={16} aria-hidden="true" />Neuer leerer Plan
+        </button>
       </div>
 
       <SendToPc plan={plan} pcUrl={pcUrl} />
-
-      {/* ── Status message ── */}
-      {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
-
-      {/* ── Server plans list ── */}
-      {plans !== null && (
-        <div className="section">
-          <div className="section-title">Pläne auf dem Server ({plans.length})</div>
-          {plans.length === 0 && <div className="empty-hint">Keine Pläne auf dem Server.</div>}
-          {plans.map(p => (
-            <div key={p.id} className="plan-row">
-              <div className="plan-row-info">
-                <span className="plan-name">{p.name || p.id}</span>
-                <span className="plan-date">{p.date ? p.date.slice(0, 10) : ''}</span>
-              </div>
-              <div className="plan-row-actions">
-                <button className="btn btn--small btn--primary" disabled={loading} onClick={() => pull(p.id)}>
-                  <Download size={14} aria-hidden="true" />Laden
-                </button>
-                <button className="btn btn--small btn--danger" disabled={loading} onClick={() => del(p.id, p.name)} aria-label="Vom Server löschen">
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
     </>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════ */
+/*  Sitzung Tab – einer gemeinsamen Sitzung auf dem Planer-Server beitreten   */
+/* ══════════════════════════════════════════════════════════════════════════ */
+function SitzungTab({ sitzung, server, setServer, token, setToken }) {
+  const z = sitzung.zustand;
+  return (
+    <div className="page">
+      {z ? <SitzungAktiv sitzung={sitzung} /> : <SitzungBeitreten sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} />}
+    </div>
+  );
+}
+
+function SitzungBeitreten({ sitzung, server, setServer, token, setToken }) {
+  const [name,    setName]    = useState(ladeName);
+  const [liste,   setListe]   = useState(null);
+  const [busy,    setBusy]    = useState(false);
+  const [fehler,  setFehler]  = useState('');
+  const [abfrage, setAbfrage] = useState(null); // { id, code, fehler }
+  useEffect(() => { speichereName(name); }, [name]);
+  const basis = serverBasis(server);
+  const bereit = !!basis && !!name.trim();
+  // Eine https-Seite (PWA im Browser) darf keinen http-Server ansprechen – die Android-App schon
+  const blockiert = window.location.protocol === 'https:' && !window.location.hostname.match(/^localhost$/) && basis.startsWith('http:');
+
+  const laden = async () => {
+    setBusy(true); setFehler('');
+    try { setListe(await serverApi(server, token).liste()); }
+    catch (e) { setFehler(e.message); setListe(null); }
+    setBusy(false);
+  };
+  useEffect(() => { if (basis && !blockiert) laden(); }, []);
+
+  const beitreten = async (s, code) => {
+    if (s.codeNoetig) {
+      try { await serverApi(server, token).pruefeCode(s.id, code); }
+      catch (e) { setAbfrage(a => ({ ...a, fehler: e.message })); return; }
+    }
+    const b = beitrittMoeglich(s, APP_VERSION);
+    if (!window.confirm(`Dein Plan auf dem Handy wird durch den Stand der Sitzung „${s.name}“ ersetzt. Noch nicht gesendete Prüfergebnisse vorher an den PC schicken.${b.umstellen ? '\n\n' + b.grund : ''}\n\nBeitreten?`)) return;
+    sitzung.verbinden({ server, token, session: s.id, code: code || undefined, name: name.trim(), info: s });
+  };
+
+  return (
+    <>
+      <div className="section">
+        <div className="section-title">Sitzung beitreten</div>
+        <p className="meas-hint" style={{ marginBottom: 12 }}>In einer Sitzung arbeiten PC und Handy gleichzeitig am selben Plan – Prüfwerte erscheinen sofort am PC. Die Sitzung wird am PC gestartet (Sitzung → Sitzung starten).</p>
+        <label className="field-label">Server-Adresse</label>
+        <input className="field-input" value={server} onChange={e => setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+        <label className="field-label" style={{ marginTop: 12 }}>Server-Token (optional)</label>
+        <input className="field-input" type="password" value={token} onChange={e => setToken(e.target.value)} />
+        <label className="field-label" style={{ marginTop: 12 }}>Dein Name (sehen die anderen)</label>
+        <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="z. B. Anna" />
+        <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} disabled={busy || !basis || blockiert} onClick={laden}>
+          <RefreshCw size={16} aria-hidden="true" />{busy ? 'Lade …' : 'Sitzungen laden'}
+        </button>
+        {blockiert && <div className="sync-msg sync-msg--err" style={{ marginTop: 12 }}><CircleAlert size={16} aria-hidden="true" />Im Browser lässt sich ein Server mit http:// nicht erreichen. Bitte die Android-App nutzen oder den Server über https erreichbar machen.</div>}
+        {fehler && <div className="sync-msg sync-msg--err" style={{ marginTop: 12 }}><CircleAlert size={16} aria-hidden="true" />{fehler}</div>}
+      </div>
+
+      {liste && (
+        <div className="section">
+          <div className="section-title">Laufende Sitzungen</div>
+          {!liste.length && <div className="empty-hint">Noch keine Sitzung auf diesem Server.</div>}
+          {liste.map(s => {
+            const b = beitrittMoeglich(s, APP_VERSION);
+            const offen = abfrage?.id === s.id;
+            return (
+              <div key={s.id} className="sitzung-row">
+                <div className="plan-row-info">
+                  <span className="plan-name">{s.name}{s.codeNoetig && <Lock size={12} className="inline-icon" style={{ marginLeft: 6 }} aria-label="Sitzungscode nötig" />}</span>
+                  <span className="plan-date">{s.users ? `${s.users} online` : 'niemand online'} · Version {s.appVersion || '?'}</span>
+                  {!b.ok && <span className="plan-date" style={{ color: 'var(--warn)' }}>{b.grund}</span>}
+                </div>
+                {offen ? (
+                  <form className="code-form" onSubmit={e => { e.preventDefault(); if (abfrage.code.trim()) beitreten(s, abfrage.code.trim()); }}>
+                    <input className="field-input" autoFocus placeholder="Sitzungscode" inputMode="text" value={abfrage.code} onChange={e => setAbfrage({ ...abfrage, code: e.target.value, fehler: '' })} />
+                    <button type="submit" className="btn btn--primary btn--small" disabled={!abfrage.code.trim()}>Beitreten</button>
+                    {abfrage.fehler && <span className="plan-date" style={{ color: 'var(--danger)', flexBasis: '100%' }}>{abfrage.fehler}</span>}
+                  </form>
+                ) : (
+                  <button className="btn btn--primary btn--small" disabled={!bereit || !b.ok}
+                    onClick={() => (s.codeNoetig ? setAbfrage({ id: s.id, code: '', fehler: '' }) : beitreten(s))}>Beitreten</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+function SitzungAktiv({ sitzung }) {
+  const z = sitzung.zustand;
+  const statusText = { online: 'verbunden', verbinden: 'verbindet …', 'neu-verbinden': 'verbindet neu …', offline: 'offline – Änderungen werden nachgeschickt', beendet: 'beendet', fehler: 'Fehler' }[z.status] || z.status;
+  const farbe = z.veraltet ? 'var(--warn)' : z.status === 'online' ? 'var(--success)' : 'var(--accent)';
+  return (
+    <div className="section">
+      <div className="section-title">Sitzung</div>
+      <div className="insp-title" style={{ fontSize: 18 }}>{z.info?.name || 'Sitzung'}</div>
+      <div className="meas-hint" style={{ margin: '4px 0 12px', color: farbe }}>● {statusText}{z.ausstehend > 0 && !z.veraltet ? ` · ${z.ausstehend} Änderung${z.ausstehend === 1 ? '' : 'en'} unterwegs` : ''}</div>
+      {z.veraltet && <div className="sync-msg sync-msg--err" style={{ marginBottom: 12 }}><CircleAlert size={16} aria-hidden="true" />Die Sitzung ist beendet. Dein Stand bleibt als Plan auf dem Handy erhalten.</div>}
+      <div className="field-label">Teilnehmer</div>
+      {(z.users || []).map(u => (
+        <div key={u.id} className="stat-row"><span><span style={{ color: u.farbe }}>●</span> {u.name}</span>{u.id === z.you?.id && <span>du</span>}</div>
+      ))}
+      <button className="btn btn--secondary" style={{ width: '100%', marginTop: 16 }} onClick={() => sitzung.verlassen()}>
+        <LogOut size={16} aria-hidden="true" />{z.veraltet ? 'Schließen' : 'Sitzung verlassen'}
+      </button>
+      {!z.veraltet && <p className="meas-hint" style={{ marginTop: 8 }}>Nach dem Verlassen bleibt der Plan auf dem Handy; du kannst später wieder beitreten.</p>}
+    </div>
   );
 }

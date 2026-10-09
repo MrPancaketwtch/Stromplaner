@@ -42,22 +42,23 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 - Android fragt beim ersten Mal, ob Apps aus dieser Quelle installiert werden dürfen → für Browser bzw. Dateimanager erlauben.
 - **Update:** Die neue APK einfach über die installierte App installieren – Pläne und Prüfergebnisse bleiben erhalten.
 - **Einmalig beim Umstieg von einer älteren Test-Version** (bis 1.2.1, mit wechselndem Debug-Schlüssel signiert): Android verweigert das Update mit „App nicht installiert“. Dann die alte App deinstallieren und neu installieren. **Dabei werden die Daten auf dem Handy gelöscht – offene Prüfergebnisse vorher an den PC senden!**
-- Alternativ läuft Stromplaner ohne Installation als Web-App unter **[mrpancaketwtch.github.io/Stromplaner](https://mrpancaketwtch.github.io/Stromplaner/)**. Der Datenaustausch im WLAN (Laden per QR-Code, An PC zurücksenden, Sync-Server über `http://`) funktioniert dort nicht, weil der Browser von einer HTTPS-Seite keine unverschlüsselten Verbindungen ins lokale Netz zulässt – für die Prüfung vor Ort die APK verwenden.
+- Alternativ läuft Stromplaner ohne Installation als Web-App unter **[mrpancaketwtch.github.io/Stromplaner](https://mrpancaketwtch.github.io/Stromplaner/)**. Der Datenaustausch im WLAN (Laden per QR-Code, An PC zurücksenden, Sitzung mit einem Server über `http://`) funktioniert dort nicht, weil der Browser von einer HTTPS-Seite keine unverschlüsselten Verbindungen ins lokale Netz zulässt – für die Prüfung vor Ort die APK verwenden.
 
 ### Tabs in der Handy-App
 | Tab | Inhalt |
 |-----|--------|
-| ✅ **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. |
-| 🔌 **Steckplan** | Verteiler und Steckungen ansehen und anpassen |
-| 📋 **Projekt** | Projektdaten |
-| ☁️ **Sync** | QR-Code scannen, Sync-Server, An PC zurücksenden |
+| **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. |
+| **Steckplan** | Verteiler und Steckungen ansehen und anpassen |
+| **Projekt** | Projektdaten |
+| **Teilen** | Plan per QR-Code vom PC holen, An PC zurücksenden – ohne Server |
+| **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten: Prüfwerte erscheinen sofort am PC (siehe „Sitzung“ weiter unten) |
 
 ### Plan vom PC aufs Handy und zurück (WLAN)
-1. **PC:** Header → **Sync** → **QR-Code anzeigen**.
+1. **PC:** Header → **Teilen** → **QR-Code anzeigen**.
 2. **Netzwerk wählen:** Hat der PC mehrere Netzwerkadapter, erscheint eine Auswahl. Hier den **physischen Adapter (WLAN bzw. LAN) wählen, in dem auch das Handy ist – nicht das VPN-Interface.** Über die VPN-Adresse ist der PC vom Handy aus in der Regel nicht erreichbar, der Scan bzw. das Zurücksenden schlägt dann mit „Failed to fetch“ / „PC nicht erreichbar“ fehl. VPN- und virtuelle Adapter (ProtonVPN, WireGuard, Hyper-V, Docker …) werden grau und als letzte angeboten.
-3. **Handy:** Tab **Sync** → **📷 QR-Code scannen** → der Plan wird geladen.
+3. **Handy:** Tab **Teilen** → **QR-Code scannen** → der Plan wird geladen.
 4. Prüfen.
-5. **Handy:** **⇪ An PC zurücksenden** (im Tab Prüfung ganz unten oder im Tab Sync).
+5. **Handy:** **An PC zurücksenden** (im Tab Prüfung ganz unten oder im Tab Teilen).
 6. **PC:** Es erscheint eine Abfrage:
    - **Nur Prüfergebnisse übernehmen** – übernimmt Prüfungsdetails und Messwerte, die Planung am PC bleibt unverändert *(empfohlen)*
    - **Ganzen Plan übernehmen** – ersetzt den kompletten Plan am PC
@@ -72,8 +73,8 @@ Das Teilen muss am PC während des Zurücksendens noch aktiv sein. Solange getei
 - Die Windows-Firewall muss eingehende Verbindungen auf **Port 4747** für Stromplaner zulassen. Beim ersten Teilen fragt Windows nach – dort **Private Netzwerke** erlauben.
 - Meldung „Port 4747 ist belegt“: Stromplaner läuft vermutlich ein zweites Mal.
 
-### Sync-Server (optional)
-Für den Austausch ohne gemeinsames WLAN nutzt Stromplaner den **[Planer-Server](https://github.com/Nomisimo/Planer-Server)**, den gemeinsamen, selbst-hostbaren Server der Planer-Familie (Stromplaner, Netzwerkplaner). Er ist auch die Grundlage für das gemeinsame Arbeiten in Echtzeit.
+### Planer-Server (für Sitzungen)
+Für Sitzungen – mehrere PCs und Handys arbeiten gleichzeitig am selben Plan – nutzt Stromplaner den **[Planer-Server](https://github.com/Nomisimo/Planer-Server)**, den gemeinsamen, selbst-hostbaren Server der Planer-Familie (Stromplaner, Netzwerkplaner).
 
 **Einrichten (Docker):**
 ```bash
@@ -85,9 +86,9 @@ curl http://localhost:3001/health                # → {"ok":true,…}
 ```
 Ohne den `chown`-Schritt legt Docker unter Linux den Datenordner als `root` an, und der Server kann nicht speichern. Unter Docker Desktop (Windows/macOS) ist er nicht nötig.
 
-Der Server läuft auf Port 3001. Am PC unter **Sync** und am Handy im Tab **Sync** die Server-URL (z. B. `http://192.168.1.10:3001`) eintragen, dann Pläne hoch- und herunterladen. Optional schützt `AUTH_TOKEN` (in der `docker-compose.yml`) den Server; derselbe Token wird dann in beiden Apps eingetragen. Ohne HTTPS ist der Server nur fürs eigene Netz gedacht – aus dem Internet nur hinter einem Reverse-Proxy mit HTTPS erreichbar machen.
+Der Server läuft auf Port 3001. Am PC unter **Sitzung** und am Handy im Tab **Sitzung** die Server-Adresse (z. B. `192.168.1.10` oder `http://192.168.1.10:3001`) eintragen. Optional schützt `AUTH_TOKEN` (in der `docker-compose.yml`) den Server; derselbe Token wird dann in beiden Apps eingetragen. Ohne HTTPS ist der Server nur fürs eigene Netz gedacht – aus dem Internet nur hinter einem Reverse-Proxy mit HTTPS erreichbar machen.
 
-**Umstieg vom bisherigen Stromplaner-Sync-Server** (Ordner `server/` bis Version 1.2.x): Die Apps sprechen mit dem Planer-Server genau wie bisher, nur der Ablageort der Pläne ist ein anderer.
+**Umstieg vom bisherigen Stromplaner-Sync-Server** (Ordner `server/` bis Version 1.2.x): Die Funktion „Sync“ (Pläne hoch-/herunterladen) gibt es ab 1.3.0 nicht mehr – sie ist durch Sitzungen ersetzt. Alte Pläne vom Sync-Server lassen sich so in den Planer-Server übernehmen und bleiben dort über `/api/plans` abrufbar:
 ```bash
 # 1. Alten Server stoppen (im Ordner des alten Servers)
 docker compose down
@@ -109,7 +110,7 @@ Stromplaner/
 ├── app/
 │   ├── Stromplaner.html      ← Gebündelte App (Output von build.js)
 │   ├── Stromplaner.jsx       ← Quellcode (React 18)
-│   ├── sync/                 ← Gemeinsam arbeiten (Anbindung an den Planer-Server)
+│   ├── sync/                 ← Sitzungen (Anbindung an den Planer-Server, auch von der Handy-App genutzt)
 │   └── Standard.json         ← Vorgeladene Verteiler-Typen & Verbraucher
 ├── dist/                     ← NSIS-Installer (gitignoriert – wird via GitHub Releases verteilt)
 ├── Speicherstände/           ← Eigene Planungen (.json) ablegen
@@ -271,24 +272,26 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 | **Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
 | **PDF** | Druckbaren Stromplan als PDF öffnen |
 | **Updates** / **Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
-| **Gemeinsam** / **2 online** | Gemeinsam mit anderen am selben Plan arbeiten (siehe unten); in einer Sitzung zeigt der Knopf Status und Teilnehmerzahl |
-| **Sync** | Plan auf den Sync-Server hoch-/herunterladen, lokal im WLAN per QR-Code teilen |
+| **Zuletzt geöffnet** | Schnellzugriff auf die zuletzt geöffneten Planungsstände |
+| **Sitzung** / **2 online** | Mit anderen gleichzeitig am selben Plan arbeiten (siehe unten); in einer Sitzung zeigt der Knopf Status und Teilnehmerzahl |
+| **Teilen** | Plan per QR-Code im WLAN aufs Handy holen – ohne Server |
 
 ---
 
-## 👥 Gemeinsam arbeiten
+## 👥 Sitzung
 
-Mehrere Personen bearbeiten denselben Plan gleichzeitig, jede Änderung erscheint sofort bei allen. Voraussetzung ist ein erreichbarer [Planer-Server](#sync-server-optional) und dieselbe Stromplaner-Version bei allen.
+Mehrere Personen bearbeiten denselben Plan gleichzeitig, jede Änderung erscheint sofort bei allen – am PC und in der Android-App. Voraussetzung ist ein erreichbarer [Planer-Server](#planer-server-für-sitzungen) und dieselbe Stromplaner-Version bei allen (PC und Handy).
 
-1. Header → **Gemeinsam** → Server-Adresse (z. B. `192.168.1.10` oder `http://server:3001`), ggf. Server-Token und den eigenen Namen eintragen.
+1. Header → **Sitzung** → Server-Adresse (z. B. `192.168.1.10` oder `http://server:3001`), ggf. Server-Token und den eigenen Namen eintragen.
 2. **Sitzung starten:** Name vergeben, optional einen Sitzungscode – der aktuelle Plan wird zum gemeinsamen Plan.
-3. **Beitreten:** Die anderen wählen die Sitzung aus der Liste (ggf. mit Code). Ihr bisheriger Plan wird dabei durch den Stand der Sitzung ersetzt – vorher speichern, falls nötig.
+3. **Beitreten:** Die anderen wählen die Sitzung aus der Liste (ggf. mit Code) – am PC unter **Sitzung**, auf dem Handy im Tab **Sitzung**. Ihr bisheriger Plan wird dabei durch den Stand der Sitzung ersetzt – vorher speichern bzw. Prüfergebnisse an den PC senden, falls nötig.
 
 **Gut zu wissen:**
 - Wer in einem Textfeld tippt, sperrt es kurz für die anderen; wer gleichzeitig dasselbe Feld ändern will, bekommt einen Hinweis und seine Eingabe wird zurückgenommen.
 - Ändern zwei Personen dasselbe Feld kurz nacheinander, gilt die letzte Änderung; die andere Person bekommt einen Hinweis.
 - Bricht die Verbindung ab, arbeitet man weiter – die Änderungen werden beim Wiederverbinden nachgeschickt.
-- **Laden**, **Neu** und „Von Server laden“ ersetzen in einer Sitzung den Plan für alle (mit Rückfrage).
+- **Laden** und **Neu** (am Handy auch ein neu gescannter Plan) ersetzen in einer Sitzung den Plan für alle (mit Rückfrage).
+- **Handy:** In der Android-App funktionieren Server mit `http://`. Die Web-App im Browser erreicht nur einen Server mit `https://`.
 - Verteiler-Typen und Verbraucher der Sitzung landen – wie beim Laden eines Plans – auch in der eigenen Bibliothek.
 - **Verlassen:** Man kann später wieder beitreten, der Plan bleibt lokal erhalten. **Für alle beenden** löscht die Sitzung auf dem Server; die anderen behalten ihren Stand als lokalen Plan.
 
@@ -336,7 +339,7 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | CI/CD | GitHub Actions (baut Windows + macOS + Android bei Tag-Push) |
 | Handy-App | React 18 + Vite, Capacitor 6 (Android-APK), PWA via GitHub Pages |
 | QR / Datenaustausch | `qrcode` (PC), `jsQR` (Handy), lokaler HTTP-Server auf Port 4747 |
-| Gemeinsam arbeiten | WebSocket zum [Planer-Server](https://github.com/Nomisimo/Planer-Server); Client in `app/sync/` (`sync-client.js`, `ops.js` unverändert aus dem Planer-Server übernommen, Apache 2.0 – siehe `app/sync/LICENSE` und `NOTICE`; Änderungen dort pflegen und hierher kopieren) |
+| Sitzungen | WebSocket zum [Planer-Server](https://github.com/Nomisimo/Planer-Server); Client in `app/sync/` (`sync-client.js`, `ops.js` unverändert aus dem Planer-Server übernommen, Apache 2.0 – siehe `app/sync/LICENSE` und `NOTICE`; Änderungen dort pflegen und hierher kopieren) |
 
 ### Build & Release
 
