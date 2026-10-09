@@ -29611,7 +29611,7 @@ button:active { filter: brightness(0.95); }
       if (!localStorage.getItem("stromplaner_donated")) setShowDonateModal(true);
     }, []);
     (0, import_react5.useEffect)(() => {
-      const v = true ? "1.2.1" : null;
+      const v = true ? "1.3.0-beta.1" : null;
       if (!v) return;
       const seen = localStorage.getItem("stromplaner_seen_version");
       if (seen !== v && changelogFor(v).length) {
@@ -29690,7 +29690,7 @@ button:active { filter: brightness(0.95); }
       setters: sitzungSetters,
       defaults: sitzungDefaults,
       notify,
-      version: true ? "1.2.1" : "dev"
+      version: true ? "1.3.0-beta.1" : "dev"
     });
     const ersetzenErlaubt = async () => !sitzung.aktiv || await uiConfirm("Du bist in einer gemeinsamen Sitzung. Der neue Stand ersetzt den Plan f\xFCr alle Teilnehmer.\n\nFortfahren?");
     const boxTypeById = (0, import_react5.useMemo)(() => {
@@ -30518,7 +30518,7 @@ Fortfahren?`);
         token: syncToken,
         setToken: setSyncToken,
         projektName: meta.production,
-        version: true ? "1.2.1" : "dev",
+        version: true ? "1.3.0-beta.1" : "dev",
         onClose: () => setShowSitzung(false)
       }
     ), /* @__PURE__ */ import_react5.default.createElement(ToastHost, { toasts }), /* @__PURE__ */ import_react5.default.createElement(DialogHost, null), helpSection && /* @__PURE__ */ import_react5.default.createElement(HelpModal, { section: helpSection, onClose: () => setHelpSection(null), goToGuide: () => {
@@ -30528,7 +30528,7 @@ Fortfahren?`);
   }
   function UpdateModal({ status, onClose, onCheck, onInstall, setStatus, kanal, onKanal }) {
     const busy = status.type === "checking" || status.type === "downloading";
-    const installiert = true ? "1.2.1" : "dev";
+    const installiert = true ? "1.3.0-beta.1" : "dev";
     const istBeta = installiert.includes("-");
     const betaTag = (v) => String(v || "").includes("-") && /* @__PURE__ */ import_react5.default.createElement("span", { style: { marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#1c2127", background: ACCENT, borderRadius: 3, padding: "1px 5px", verticalAlign: "1px" } }, "BETA");
     const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1e3, display: "flex", alignItems: "center", justifyContent: "center" };
