@@ -48,7 +48,7 @@ https://mrpancaketwtch.github.io/Stromplaner/datenschutz.html
 
 ## Kategorie / Kontakt
 - App-Kategorie: Tools (alternativ: Produktivität)
-- E-Mail-Adresse für Nutzer: silas.roesler@pm.me
+- E-Mail-Adresse für Nutzer: Stromplaner@pm.me
 
 ## Hinweise zu den Formularen (Stand der App: Oktober 2026 – vor dem Absenden selbst prüfen)
 **Datensicherheit**
