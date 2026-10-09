@@ -380,6 +380,61 @@ function FilterSelect({ options, value, onChange, placeholder, style }) {
 /* ══════════════════════════════════════════════════════════════════════════
    MAIN APP
 ══════════════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════════════
+   In-App-Dialoge statt alert()/confirm()
+   Native Dialoge geben unter Windows den Tastatur-Fokus nicht sauber an den
+   Renderer zurück (electron#35872, #41602) → Textfelder nehmen danach keine
+   Eingaben mehr an, bis die App neu gestartet wird.
+══════════════════════════════════════════════════════════════════════════ */
+let pushDialog=null;
+const showDialog=(opts)=>new Promise(resolve=>{
+  if(pushDialog) pushDialog({...opts,resolve});
+  else resolve(opts.confirm?window.confirm(opts.message):(window.alert(opts.message),true));
+});
+const uiAlert  =(message)=>showDialog({message,confirm:false});
+const uiConfirm=(message)=>showDialog({message,confirm:true});
+
+function DialogHost(){
+  const [queue,setQueue]=useState([]);
+  const okRef=useRef(null);
+  const prevFocus=useRef(null);
+  useEffect(()=>{
+    pushDialog=(d)=>{
+      setQueue(q=>{ if(!q.length) prevFocus.current=document.activeElement; return [...q,d]; });
+    };
+    return ()=>{ pushDialog=null; };
+  },[]);
+  const cur=queue[0];
+  useEffect(()=>{ if(cur) okRef.current?.focus(); },[cur]);
+  if(!cur) return null;
+
+  const close=(val)=>{
+    cur.resolve(val);
+    if(queue.length===1){
+      const el=prevFocus.current; prevFocus.current=null;
+      setTimeout(()=>{ if(el&&el.isConnected&&typeof el.focus==="function") el.focus(); },0);
+    }
+    setQueue(q=>q.slice(1));
+  };
+  const onKeyDown=(e)=>{
+    if(e.key==="Escape"){ e.preventDefault(); close(!cur.confirm); }
+  };
+  const overlay={position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center'};
+  const box={background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:10,padding:'24px 28px',minWidth:340,maxWidth:480,color:'#e8eaf0',fontFamily:'inherit'};
+  const btn=(c)=>({padding:'7px 18px',borderRadius:5,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,...c});
+  return(
+    <div style={overlay} onKeyDown={onKeyDown}>
+      <div style={box} role="dialog" aria-modal="true">
+        <div style={{whiteSpace:'pre-wrap',lineHeight:1.5,fontSize:13}}>{cur.message}</div>
+        <div style={{display:'flex',gap:10,marginTop:20,justifyContent:'flex-end'}}>
+          {cur.confirm&&<button style={btn({background:'#2a3547',color:'#aab'})} onClick={()=>close(false)}>Abbrechen</button>}
+          <button ref={okRef} style={btn({background:'#3a7bd5',color:'#fff'})} onClick={()=>close(true)}>OK</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [tab,  setTab]  = useState("config");
   const [tabDir,setTabDir]=useState(1);
@@ -626,7 +681,7 @@ export default function App() {
   };
   const updateInstance=(id,patch)=>setInstances(s=>s.map(i=>i.id===id?{...i,...patch}:i));
 
-  const setParentWithValidation=(instId,parentId,parentOutletId)=>{
+  const setParentWithValidation=async(instId,parentId,parentOutletId)=>{
     const inst=instById[instId]; if(!inst) return;
     const type=boxTypeById[inst.typeId];
     if(parentId&&parentOutletId){
@@ -634,7 +689,7 @@ export default function App() {
       const parentType=parentInst?boxTypeById[parentInst.typeId]:null;
       const outlet=parentType?.outlets.find(o=>o.id===parentOutletId);
       if(outlet&&type&&type.feedAmp>outlet.amp){
-        const ok=confirm(`Warnung: ${type.name} (${type.feedAmp}A) wird auf einen ${outlet.amp}A Anschluss gesteckt.\nEffektive Absicherung: ${outlet.amp}A.\n\nFortfahren?`);
+        const ok=await uiConfirm(`Warnung: ${type.name} (${type.feedAmp}A) wird auf einen ${outlet.amp}A Anschluss gesteckt.\nEffektive Absicherung: ${outlet.amp}A.\n\nFortfahren?`);
         if(!ok) return;
       }
     }
@@ -656,16 +711,16 @@ export default function App() {
   };
 
   /* ── Reset ─────────────────────────────────────────────────────────────── */
-  const resetAll=()=>{
-    if(!confirm("Alles zurücksetzen? Alle Verteiler, Steckungen und Produktionsdaten werden gelöscht. Verteiler-Typen und Verbraucher bleiben erhalten.")) return;
+  const resetAll=async()=>{
+    if(!await uiConfirm("Alles zurücksetzen? Alle Verteiler, Steckungen und Produktionsdaten werden gelöscht. Verteiler-Typen und Verbraucher bleiben erhalten.")) return;
     setMeta(DEFAULT_META);
     setMainConns([]);
     setInstances([]);
     setPlacements([]);
     setActivePlan(null);
   };
-  const clearAllInstances=()=>{
-    if(!confirm("Alle Verteiler und Steckungen löschen? Verteiler-Typen, Verbraucher und Produktionsdaten bleiben erhalten.")) return;
+  const clearAllInstances=async()=>{
+    if(!await uiConfirm("Alle Verteiler und Steckungen löschen? Verteiler-Typen, Verbraucher und Produktionsdaten bleiben erhalten.")) return;
     setInstances([]);
     setPlacements([]);
     setActivePlan(null);
@@ -673,7 +728,7 @@ export default function App() {
 
   /* ── JSON Save/Load ────────────────────────────────────────────────────── */
   const applyPlanData=(d)=>{
-    if(d._format!=="stromplaner"){ alert("Keine gültige Stromplaner-Datei."); return false; }
+    if(d._format!=="stromplaner"){ uiAlert("Keine gültige Stromplaner-Datei."); return false; }
     if(d.meta)        setMeta(d.meta);
     if(d.mainConns)   setMainConns(d.mainConns||[]);
     if(d.boxTypes)    setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType),"name"));
@@ -704,7 +759,7 @@ export default function App() {
       const result=await window.electronAPI.openPlan();
       if(!result) return;
       try{ if(applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }
-      catch(err){ alert("Fehler: "+err.message); }
+      catch(err){ uiAlert("Fehler: "+err.message); }
     } else {
       fileInputRef.current?.click();
     }
@@ -713,10 +768,10 @@ export default function App() {
   const openRecent=async(filePath)=>{
     setShowRecents(false);
     const result=await window.electronAPI?.openRecent?.(filePath);
-    if(result.error==="not-found"){ alert("Datei nicht gefunden – wurde sie verschoben oder gelöscht?"); if(result.recents) setRecents(result.recents); return; }
-    if(result.error){ alert("Fehler: "+result.error); return; }
+    if(result.error==="not-found"){ uiAlert("Datei nicht gefunden – wurde sie verschoben oder gelöscht?"); if(result.recents) setRecents(result.recents); return; }
+    if(result.error){ uiAlert("Fehler: "+result.error); return; }
     try{ if(applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }
-    catch(err){ alert("Fehler: "+err.message); }
+    catch(err){ uiAlert("Fehler: "+err.message); }
   };
 
   /* ── Sync-Funktionen ───────────────────────────────────────────────────── */
@@ -812,7 +867,7 @@ export default function App() {
     const reader=new FileReader();
     reader.onload=(ev)=>{
       try{ applyPlanData(JSON.parse(ev.target.result)); }
-      catch(err){ alert("Fehler: "+err.message); }
+      catch(err){ uiAlert("Fehler: "+err.message); }
     };
     reader.readAsText(file);
     e.target.value="";
@@ -884,7 +939,7 @@ export default function App() {
   /* ── PDF export ─────────────────────────────────────────────────────────── */
   const exportPDF=()=>{
     const pw=window.open("","_blank","width=900,height=700");
-    if(!pw){ alert("Popup-Blocker aktiv – bitte erlauben."); return; }
+    if(!pw){ uiAlert("Popup-Blocker aktiv – bitte erlauben."); return; }
     const phBar=(vals,maxA)=>PHASES.map(ph=>{
       const a=round2(vals[ph]); const pct=maxA?Math.round((a/maxA)*100):0;
       const col=pct>100?"#c0392b":pct>80?"#e67e22":"#27ae60";
@@ -1243,6 +1298,7 @@ export default function App() {
       {changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
       {showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
       {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus}/>}
+      <DialogHost/>
       {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);goTab("help");}}/>}
     </div>
     </HelpContext.Provider>
@@ -1439,7 +1495,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                         </select>
                       ) : <span style={{color:"#555",fontSize:11}}>via Parent</span>}
                     </td>
-                    <td style={S.td}><button style={S.dangerBtn} onClick={()=>{if(confirm(`Verteiler „${inst.name}" wirklich löschen? Alle Steckungen dieses Verteilers gehen verloren.`))removeInstance(inst.id);}}>✕</button></td>
+                    <td style={S.td}><button style={S.dangerBtn} onClick={async()=>{if(await uiConfirm(`Verteiler „${inst.name}" wirklich löschen? Alle Steckungen dieses Verteilers gehen verloren.`))removeInstance(inst.id);}}>✕</button></td>
                   </tr>
                 );
               })}
@@ -1710,13 +1766,16 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   });
   const update=(id,patch)=>setBoxTypes(s=>s.map(b=>b.id===id?{...b,...patch}:b));
   const updateOutlet=(boxId,outletId,patch)=>{
+    const box0=boxTypes.find(b=>b.id===boxId);
+    const outlet0=box0?.outlets.find(o=>o.id===outletId);
+    if(box0&&outlet0&&{...outlet0,...patch}.amp>box0.feedAmp){ uiAlert(`Anschluss (${{...outlet0,...patch}.amp}A) kann Einspeisung (${box0.feedAmp}A) nicht übersteigen.`); return; }
     setBoxTypes(s=>s.map(b=>{
       if(b.id!==boxId) return b;
       return {...b,outlets:b.outlets.map(o=>{
         if(o.id!==outletId) return o;
         const upd={...o,...patch};
         const box=s.find(bb=>bb.id===boxId);
-        if(box&&upd.amp>box.feedAmp){ alert(`Anschluss (${upd.amp}A) kann Einspeisung (${box.feedAmp}A) nicht übersteigen.`); return o; }
+        if(box&&upd.amp>box.feedAmp) return o;
         if(patch.connector){
           upd.phase=is3ph(patch.connector)?"L1L2L3":(o.phase==="L1L2L3"?"L1":o.phase);
           upd.amp=CONN[patch.connector]?.amp||upd.amp;
@@ -1730,22 +1789,22 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   const addOutlet=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:[...b.outlets,{id:uid(),label:`Anschluss ${b.outlets.length+1}`,connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdMa:30,rcdId:null}]}));
   const removeOutlet=(boxId,outletId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,outlets:b.outlets.filter(o=>o.id!==outletId)}));
   const addType=()=>{ const id="NEU_"+uid(); setBoxTypes(s=>[{id,name:"Neuer Verteiler",feedConnector:"CEE32",feedAmp:32,rcds:[],outlets:[]},...s]); setOpenId(id); };
-  const removeType=(id)=>{ if(instances.some(i=>i.typeId===id)){alert("Verteiler-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!confirm("Verteiler-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
-  const removeAllTypes=()=>{
+  const removeType=async(id)=>{ if(instances.some(i=>i.typeId===id)){uiAlert("Verteiler-Typ ist in Benutzung und kann nicht gelöscht werden.");return;} if(!await uiConfirm("Verteiler-Typ wirklich löschen?"))return; setBoxTypes(s=>s.filter(b=>b.id!==id)); };
+  const removeAllTypes=async()=>{
     const inUse=boxTypes.filter(b=>instances.some(i=>i.typeId===b.id));
     const free=boxTypes.filter(b=>!instances.some(i=>i.typeId===b.id));
-    if(free.length===0){alert("Alle Typen sind in Benutzung und können nicht gelöscht werden.");return;}
+    if(free.length===0){uiAlert("Alle Typen sind in Benutzung und können nicht gelöscht werden.");return;}
     const msg=inUse.length>0
       ?`${free.length} Typen löschen? (${inUse.length} in Benutzung werden übersprungen)`
       :`Alle ${free.length} Verteiler-Typen löschen?`;
-    if(!confirm(msg))return;
+    if(!await uiConfirm(msg))return;
     setBoxTypes(s=>s.filter(b=>instances.some(i=>i.typeId===b.id)));
     setOpenId(null);
   };
   const addRcd=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:[...(b.rcds||[]),{id:uid(),label:"RCD",mA:30}]}));
   const updateRcd=(boxId,rcdId,patch)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:(b.rcds||[]).map(r=>r.id===rcdId?{...r,...patch}:r)}));
-  const removeRcd=(boxId,rcdId)=>{
-    if(!confirm("RCCB-Gruppe loeschen? Zugeordnete Anschluesse verlieren ihre RCD-Zuordnung."))return;
+  const removeRcd=async(boxId,rcdId)=>{
+    if(!await uiConfirm("RCCB-Gruppe loeschen? Zugeordnete Anschluesse verlieren ihre RCD-Zuordnung."))return;
     setBoxTypes(s=>s.map(b=>{
       if(b.id!==boxId) return b;
       return {...b,rcds:(b.rcds||[]).filter(r=>r.id!==rcdId),outlets:b.outlets.map(o=>o.rcdId===rcdId?{...o,rcdId:null}:o)};
@@ -1758,10 +1817,12 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
     const r=new FileReader(); r.onload=(ev)=>{
       try {
         const d=JSON.parse(ev.target.result);
-        if(d._format!=="stromplaner-boxtypes"&&d._format!=="stromplaner"){ alert("Kein gültiger Verteiler-Typen-Export."); return; }
+        if(d._format!=="stromplaner-boxtypes"&&d._format!=="stromplaner"){ uiAlert("Kein gültiger Verteiler-Typen-Export."); return; }
         const imported=(d.boxTypes||[]).map(migrateBoxType);
-        setBoxTypes(s=>{ const ids=new Set(s.map(b=>b.id)); const neu=imported.filter(b=>!ids.has(b.id)); alert(`${neu.length} Verteiler-Typen hinzugefügt.`); return alphaSort([...neu,...s],"name"); });
-      } catch(err){ alert("Fehler: "+err.message); }
+        const known=new Set(boxTypes.map(b=>b.id));
+        uiAlert(`${imported.filter(b=>!known.has(b.id)).length} Verteiler-Typen hinzugefügt.`);
+        setBoxTypes(s=>{ const ids=new Set(s.map(b=>b.id)); const neu=imported.filter(b=>!ids.has(b.id)); return alphaSort([...neu,...s],"name"); });
+      } catch(err){ uiAlert("Fehler: "+err.message); }
     }; r.readAsText(file); e.target.value="";
   };
 
@@ -1936,10 +1997,12 @@ function LoadsTab({ loads,setLoads }) {
     const r=new FileReader(); r.onload=(ev)=>{
       try {
         const d=JSON.parse(ev.target.result);
-        if(d._format!=="stromplaner-loads"&&d._format!=="stromplaner"){ alert("Kein gültiger Verbraucher-Export."); return; }
+        if(d._format!=="stromplaner-loads"&&d._format!=="stromplaner"){ uiAlert("Kein gültiger Verbraucher-Export."); return; }
         const imported=(d.loads||[]);
-        setLoads(s=>{ const ids=new Set(s.map(l=>l.id)); const neu=imported.filter(l=>!ids.has(l.id)).map(l=>({...l,threePhase:l.threePhase||false})); alert(`${neu.length} Verbraucher hinzugefügt.`); return [...neu,...s]; });
-      } catch(err){ alert("Fehler: "+err.message); }
+        const known=new Set(loads.map(l=>l.id));
+        uiAlert(`${imported.filter(l=>!known.has(l.id)).length} Verbraucher hinzugefügt.`);
+        setLoads(s=>{ const ids=new Set(s.map(l=>l.id)); const neu=imported.filter(l=>!ids.has(l.id)).map(l=>({...l,threePhase:l.threePhase||false})); return [...neu,...s]; });
+      } catch(err){ uiAlert("Fehler: "+err.message); }
     }; r.readAsText(file); e.target.value="";
   };
 
@@ -2684,7 +2747,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
         )}
         <div style={{flex:1}}/>
         {hasOverrides && (
-          <button onClick={()=>{ if(confirm("Layout und Annotationen zurücksetzen?")) setSchaltbildLayout({ positions:{}, consumerPositions:{}, annotations:[] }); }}
+          <button onClick={async()=>{ if(await uiConfirm("Layout und Annotationen zurücksetzen?")) setSchaltbildLayout({ positions:{}, consumerPositions:{}, annotations:[] }); }}
             style={{padding:"3px 10px",fontSize:11,borderRadius:4,border:"1px solid #3a5060",background:"#1a2830",color:"#5a8090",cursor:"pointer"}}>
             ↺ Auto-Layout
           </button>
@@ -3850,15 +3913,15 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     const fullHtml=`<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`;
     if(window.electronAPI?.exportInspectionPdf){
       window.electronAPI.exportInspectionPdf(fullHtml)
-        .catch(err=>alert("PDF-Export Fehler: "+(err?.message||err)));
+        .catch(err=>uiAlert("PDF-Export Fehler: "+(err?.message||err)));
     } else {
       const blob=new Blob([fullHtml],{type:"text/html;charset=utf-8"});
       const url=URL.createObjectURL(blob);
       const w=window.open(url,"Stromplaner – Prüfprotokoll");
-      if(!w) alert("Popup-Blocker aktiv – bitte Popups für diese Seite erlauben und erneut versuchen.");
+      if(!w) uiAlert("Popup-Blocker aktiv – bitte Popups für diese Seite erlauben und erneut versuchen.");
       setTimeout(()=>URL.revokeObjectURL(url),30000);
     }
-  } catch(err){ alert("PDF-Fehler: "+(err?.stack||err?.message||String(err))); } };
+  } catch(err){ uiAlert("PDF-Fehler: "+(err?.stack||err?.message||String(err))); } };
 
   // Topologische Sortierung: Einspeisepunkt → Kinder → Enkel (BFS, alphabetisch je Ebene)
   const sorted = (()=>{

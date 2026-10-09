@@ -10,6 +10,24 @@ const QRCode = require('qrcode');
 const root = app.getAppPath();
 let mainWindow = null;
 
+// Native Dialoge (Speichern/Öffnen/MessageBox) geben unter Windows den Tastatur-Fokus
+// nicht zuverlässig an den Renderer zurück (electron#35872, #41602) → Textfelder
+// reagieren nicht mehr. Blur + Focus erzwingt, dass Chromium den Fokus neu vergibt.
+function restoreFocus(win = mainWindow) {
+  if (!win || win.isDestroyed()) return;
+  setTimeout(() => {
+    if (win.isDestroyed()) return;
+    if (win.isFocused()) win.blur();
+    win.focus();
+    win.webContents.focus();
+  }, 50);
+}
+
+async function withDialog(win, fn) {
+  try { return await fn(); }
+  finally { restoreFocus(win); }
+}
+
 function createWindow() {
   const splash = new BrowserWindow({
     width: 360,
@@ -73,6 +91,10 @@ function createWindow() {
   setTimeout(() => { minTimeUp = true; tryShow(); }, 3000);
 
   win.on('focus', () => { if (!win.isDestroyed()) win.webContents.focus(); });
+  // Schließt das Druck-/PDF-Vorschaufenster, bekommt das Hauptfenster den Fokus zurück
+  win.webContents.on('did-create-window', (child) => {
+    child.on('closed', () => restoreFocus(win));
+  });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url || url === 'about:blank') {
@@ -182,11 +204,11 @@ ipcMain.handle('save-library', (_event, data) => {
 ipcMain.handle('save-plan', async (_event, { json, suggestedName }) => {
   ensurePlansDir();
   const parent = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible());
-  const { filePath, canceled } = await dialog.showSaveDialog(parent, {
+  const { filePath, canceled } = await withDialog(parent, () => dialog.showSaveDialog(parent, {
     title: 'Stromplan speichern',
     defaultPath: path.join(getPlansDir(), `${suggestedName}.json`),
     filters: [{ name: 'Stromplaner-Datei', extensions: ['json'] }],
-  });
+  }));
   if (canceled || !filePath) return null;
   fs.writeFileSync(filePath, json, 'utf8');
   const name = path.basename(filePath, '.json');
@@ -196,12 +218,12 @@ ipcMain.handle('save-plan', async (_event, { json, suggestedName }) => {
 ipcMain.handle('open-plan', async () => {
   ensurePlansDir();
   const parent = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible());
-  const { filePaths, canceled } = await dialog.showOpenDialog(parent, {
+  const { filePaths, canceled } = await withDialog(parent, () => dialog.showOpenDialog(parent, {
     title: 'Stromplan öffnen',
     defaultPath: getPlansDir(),
     filters: [{ name: 'Stromplaner-Datei', extensions: ['json'] }],
     properties: ['openFile'],
-  });
+  }));
   if (canceled || !filePaths.length) return null;
   const filePath = filePaths[0];
   const name = path.basename(filePath, '.json');
@@ -223,11 +245,11 @@ ipcMain.handle('export-inspection-pdf', async (_event, html) => {
   let win;
   try {
     const parent = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible());
-    const { filePath, canceled } = await dialog.showSaveDialog(parent, {
+    const { filePath, canceled } = await withDialog(parent, () => dialog.showSaveDialog(parent, {
       title: 'Prüfprotokoll speichern',
       defaultPath: 'Errichtungspruefung.pdf',
       filters: [{ name: 'PDF-Datei', extensions: ['pdf'] }],
-    });
+    }));
     if (canceled || !filePath) return null;
 
     fs.writeFileSync(tmpPath, html, 'utf8');
@@ -246,12 +268,11 @@ ipcMain.handle('export-inspection-pdf', async (_event, html) => {
 
     fs.writeFileSync(filePath, pdfBuffer);
     shell.showItemInFolder(filePath);
-    const mainWin = BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible());
-    if (mainWin) { mainWin.focus(); mainWin.webContents.focus(); }
     return filePath;
   } finally {
     if (win && !win.isDestroyed()) win.destroy();
     if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    restoreFocus();
   }
 });
 
@@ -298,7 +319,7 @@ async function receivePlanFromPhone(req, res) {
     mainWindow.show();
     mainWindow.focus();
     const count = Object.keys(data.inspResults || {}).length;
-    const { response } = await dialog.showMessageBox(mainWindow, {
+    const { response } = await withDialog(mainWindow, () => dialog.showMessageBox(mainWindow, {
       type: 'question',
       title: 'Plan vom Handy',
       message: `Plan „${data.meta?.production || 'ohne Namen'}“ vom Handy empfangen`,
@@ -307,7 +328,7 @@ async function receivePlanFromPhone(req, res) {
       defaultId: 0,
       cancelId: 2,
       noLink: true,
-    });
+    }));
     if (response === 2) return sendJson(res, 409, { ok: false, error: 'Am PC abgelehnt' });
     const mode = response === 0 ? 'insp' : 'full';
     mainWindow.webContents.send('local-share-received', { data, mode });
