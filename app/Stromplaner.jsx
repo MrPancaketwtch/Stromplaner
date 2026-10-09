@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
+import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, Cloud, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode } from "lucide-react";
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 
 const PHASES = ["L1","L2","L3"];
@@ -75,7 +76,9 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 
 const CHANGELOG = {
   "1.3.0": [
-    "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → 👥 Gemeinsam)",
+    "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → Gemeinsam)",
+    "Header mit einheitlichen Icons statt Emojis",
+    "Schaltbild: Multicore-Steckungen zeigen ihren Steckplatz deutlich als „SP 1“, „SP 2“ … (fehlt die Zuordnung, erscheint „SP ?“)",
     "Eigener Dialog statt Windows-Meldungen: Textfelder bleiben nach Hinweisen, Speichern- und Öffnen-Dialogen wieder bedienbar",
   ],
   "1.2.1": [
@@ -1106,6 +1109,7 @@ export default function App() {
         '#1b2026':'#e8edf2','#21282f':'#f0f4f8','#1f252c':'#e4e9ee','#1f242b':'#e4e9ee',
         '#252b33':'#f4f4f4','#252e3a':'#dde3ea','#2a3a2a':'#e8f0e8','#1a2530':'#e6edf4',
         '#1c2127':'#e4eaf0','#1e2a32':'#e4edf4','#2d3748':'#2d3748',
+        '#1e3a4a':'#dbeef7','#3a2a14':'#fdf0dc',
         'none':'none',
       };
       // stroke-Map
@@ -1113,6 +1117,7 @@ export default function App() {
         '#3a424c':'#bbb','#4a5568':'#999','#3a5468':'#999','#3a5060':'#8aacbe',
         '#2a3a2a':'#8aac8a','#f5a623':'#b05a00','#4a5060':'#8aacbe',
         '#2ecc71':'#1a8040','#e74c3c':'#c0392b',
+        '#3a7a9a':'#5a9aba','#e67e22':'#c06010',
       };
       // text fill-Map
       const textMap={
@@ -1121,6 +1126,7 @@ export default function App() {
         '#3a6a4a':'#1a5a3a','#3a4a5a':'#4a5a6a','#f5a623':'#b05a00','#d97706':'#8a4a00',
         '#666':'#555','#3a7a5a':'#1a5a3a','#4a6a7a':'#2a5a6a','#5a6a7a':'#4a5a6a',
         '#a78bfa':'#6a4fca','#c4a8fa':'#8a6aca','#2ecc71':'#1a8040','#e74c3c':'#c0392b',
+        '#b8ecff':'#0a4a6a',
       };
 
       svgClone.querySelectorAll('rect,circle,path,polygon').forEach(el=>{
@@ -1182,18 +1188,18 @@ export default function App() {
     <div style={S.app}>
       <style>{`@keyframes tabSlideR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}@keyframes tabSlideL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}`}</style>
       <header style={S.header}>
-        <div style={S.logo}>⚡ STROMPLANER</div>
+        <div style={{...S.logo,display:"flex",alignItems:"center",gap:6}}><Zap size={18} fill={ACCENT} strokeWidth={1.5} aria-hidden="true"/>STROMPLANER</div>
         {corpLogo&&<img src={corpLogo} alt="Logo" style={{height:26,maxWidth:100,objectFit:"contain",display:"block",marginLeft:6}}/>}
         <label style={{...S.ghostBtn,padding:"3px 7px",fontSize:9,cursor:"pointer"}} title={corpLogo?"Logo ersetzen":"Firmenlogo hochladen"}>
-          {corpLogo?"✎ Logo":"+ Logo"}<input type="file" accept="image/*" style={{display:"none"}} onChange={uploadLogo}/>
+          {corpLogo?<Pencil size={11} aria-hidden="true"/>:<ImagePlus size={11} aria-hidden="true"/>}Logo<input type="file" accept="image/*" style={{display:"none"}} onChange={uploadLogo}/>
         </label>
-        {corpLogo&&<button style={{...S.ghostBtn,padding:"3px 6px",fontSize:9}} onClick={removeLogo} title="Logo entfernen">✕</button>}
+        {corpLogo&&<button style={{...S.ghostBtn,padding:"3px 6px",fontSize:9}} onClick={removeLogo} title="Logo entfernen" aria-label="Logo entfernen"><X size={11}/></button>}
         <div style={S.headerMeta}>{meta.production} · v{meta.version} · {meta.date}</div>
-        <span style={{fontSize:10,color:"#555",marginLeft:4}} title="Automatisch gespeichert">💾 auto</span>
+        <span style={{fontSize:10,color:"#555",marginLeft:4,display:"inline-flex",alignItems:"center",gap:3}} title="Automatisch gespeichert"><Save size={11} aria-hidden="true"/>auto</span>
         <input ref={fileInputRef} type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/>
-        <button style={S.ghostBtn} onClick={openPlan}>↥ Laden</button>
+        <button style={S.ghostBtn} onClick={openPlan}><FolderOpen size={14} aria-hidden="true"/>Laden</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
-          <button style={{...S.ghostBtn,padding:"4px 5px"}} title="Zuletzt geöffnet" onClick={()=>setShowRecents(v=>!v)}>⏱</button>
+          <button style={{...S.ghostBtn,padding:"4px 6px"}} title="Zuletzt geöffnet" aria-label="Zuletzt geöffnet" onClick={()=>setShowRecents(v=>!v)}><History size={14}/></button>
           {showRecents&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",minWidth:280,maxWidth:380,marginTop:4}} onMouseLeave={()=>setShowRecents(false)}>
             <div style={{padding:"6px 10px",fontSize:10,color:"#7c8794",borderBottom:"1px solid #2e3640",letterSpacing:.5,textTransform:"uppercase"}}>Zuletzt geöffnet</div>
             {recents.length===0
@@ -1209,25 +1215,25 @@ export default function App() {
           const z=sitzung.zustand;
           const farbe=!z?null:z.veraltet?"#e67e22":z.status==="online"?"#2ecc71":"#f5a623";
           return <button style={{...S.ghostBtn,padding:"4px 7px",...(z?{borderColor:farbe}:{})}} title={z?`Sitzung „${z.info?.name||""}“ – ${z.veraltet?"beendet":z.status==="online"?"verbunden":"verbindet …"}`:"Gemeinsam mit anderen am Plan arbeiten"} onClick={()=>setShowSitzung(true)}>
-            {z?<><span style={{color:farbe}}>●</span> {z.veraltet?"Sitzung beendet":`${z.users?.length||0} online`}</>:"👥 Gemeinsam"}
+            {z?<><Users size={14} color={farbe} aria-hidden="true"/>{z.veraltet?"Sitzung beendet":`${z.users?.length||0} online`}</>:<><Users size={14} aria-hidden="true"/>Gemeinsam</>}
           </button>;
         })()}
         <div style={{position:"relative"}}>
-          <button style={{...S.ghostBtn,padding:"4px 7px"}} title="Mit Server synchronisieren" onClick={()=>{setShowSyncPanel(v=>!v);setSyncPlans(null);setSyncStatus({msg:"",err:false});}}>☁ Sync</button>
+          <button style={{...S.ghostBtn,padding:"4px 7px"}} title="Mit Server synchronisieren" onClick={()=>{setShowSyncPanel(v=>!v);setSyncPlans(null);setSyncStatus({msg:"",err:false});}}><Cloud size={14} aria-hidden="true"/>Sync</button>
           {showSyncPanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}} onMouseLeave={()=>{}}>
             <div style={{fontSize:10,color:"#7c8794",marginBottom:8,letterSpacing:.5,textTransform:"uppercase"}}>Cloud-Sync</div>
             <input value={syncServer} onChange={e=>setSyncServer(e.target.value)} placeholder="http://server:3001" style={{width:"100%",boxSizing:"border-box",background:"#10141a",border:"1px solid #2e3640",borderRadius:5,color:"#e8eaed",padding:"5px 8px",fontSize:11,marginBottom:6}} spellCheck={false}/>
             <input value={syncToken} onChange={e=>setSyncToken(e.target.value)} placeholder="Auth-Token (optional)" type="password" style={{width:"100%",boxSizing:"border-box",background:"#10141a",border:"1px solid #2e3640",borderRadius:5,color:"#e8eaed",padding:"5px 8px",fontSize:11,marginBottom:8}} spellCheck={false}/>
             <div style={{display:"flex",gap:6,marginBottom:8}}>
-              <button disabled={syncBusy} onClick={syncPush} style={{flex:1,...S.ghostBtn,background:"#1c2e1c",borderColor:"#2d4a2d",color:"#7ecf7e",fontSize:11}}>↑ Hochladen</button>
-              <button disabled={syncBusy} onClick={syncFetchList} style={{flex:1,...S.ghostBtn,fontSize:11}}>↓ Von Server laden</button>
+              <button disabled={syncBusy} onClick={syncPush} style={{flex:1,...S.ghostBtn,background:"#1c2e1c",borderColor:"#2d4a2d",color:"#7ecf7e",fontSize:11,justifyContent:"center"}}><Upload size={12} aria-hidden="true"/>Hochladen</button>
+              <button disabled={syncBusy} onClick={syncFetchList} style={{flex:1,...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Download size={12} aria-hidden="true"/>Von Server laden</button>
             </div>
             {syncStatus.msg&&<div style={{fontSize:10,color:syncStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{syncStatus.msg}</div>}
             {window.electronAPI&&<>
               <div style={{borderTop:"1px solid #2e3640",paddingTop:8,marginTop:4}}>
                 <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Lokal im WLAN teilen</div>
                 {!localShare
-                  ? <button disabled={syncBusy} onClick={startLocalShare} style={{width:"100%",...S.ghostBtn,fontSize:11}}>📱 QR-Code anzeigen</button>
+                  ? <button disabled={syncBusy} onClick={startLocalShare} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><QrCode size={12} aria-hidden="true"/>QR-Code anzeigen</button>
                   : <div style={{textAlign:"center"}}>
                       {localShare.ips?.length>1&&<>
                         <div style={{fontSize:9,color:"#7c8794",marginBottom:4,textAlign:"left"}}>Netzwerk wählen, in dem auch das Handy ist – nicht den VPN-Adapter:</div>
@@ -1244,7 +1250,7 @@ export default function App() {
                       <img src={localShare.qrDataUrl} alt="QR" style={{width:140,height:140,borderRadius:6,display:"block",margin:"0 auto 6px"}}/>
                       <div style={{fontSize:9,color:"#7c8794",wordBreak:"break-all",marginBottom:4}}>{localShare.url}</div>
                       <div style={{fontSize:9,color:"#7c8794",marginBottom:6}}>Das Handy kann den Plan über denselben Server zurücksenden.</div>
-                      <button onClick={stopLocalShare} style={{...S.ghostBtn,fontSize:10,width:"100%"}}>✕ Server stoppen</button>
+                      <button onClick={stopLocalShare} style={{...S.ghostBtn,fontSize:10,width:"100%",justifyContent:"center"}}><X size={12} aria-hidden="true"/>Server stoppen</button>
                     </div>
                 }
               </div>
@@ -1263,14 +1269,18 @@ export default function App() {
             <button onClick={()=>setShowSyncPanel(false)} style={{marginTop:8,width:"100%",background:"none",border:"none",color:"#7c8794",cursor:"pointer",fontSize:10}}>Schließen</button>
           </div>}
         </div>
-        <button style={S.ghostBtn} onClick={saveJSON}>💾 Speichern</button>
-        <button style={S.ghostBtn} onClick={resetAll}>↺ Neu</button>
-        <button style={S.ghostBtn} onClick={()=>setChangelogVersion(Object.keys(CHANGELOG)[0])} title="Was ist neu?">📋 Changelog</button>
-        {window.electronAPI&&<button style={S.ghostBtn} onClick={()=>setShowUpdateModal(true)}>
-          {updateStatus.type==='downloaded'?'↓ Update bereit':updateStatus.type==='available'?'↑ Update verfügbar':'↑ Updates'}
+        <button style={S.ghostBtn} onClick={saveJSON}><Save size={14} aria-hidden="true"/>Speichern</button>
+        <button style={S.ghostBtn} onClick={resetAll}><FilePlus2 size={14} aria-hidden="true"/>Neu</button>
+        <button style={S.ghostBtn} onClick={()=>setChangelogVersion(Object.keys(CHANGELOG)[0])} title="Was ist neu?"><ScrollText size={14} aria-hidden="true"/>Changelog</button>
+        {window.electronAPI&&<button style={{...S.ghostBtn,...(updateStatus.type==='downloaded'||updateStatus.type==='available'?{color:ACCENT,borderColor:ACCENT}:{})}} onClick={()=>setShowUpdateModal(true)}>
+          {updateStatus.type==='downloaded'
+            ?<><Download size={14} aria-hidden="true"/>Update bereit</>
+            :updateStatus.type==='available'
+            ?<><CircleArrowUp size={14} aria-hidden="true"/>Update verfügbar</>
+            :<><RefreshCw size={14} aria-hidden="true"/>Updates</>}
         </button>}
-        <button style={{...S.ghostBtn,color:'#f5a623'}} onClick={()=>setShowDonateModal(true)}>☕</button>
-        <button style={S.exportBtn} onClick={exportPDF}>🖨 PDF</button>
+        <button style={{...S.ghostBtn,color:ACCENT,padding:"4px 6px"}} onClick={()=>setShowDonateModal(true)} title="Unterstützen" aria-label="Unterstützen"><Coffee size={14}/></button>
+        <button style={{...S.exportBtn,display:"inline-flex",alignItems:"center",gap:6}} onClick={exportPDF}><Printer size={15} aria-hidden="true"/>PDF</button>
       </header>
       <nav style={S.nav}>
         {TABS.map(([k,label])=>(
@@ -1406,7 +1416,7 @@ function SitzungDialog({ sitzung, onClose, ...rest }){
     <div style={overlay} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={box} role="dialog" aria-modal="true" aria-label="Gemeinsam arbeiten">
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-          <div style={{fontSize:16,fontWeight:700,color:'#fff'}}>👥 Gemeinsam arbeiten</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',gap:8}}><Users size={18} color={ACCENT} aria-hidden="true"/>Gemeinsam arbeiten</div>
           <button onClick={onClose} aria-label="Schließen" style={{background:'none',border:'none',color:'#9aa4af',fontSize:16,cursor:'pointer'}}>✕</button>
         </div>
         {sitzung.zustand
@@ -1518,7 +1528,7 @@ function SitzungAktiv({ sitzung, onClose }){
   return(<>
     <div style={{fontWeight:700,fontSize:15}}>{z.info?.name||"Sitzung"}</div>
     <div style={{...SZ.muted,marginTop:3}}><span style={{color:farbe}}>●</span> {statusText}{z.ausstehend>0&&!z.veraltet?` · ${z.ausstehend} Änderung${z.ausstehend===1?"":"en"} unterwegs`:""}</div>
-    {z.veraltet&&<div style={{background:"#3a2a1a",border:"1px solid #e67e22",borderRadius:6,padding:"8px 10px",fontSize:12,marginTop:12,lineHeight:1.5}}>Die Sitzung ist beendet. Dein Stand ist jetzt ein normaler lokaler Plan – Änderungen anderer kommen nicht mehr an. Bei Bedarf mit 💾 speichern.</div>}
+    {z.veraltet&&<div style={{background:"#3a2a1a",border:"1px solid #e67e22",borderRadius:6,padding:"8px 10px",fontSize:12,marginTop:12,lineHeight:1.5}}>Die Sitzung ist beendet. Dein Stand ist jetzt ein normaler lokaler Plan – Änderungen anderer kommen nicht mehr an. Bei Bedarf über „Speichern“ sichern.</div>}
     <div style={SZ.label}>Teilnehmer</div>
     {users.length===0&&<div style={SZ.muted}>—</div>}
     {users.map(u=><div key={u.id} style={{fontSize:13,padding:"3px 0"}}><span style={{color:u.farbe}}>●</span> {u.name}{u.id===z.you?.id&&<span style={SZ.muted}> (du)</span>}</div>)}
@@ -3221,21 +3231,26 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
                     const leafY=pi*(LEAF_H+LEAF_GAP);
                     const wattStr=load.watt?`${load.watt} W`:"";
                     const ampStr=load.watt?` · ${round2(load.watt/230)} A`:"";
-                    const maxName=isMC&&plac.mcSlot!=null?14:18;
+                    const maxName=isMC?13:18;
                     const nameDisp=load.name&&load.name.length>maxName?load.name.slice(0,maxName-1)+"…":(load.name||"?");
+                    // Multicore: Steckplatz deutlich kennzeichnen; fehlt er, orange „SP ?“
+                    const spOk=plac.mcSlot!=null;
+                    const spText=`SP ${spOk?plac.mcSlot:"?"}`;
+                    const spW=spText.length*5.6+8;
                     return (
                       <g key={plac.id} transform={`translate(0,${leafY})`}>
                         <rect width={LEAF_W} height={LEAF_H} rx={4}
                               fill="#1a2530" stroke="#3a5060" strokeWidth={1}/>
                         <text x={8} y={14} fill="#6aaabf" fontSize={9} fontWeight="600">{nameDisp}</text>
                         <text x={8} y={27} fill="#3a6070" fontSize={8}>{wattStr}{ampStr}</text>
-                        {isMC&&plac.mcSlot!=null&&(
+                        {isMC&&(
                           <g>
-                            <rect x={LEAF_W-30} y={4} width={26} height={13} rx={3}
-                                  fill="#1e3a4a" stroke="#3a7a9a" strokeWidth={0.8}/>
-                            <text x={LEAF_W-17} y={14} textAnchor="middle"
-                                  fill="#b8ecff" fontSize={8} fontWeight="700">
-                              Ch.{plac.mcSlot}
+                            <title>{spOk?`Steckplatz ${plac.mcSlot} (${PHASES[(plac.mcSlot-1)%3]}) auf ${out.label}`:`Kein Steckplatz zugeordnet – im Steckplan auswählen`}</title>
+                            <rect x={LEAF_W-spW-4} y={4} width={spW} height={14} rx={3}
+                                  fill={spOk?"#1e3a4a":"#3a2a14"} stroke={spOk?"#3a7a9a":"#e67e22"} strokeWidth={0.8}/>
+                            <text x={LEAF_W-4-spW/2} y={14.5} textAnchor="middle"
+                                  fill={spOk?"#b8ecff":"#f5a623"} fontSize={9} fontWeight="700">
+                              {spText}
                             </text>
                           </g>
                         )}
@@ -3383,7 +3398,7 @@ const HELP_SECTIONS = {
   },
   logo: {
     title: 'Firmenlogo',
-    text: 'Über den kleinen "+ Logo"-Button rechts neben dem App-Titel kannst du ein Unternehmens- oder Veranstaltungslogo hochladen (PNG, JPG oder SVG). Das Logo erscheint sofort im App-Header und wird automatisch in alle PDF-Exporte eingebunden: in die Kopfzeile des Errichtungsprüfdokuments sowie in den Stromplan-Ausdruck.',
+    text: 'Über den kleinen „Logo“-Button rechts neben dem App-Titel kannst du ein Unternehmens- oder Veranstaltungslogo hochladen (PNG, JPG oder SVG). Das Logo erscheint sofort im App-Header und wird automatisch in alle PDF-Exporte eingebunden: in die Kopfzeile des Errichtungsprüfdokuments sowie in den Stromplan-Ausdruck.',
     extra: 'Das Logo wird lokal in der App gespeichert und bleibt auch nach einem Neustart erhalten. Mit dem kleinen "x"-Button neben dem Logo kannst du es jederzeit wieder entfernen. Es wird nicht mit der JSON-Projektdatei übertragen und ist daher gerätespezifisch.'
   },
   updates: {

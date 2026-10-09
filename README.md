@@ -16,16 +16,16 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Vertei
    - **macOS (Intel):** `Stromplaner-x.x.x.dmg`
    
    > **macOS-Hinweis:** Beim ersten Öffnen erscheint eine Warnung „Entwickler nicht verifiziert". Rechtsklick auf die App → **Öffnen** → **Öffnen** umgeht diese Meldung einmalig.
-2. **Erster Start:** **Verteiler-Typen und Verbraucher selber anlegen** oder **↥ Laden** → `app/Standard.json` auswählen, um Verteiler-Typen und Verbraucher vorzuladen
+2. **Erster Start:** **Verteiler-Typen und Verbraucher selber anlegen** oder **Laden** → `app/Standard.json` auswählen, um Verteiler-Typen und Verbraucher vorzuladen
 3. Planen, stecken, prüfen
-4. Mit **💾 Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
-5. **🖨 PDF** für den fertigen Stromplan oder das Prüfprotokoll → **Achtung** zwei verschiedene Exports: Einer für den Plan, einer für die Errichtungsprüfung
+4. Mit **Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
+5. **PDF** für den fertigen Stromplan oder das Prüfprotokoll → **Achtung** zwei verschiedene Exports: Einer für den Plan, einer für die Errichtungsprüfung
 
 Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen, um zu archivieren, oder um in einem anderem Projekt zu arbeiten und vorher den aktuellen Stand zu sichern.
 
 **Verteiler-Typen und Verbraucher** werden zusätzlich automatisch als Bibliothek in AppData gespeichert (`AppData\Stromplaner\Speicherstände\Bibliothek.json` auf Windows, `~/Library/Application Support/Stromplaner/Speicherstände/Bibliothek.json` auf macOS) und beim Start von dort geladen – sie bleiben also erhalten, auch wenn ein anderer Planungsstand geöffnet wird.
 
-**Updates** werden unter Windows automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **↓ Update bereit**-Button, der einen Neustart-Dialog öffnet.
+**Updates** werden unter Windows automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **Update bereit**-Button, der einen Neustart-Dialog öffnet.
 
 Auf **macOS** ist die App nicht mit einem Apple-Entwicklerzertifikat signiert, deshalb kann sie sich nicht selbst austauschen. Stromplaner zeigt eine neue Version mit **↑ Update verfügbar** an. **Download-Seite öffnen** führt zum Release: dort die passende `.dmg` laden, öffnen und Stromplaner in den Programme-Ordner ziehen. Pläne, Bibliothek und Einstellungen bleiben erhalten.
 
@@ -51,7 +51,7 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 | ☁️ **Sync** | QR-Code scannen, Sync-Server, An PC zurücksenden |
 
 ### Plan vom PC aufs Handy und zurück (WLAN)
-1. **PC:** Header → **☁ Sync** → **📱 QR-Code anzeigen**.
+1. **PC:** Header → **Sync** → **QR-Code anzeigen**.
 2. **Netzwerk wählen:** Hat der PC mehrere Netzwerkadapter, erscheint eine Auswahl. Hier den **physischen Adapter (WLAN bzw. LAN) wählen, in dem auch das Handy ist – nicht das VPN-Interface.** Über die VPN-Adresse ist der PC vom Handy aus in der Regel nicht erreichbar, der Scan bzw. das Zurücksenden schlägt dann mit „Failed to fetch“ / „PC nicht erreichbar“ fehl. VPN- und virtuelle Adapter (ProtonVPN, WireGuard, Hyper-V, Docker …) werden grau und als letzte angeboten.
 3. **Handy:** Tab **Sync** → **📷 QR-Code scannen** → der Plan wird geladen.
 4. Prüfen.
@@ -83,7 +83,7 @@ curl http://localhost:3001/health                # → {"ok":true,…}
 ```
 Ohne den `chown`-Schritt legt Docker unter Linux den Datenordner als `root` an, und der Server kann nicht speichern. Unter Docker Desktop (Windows/macOS) ist er nicht nötig.
 
-Der Server läuft auf Port 3001. Am PC unter **☁ Sync** und am Handy im Tab **Sync** die Server-URL (z. B. `http://192.168.1.10:3001`) eintragen, dann Pläne hoch- und herunterladen. Optional schützt `AUTH_TOKEN` (in der `docker-compose.yml`) den Server; derselbe Token wird dann in beiden Apps eingetragen. Ohne HTTPS ist der Server nur fürs eigene Netz gedacht – aus dem Internet nur hinter einem Reverse-Proxy mit HTTPS erreichbar machen.
+Der Server läuft auf Port 3001. Am PC unter **Sync** und am Handy im Tab **Sync** die Server-URL (z. B. `http://192.168.1.10:3001`) eintragen, dann Pläne hoch- und herunterladen. Optional schützt `AUTH_TOKEN` (in der `docker-compose.yml`) den Server; derselbe Token wird dann in beiden Apps eingetragen. Ohne HTTPS ist der Server nur fürs eigene Netz gedacht – aus dem Internet nur hinter einem Reverse-Proxy mit HTTPS erreichbar machen.
 
 **Umstieg vom bisherigen Stromplaner-Sync-Server** (Ordner `server/` bis Version 1.2.x): Die Apps sprechen mit dem Planer-Server genau wie bisher, nur der Ablageort der Pläne ist ein anderer.
 ```bash
@@ -171,7 +171,7 @@ Topologie der gesamten Verteilerkaskade als SVG-Baumdiagramm.
 - Verbindungslinien exakt am jeweiligen Steckplatz des Eltern-Verteilers; Steckerfamilie als Label
 - Connector-Type-Fallback: fehlende oder veraltete `parentOutletId` wird automatisch über den Eingangs-Steckertyp aufgelöst; orange gestrichelte Linie + ⚠ als Warnung
 - Verbraucher als Leaf-Boxen rechts neben dem Steckplatz (Name, Watt, Ampere)
-- **Multicore:** Ch.X-Badge je Verbraucher-Box zeigt den belegten Slot
+- **Multicore:** Kennung „SP 1“, „SP 2“ … je Verbraucher-Box zeigt den belegten Steckplatz; fehlt die Zuordnung, erscheint ein oranges „SP ?“
 - Adapter-Verbindungen lila hervorgehoben
 - PDF-Export: SVG wird automatisch auf Seitenbreite skaliert, vollständige Farbumwandlung Dark → Light für druckfreundliche Darstellung
 
@@ -261,16 +261,16 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 
 | Button | Funktion |
 |--------|----------|
-| **+ Logo** / **✎ Logo** | Firmenlogo hochladen oder ersetzen (PNG, JPG, SVG) — erscheint in der App und im PDF |
-| **✕** *(neben Logo)* | Hochgeladenes Logo entfernen |
-| **↥ Laden** | Gespeicherten Stand (`.json`) laden |
-| **💾 Speichern** | Aktuellen Stand als `.json` exportieren |
-| **↺ Neu** | Planung zurücksetzen (Verteiler-Typen und Verbraucher bleiben erhalten) |
-| **📋 Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
-| **🖨 PDF** | Druckbaren Stromplan als PDF öffnen |
-| **↓ Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
-| **👥 Gemeinsam** / **● 2 online** | Gemeinsam mit anderen am selben Plan arbeiten (siehe unten); in einer Sitzung zeigt der Knopf Status und Teilnehmerzahl |
-| **☁ Sync** | Plan auf den Sync-Server hoch-/herunterladen, lokal im WLAN per QR-Code teilen |
+| **Logo** | Firmenlogo hochladen oder ersetzen (PNG, JPG, SVG) — erscheint in der App und im PDF |
+| **✕** *(neben Logo, nur wenn eins gesetzt ist)* | Hochgeladenes Logo entfernen |
+| **Laden** | Gespeicherten Stand (`.json`) laden |
+| **Speichern** | Aktuellen Stand als `.json` exportieren |
+| **Neu** | Planung zurücksetzen (Verteiler-Typen und Verbraucher bleiben erhalten) |
+| **Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
+| **PDF** | Druckbaren Stromplan als PDF öffnen |
+| **Updates** / **Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
+| **Gemeinsam** / **2 online** | Gemeinsam mit anderen am selben Plan arbeiten (siehe unten); in einer Sitzung zeigt der Knopf Status und Teilnehmerzahl |
+| **Sync** | Plan auf den Sync-Server hoch-/herunterladen, lokal im WLAN per QR-Code teilen |
 
 ---
 
@@ -278,7 +278,7 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 
 Mehrere Personen bearbeiten denselben Plan gleichzeitig, jede Änderung erscheint sofort bei allen. Voraussetzung ist ein erreichbarer [Planer-Server](#sync-server-optional) und dieselbe Stromplaner-Version bei allen.
 
-1. Header → **👥 Gemeinsam** → Server-Adresse (z. B. `192.168.1.10` oder `http://server:3001`), ggf. Server-Token und den eigenen Namen eintragen.
+1. Header → **Gemeinsam** → Server-Adresse (z. B. `192.168.1.10` oder `http://server:3001`), ggf. Server-Token und den eigenen Namen eintragen.
 2. **Sitzung starten:** Name vergeben, optional einen Sitzungscode – der aktuelle Plan wird zum gemeinsamen Plan.
 3. **Beitreten:** Die anderen wählen die Sitzung aus der Liste (ggf. mit Code). Ihr bisheriger Plan wird dabei durch den Stand der Sitzung ersetzt – vorher speichern, falls nötig.
 
@@ -286,7 +286,7 @@ Mehrere Personen bearbeiten denselben Plan gleichzeitig, jede Änderung erschein
 - Wer in einem Textfeld tippt, sperrt es kurz für die anderen; wer gleichzeitig dasselbe Feld ändern will, bekommt einen Hinweis und seine Eingabe wird zurückgenommen.
 - Ändern zwei Personen dasselbe Feld kurz nacheinander, gilt die letzte Änderung; die andere Person bekommt einen Hinweis.
 - Bricht die Verbindung ab, arbeitet man weiter – die Änderungen werden beim Wiederverbinden nachgeschickt.
-- **↥ Laden**, **↺ Neu** und „Von Server laden“ ersetzen in einer Sitzung den Plan für alle (mit Rückfrage).
+- **Laden**, **Neu** und „Von Server laden“ ersetzen in einer Sitzung den Plan für alle (mit Rückfrage).
 - Verteiler-Typen und Verbraucher der Sitzung landen – wie beim Laden eines Plans – auch in der eigenen Bibliothek.
 - **Verlassen:** Man kann später wieder beitreten, der Plan bleibt lokal erhalten. **Für alle beenden** löscht die Sitzung auf dem Server; die anderen behalten ihren Stand als lokalen Plan.
 
@@ -324,7 +324,7 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 ### Stack
 | Komponente | Technologie |
 |------------|-------------|
-| UI | React 18 (JSX) |
+| UI | React 18 (JSX), Icons: [lucide-react](https://lucide.dev) (wie im Netzwerkplaner) |
 | Build | esbuild → standalone IIFE |
 | Output | Einzelne HTML-Datei (keine externen Abhängigkeiten) |
 | Desktop-Wrapper | Electron 33 (NSIS für Windows, DMG für macOS) |
