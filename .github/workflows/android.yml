@@ -28,7 +28,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'   # Capacitor 8 braucht JDK 21
 
       - name: Copy icon for PWA build
         run: mkdir -p webapp/public && cp build/icon.png webapp/public/icon.png
@@ -85,12 +85,12 @@ jobs:
       #   ANDROID_KEY_ALIAS        - Alias des Schlüssels
       #   ANDROID_KEY_PASSWORD     - Passwort des Schlüssels
       #   ANDROID_STORE_PASSWORD   - Passwort des Keystores
-      - name: Build release APK (signed)
+      - name: Build release APK + App-Bundle (signed)
         if: env.HAS_SIGNING == 'true'
         working-directory: webapp/android
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-          ./gradlew assembleRelease \
+          ./gradlew assembleRelease bundleRelease \
             -Pandroid.injected.signing.store.file="$RUNNER_TEMP/release.keystore" \
             -Pandroid.injected.signing.store.password="$ANDROID_STORE_PASSWORD" \
             -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
@@ -120,6 +120,15 @@ jobs:
         with:
           name: Stromplaner-Android
           path: ${{ steps.find-apk.outputs.path }}
+
+      # App-Bundle für den Google Play Store (nur mit Signierung)
+      - name: Upload App-Bundle as artifact
+        if: env.HAS_SIGNING == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Stromplaner-PlayStore-Bundle
+          path: webapp/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
 
       # Das Release legt electron-builder im Workflow „Build & Release“ an – das dauert länger als dieser Build
       - name: Attach APK to GitHub release
