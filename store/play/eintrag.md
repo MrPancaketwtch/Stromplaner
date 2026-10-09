@@ -12,6 +12,9 @@ Alle Inhalte der Screenshots sind ein frei erfundener Beispielplan („Stadtfest
 ## App-Name (max. 30 Zeichen)
 Stromplaner
 
+## Paketname (nach dem ersten Upload nicht mehr änderbar)
+de.stromplaner.app
+
 ## Kurzbeschreibung (max. 80 Zeichen)
 Stromverteilung für Events planen und Errichtungsprüfung am Verteiler erfassen
 

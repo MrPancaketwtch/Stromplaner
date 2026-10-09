@@ -41,7 +41,7 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 - Die Datei `Stromplaner-x.x.x.apk` von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** aufs Handy laden und öffnen.
 - Android fragt beim ersten Mal, ob Apps aus dieser Quelle installiert werden dürfen → für Browser bzw. Dateimanager erlauben.
 - **Update:** Die neue APK einfach über die installierte App installieren – Pläne und Prüfergebnisse bleiben erhalten.
-- **Einmalig beim Umstieg von einer älteren Test-Version** (bis 1.2.1, mit wechselndem Debug-Schlüssel signiert): Android verweigert das Update mit „App nicht installiert“. Dann die alte App deinstallieren und neu installieren. **Dabei werden die Daten auf dem Handy gelöscht – offene Prüfergebnisse vorher an den PC senden!**
+- **Einmalig beim Umstieg von einer älteren Test-Version** (bis 1.3.0-beta.1): Ab 1.3.0 hat die App die Kennung `de.stromplaner.app` (vorher `dev.stromplaner`). Android installiert sie deshalb **neben** der alten App statt als Update. Offene Prüfergebnisse in der alten App an den PC senden, dann die alte App deinstallieren. Ganz alte Versionen bis 1.2.1 lassen sich ohnehin nicht aktualisieren („App nicht installiert“).
 - Alternativ läuft Stromplaner ohne Installation als Web-App unter **[mrpancaketwtch.github.io/Stromplaner](https://mrpancaketwtch.github.io/Stromplaner/)**. Der Datenaustausch im WLAN (Laden per QR-Code, An PC zurücksenden, Sitzung mit einem Server über `http://`) funktioniert dort nicht, weil der Browser von einer HTTPS-Seite keine unverschlüsselten Verbindungen ins lokale Netz zulässt – für die Prüfung vor Ort die APK verwenden.
 
 ### Tabs in der Handy-App

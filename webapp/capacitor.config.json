@@ -1,5 +1,5 @@
 {
-  "appId": "dev.stromplaner",
+  "appId": "de.stromplaner.app",
   "appName": "Stromplaner",
   "webDir": "dist",
   "android": {
