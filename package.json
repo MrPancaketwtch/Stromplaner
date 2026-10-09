@@ -13,6 +13,7 @@
   "build": {
     "afterPack": "./scripts/afterPack.js",
     "appId": "dev.stromplaner",
+    "generateUpdatesFilesForAllChannels": true,
     "productName": "Stromplaner",
     "icon": "build/icon.png",
     "files": [

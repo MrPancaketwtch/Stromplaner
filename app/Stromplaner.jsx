@@ -74,6 +74,8 @@ const minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct=3) => {
 
 const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCompare(b[1].label,"de"));
 
+// Betas (1.3.0-beta.1) zeigen die Einträge der kommenden Version (1.3.0)
+const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
   "1.3.0": [
     "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → Gemeinsam)",
@@ -551,7 +553,7 @@ export default function App() {
     const v = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : null;
     if(!v) return;
     const seen = localStorage.getItem("stromplaner_seen_version");
-    if(seen !== v && CHANGELOG[v]) {
+    if(seen !== v && changelogFor(v).length) {
       setChangelogVersion(v);
       localStorage.setItem("stromplaner_seen_version", v);
     }
@@ -1545,7 +1547,7 @@ function SitzungAktiv({ sitzung, onClose }){
 }
 
 function ChangelogModal({ version, onClose }) {
-  const entries = CHANGELOG[version] || [];
+  const entries = changelogFor(version);
   const overlay = { position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center' };
   const box     = { background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:12,padding:'28px 32px',maxWidth:420,width:'90%',color:'#e8eaf0',fontFamily:'inherit' };
   return (

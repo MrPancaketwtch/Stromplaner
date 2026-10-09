@@ -29,11 +29,14 @@ jobs:
       - name: Build app
         run: npm run build
 
+      # Tags mit Bindestrich (v1.3.0-beta.1) werden Pre-releases: die In-App-Updates normaler Nutzer
+      # ignorieren sie. EP_PRE_RELEASE hat bei electron-builder Vorrang vor publish.releaseType.
       - name: Package & publish
         run: npx electron-builder --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
 
   release-notes:
     needs: release
@@ -46,12 +49,16 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           V="${VERSION#v}"
+          BETA=""
+          case "$V" in *-*) BETA="> **Beta-Version zum Testen** – kann noch Fehler enthalten. Installierte Stromplaner-Versionen aktualisieren sich nicht automatisch auf Betas; wer eine Beta installiert, bekommt spätere Betas und die fertige Version als Update."; esac
           cat > /tmp/notes.md << NOTES
+          ${BETA}
+
           ## Herunterladen
 
           | Plattform | Datei |
           |---|---|
-          | 🪟 **Windows** | \`Stromplaner Setup ${V}.exe\` |
+          | 🪟 **Windows** | \`Stromplaner-Setup-${V}.exe\` |
           | 🍎 **macOS (Apple Silicon / M-Series)** | \`Stromplaner-${V}-arm64.dmg\` |
           | 🍎 **macOS (Intel)** | \`Stromplaner-${V}.dmg\` |
           | 🤖 **Android (Handy-App)** | \`Stromplaner-${V}.apk\` |

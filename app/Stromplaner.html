@@ -29141,6 +29141,7 @@ button:active { filter: brightness(0.95); }
     return round2(fac * +I * +l * +cosPhi / (KAPPA_CU * (maxPct / 100) * 230));
   };
   var CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
+  var changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v || "").split("-")[0]] || [];
   var CHANGELOG = {
     "1.3.0": [
       "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig \xFCber den Planer-Server \u2013 Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbr\xFCchen (Header \u2192 Gemeinsam)",
@@ -29602,7 +29603,7 @@ button:active { filter: brightness(0.95); }
       const v = true ? "1.2.1" : null;
       if (!v) return;
       const seen = localStorage.getItem("stromplaner_seen_version");
-      if (seen !== v && CHANGELOG[v]) {
+      if (seen !== v && changelogFor(v).length) {
         setChangelogVersion(v);
         localStorage.setItem("stromplaner_seen_version", v);
       }
@@ -30643,7 +30644,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
     return /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontWeight: 700, fontSize: 15 } }, z.info?.name || "Sitzung"), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...SZ.muted, marginTop: 3 } }, /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: farbe } }, "\u25CF"), " ", statusText, z.ausstehend > 0 && !z.veraltet ? ` \xB7 ${z.ausstehend} \xC4nderung${z.ausstehend === 1 ? "" : "en"} unterwegs` : ""), z.veraltet && /* @__PURE__ */ import_react5.default.createElement("div", { style: { background: "#3a2a1a", border: "1px solid #e67e22", borderRadius: 6, padding: "8px 10px", fontSize: 12, marginTop: 12, lineHeight: 1.5 } }, "Die Sitzung ist beendet. Dein Stand ist jetzt ein normaler lokaler Plan \u2013 \xC4nderungen anderer kommen nicht mehr an. Bei Bedarf \xFCber \u201ESpeichern\u201C sichern."), /* @__PURE__ */ import_react5.default.createElement("div", { style: SZ.label }, "Teilnehmer"), users.length === 0 && /* @__PURE__ */ import_react5.default.createElement("div", { style: SZ.muted }, "\u2014"), users.map((u) => /* @__PURE__ */ import_react5.default.createElement("div", { key: u.id, style: { fontSize: 13, padding: "3px 0" } }, /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: u.farbe } }, "\u25CF"), " ", u.name, u.id === z.you?.id && /* @__PURE__ */ import_react5.default.createElement("span", { style: SZ.muted }, " (du)"))), /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", gap: 8, marginTop: 18, flexWrap: "wrap" } }, z.veraltet ? /* @__PURE__ */ import_react5.default.createElement("button", { style: S.primaryBtn, onClick: verlassen }, "Schlie\xDFen") : /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.ghostBtn, onClick: verlassen }, "Nur ich verlasse die Sitzung"), /* @__PURE__ */ import_react5.default.createElement("button", { style: { ...SZ.danger, ...z.status !== "online" ? { opacity: 0.4, cursor: "not-allowed" } : {} }, disabled: z.status !== "online", title: z.status !== "online" ? "Nur mit Verbindung zum Server m\xF6glich" : "", onClick: beenden }, "Sitzung f\xFCr alle beenden", andere ? ` (${andere} weitere online)` : ""))), !z.veraltet && /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...SZ.muted, marginTop: 8, lineHeight: 1.5 } }, "Wer nur verl\xE4sst, kann sp\xE4ter wieder beitreten; der Plan bleibt bei dir als lokaler Plan erhalten. \u201EF\xFCr alle beenden\u201C l\xF6scht die Sitzung auf dem Server."));
   }
   function ChangelogModal({ version: version2, onClose }) {
-    const entries = CHANGELOG[version2] || [];
+    const entries = changelogFor(version2);
     const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1e3, display: "flex", alignItems: "center", justifyContent: "center" };
     const box = { background: "#1e2530", border: "1px solid #2e3a4a", borderRadius: 12, padding: "28px 32px", maxWidth: 420, width: "90%", color: "#e8eaf0", fontFamily: "inherit" };
     return /* @__PURE__ */ import_react5.default.createElement("div", { style: overlay, onClick: (e) => {
