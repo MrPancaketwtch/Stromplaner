@@ -423,4 +423,4 @@ Adapter-Verbindungen sind innerhalb einer Steckerfamilie (CEE3P, CEE1P, PL, MC, 
 
 ---
 
-Kontakt / Fragen: silas.roesler@pm.me
+Kontakt / Fragen: Stromplaner@pm.me
