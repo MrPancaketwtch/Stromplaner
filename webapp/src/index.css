@@ -643,13 +643,17 @@ html, body {
 }
 .link-btn--muted { color: var(--muted); font-weight: 500; }
 
-.sicht-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* minmax(0,…): lange Wörter wie „Steckverbinder“ dürfen die Spalte auf schmalen Handys nicht sprengen */
+.sicht-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .sicht-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
   min-height: 48px;
-  padding: 8px 10px;
+  padding: 8px;
+  hyphens: auto;
+  overflow-wrap: break-word;
   background: var(--bg);
   border: 1px solid var(--line);
   border-radius: 8px;

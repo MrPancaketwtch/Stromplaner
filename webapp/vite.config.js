@@ -38,6 +38,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg}'],
+        // Die Datenschutzerklärung ist eine eigene Seite, nicht die App
+        navigateFallbackDenylist: [/datenschutz\.html$/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\//,
