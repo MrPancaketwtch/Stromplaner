@@ -116,7 +116,39 @@ function createWindow() {
 // macOS tauscht die App nur aus, wenn sie mit Apple-Developer-ID signiert ist – das ist sie nicht.
 // Dort daher nur auf neue Versionen hinweisen und die Download-Seite öffnen.
 const MANUAL_UPDATE = process.platform === 'darwin';
-const RELEASES_URL = 'https://github.com/MrPancaketwtch/Stromplaner/releases/latest';
+const RELEASES_URL = 'https://github.com/MrPancaketwtch/Stromplaner/releases';
+
+// Update-Kanal: „stabil“ = nur fertige Versionen, „beta“ = auch Betas. Die Wahl bleibt gespeichert;
+// ohne gespeicherte Wahl sucht eine installierte Beta weiter nach Betas.
+const istVorabversion = (v) => String(v || '').includes('-');
+const updateSettingsFile = () => path.join(app.getPath('userData'), 'update-settings.json');
+let updateKanal = null;
+let kanalWechsel = null; // wird gesetzt, sobald der Updater läuft (nur in der installierten App)
+
+function ladeUpdateKanal() {
+  try {
+    const k = JSON.parse(fs.readFileSync(updateSettingsFile(), 'utf8')).kanal;
+    if (k === 'beta' || k === 'stabil') return k;
+  } catch {}
+  return istVorabversion(app.getVersion()) ? 'beta' : 'stabil';
+}
+const aktuellerKanal = () => updateKanal || (updateKanal = ladeUpdateKanal());
+
+function kanalAnwenden(kanal) {
+  autoUpdater.channel = kanal === 'beta' ? 'beta' : 'latest';
+  autoUpdater.allowPrerelease = kanal === 'beta';
+  autoUpdater.allowDowngrade = false; // der channel-Setter erlaubt Downgrades – nie auf eine ältere Version zurückstufen
+}
+
+ipcMain.handle('get-update-channel', () => aktuellerKanal());
+ipcMain.handle('set-update-channel', (_event, kanal) => {
+  if (kanal !== 'beta' && kanal !== 'stabil') return { kanal: aktuellerKanal(), geprueft: false };
+  updateKanal = kanal;
+  try { fs.writeFileSync(updateSettingsFile(), JSON.stringify({ kanal }, null, 2), 'utf8'); } catch {}
+  if (!kanalWechsel) return { kanal, geprueft: false };
+  kanalWechsel(kanal);
+  return { kanal, geprueft: true };
+});
 
 function setupAutoUpdater(win) {
   const send = (type, payload) => {
@@ -124,7 +156,29 @@ function setupAutoUpdater(win) {
   };
 
   let updateReady = false;
+  let geladeneVersion = null;
+  let gefundeneVersion = null;
   if (MANUAL_UPDATE) autoUpdater.autoDownload = false;
+  kanalAnwenden(aktuellerKanal());
+
+  const pruefen = () => {
+    if (updateReady) { send('downloaded', { version: geladeneVersion }); return; }
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('checkForUpdates error:', err?.message || err);
+      send('error', { message: err?.message || String(err) });
+    });
+  };
+
+  kanalWechsel = (kanal) => {
+    // Eine schon geladene Beta soll nach dem Wechsel auf „Stabil“ nicht mehr installiert werden
+    if (kanal === 'stabil' && istVorabversion(geladeneVersion)) {
+      autoUpdater.autoInstallOnAppQuit = false;
+      updateReady = false;
+      geladeneVersion = null;
+    }
+    kanalAnwenden(kanal);
+    pruefen();
+  };
 
   autoUpdater.on('checking-for-update',  () => send('checking'));
   autoUpdater.on('update-not-available', () => send('up-to-date'));
@@ -135,24 +189,22 @@ function setupAutoUpdater(win) {
   autoUpdater.on('download-progress', (p) =>
     send('downloading', { percent: Math.round(p.percent) })
   );
-  autoUpdater.on('update-available', (info) =>
-    send('available', { version: info.version, manual: MANUAL_UPDATE })
-  );
+  autoUpdater.on('update-available', (info) => {
+    gefundeneVersion = info.version;
+    send('available', { version: info.version, manual: MANUAL_UPDATE, beta: istVorabversion(info.version) });
+  });
   autoUpdater.on('update-downloaded', (info) => {
     updateReady = true;
-    send('downloaded', { version: info.version });
+    geladeneVersion = info.version;
+    autoUpdater.autoInstallOnAppQuit = true;
+    send('downloaded', { version: info.version, beta: istVorabversion(info.version) });
   });
 
-  ipcMain.handle('check-for-updates', () => {
-    if (updateReady) { send('downloaded'); return; }
-    autoUpdater.checkForUpdates().catch((err) => {
-      console.error('checkForUpdates error:', err?.message || err);
-      send('error', { message: err?.message || String(err) });
-    });
-  });
+  ipcMain.handle('check-for-updates', () => pruefen());
 
   ipcMain.handle('install-update', () => {
-    if (MANUAL_UPDATE) { shell.openExternal(RELEASES_URL); return; }
+    // „latest“ zeigt auf GitHub nie Betas – daher direkt die gefundene Version öffnen
+    if (MANUAL_UPDATE) { shell.openExternal(gefundeneVersion ? `${RELEASES_URL}/tag/v${gefundeneVersion}` : `${RELEASES_URL}/latest`); return; }
     autoUpdater.quitAndInstall();
   });
 

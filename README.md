@@ -27,6 +27,8 @@ Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speicher
 
 **Updates** werden unter Windows automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **Update bereit**-Button, der einen Neustart-Dialog öffnet.
 
+**Beta-Versionen:** Im Dialog **Updates** lässt sich der Update-Kanal wählen. **Stabil** (Standard) liefert nur fertige Versionen, **Beta** zusätzlich Vorabversionen zum Testen. Wer auf Stabil zurückschaltet, bleibt auf der installierten Beta, bis eine neuere fertige Version erscheint – es wird nie auf eine ältere Version zurückgestuft. Die Wahl wird gespeichert.
+
 Auf **macOS** ist die App nicht mit einem Apple-Entwicklerzertifikat signiert, deshalb kann sie sich nicht selbst austauschen. Stromplaner zeigt eine neue Version mit **↑ Update verfügbar** an. **Download-Seite öffnen** führt zum Release: dort die passende `.dmg` laden, öffnen und Stromplaner in den Programme-Ordner ziehen. Pläne, Bibliothek und Einstellungen bleiben erhalten.
 
 ---
@@ -360,6 +362,8 @@ npm start
 3. Das Skript setzt die Version, baut, committet und pusht einen Git-Tag
 4. GitHub Actions baut automatisch Windows (`.exe`) und macOS (`.dmg`) und lädt beide als GitHub Release hoch; die Android-APK wird einige Minuten später an dasselbe Release angehängt
 5. Installierte Desktop-Apps erkennen das Update beim nächsten Start automatisch
+
+**Beta veröffentlichen:** Genauso, nur mit Bindestrich in der Versionsnummer, z. B. `1.3.0-beta.1`, `1.3.0-beta.2` … Solche Tags werden als *Pre-release* veröffentlicht (mit Beta-Hinweis in den Release-Notes) und nur von Apps im Update-Kanal **Beta** geladen. Der Changelog-Eintrag gehört unter die kommende Version (`"1.3.0"`); Betas zeigen ihn automatisch an.
 
 **Handy-App lokal entwickeln:**
 ```bash

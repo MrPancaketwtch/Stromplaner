@@ -79,6 +79,7 @@ const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0
 const CHANGELOG = {
   "1.3.0": [
     "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → Gemeinsam)",
+    "Update-Kanal wählbar (Updates → Stabil / Beta): Wer möchte, bekommt Beta-Versionen zum Testen direkt als In-App-Update",
     "Header mit einheitlichen Icons statt Emojis",
     "Schaltbild: Multicore-Steckungen zeigen ihren Steckplatz deutlich als „SP 1“, „SP 2“ … (fehlt die Zuordnung, erscheint „SP ?“)",
     "Eigener Dialog statt Windows-Meldungen: Textfelder bleiben nach Hinweisen, Speichern- und Öffnen-Dialogen wieder bedienbar",
@@ -544,6 +545,13 @@ export default function App() {
       setUpdateStatus(msg);
     });
   },[]);
+  const [updateKanal, setUpdateKanal] = useState(null);
+  useEffect(()=>{ window.electronAPI?.getUpdateChannel?.().then(setUpdateKanal).catch(()=>{}); },[]);
+  const kanalWaehlen=async(k)=>{
+    const r=await window.electronAPI.setUpdateChannel(k);
+    setUpdateKanal(r.kanal);
+    if(r.geprueft) setUpdateStatus({type:'checking'});
+  };
 
   useEffect(()=>{
     if(!localStorage.getItem("stromplaner_donated")) setShowDonateModal(true);
@@ -1344,7 +1352,7 @@ export default function App() {
       </main>
       {changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
       {showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
-      {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus}/>}
+      {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus} kanal={updateKanal} onKanal={kanalWaehlen}/>}
       {showSitzung&&<SitzungDialog sitzung={sitzung} server={syncServer} setServer={setSyncServer} token={syncToken} setToken={setSyncToken}
         projektName={meta.production} version={typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"} onClose={()=>setShowSitzung(false)}/>}
       <ToastHost toasts={toasts}/>
@@ -1355,8 +1363,11 @@ export default function App() {
   );
 }
 
-function UpdateModal({status,onClose,onCheck,onInstall,setStatus}){
+function UpdateModal({status,onClose,onCheck,onInstall,setStatus,kanal,onKanal}){
   const busy=status.type==='checking'||status.type==='downloading';
+  const installiert=typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev";
+  const istBeta=installiert.includes("-");
+  const betaTag=(v)=>String(v||"").includes("-")&&<span style={{marginLeft:6,fontSize:10,fontWeight:700,color:'#1c2127',background:ACCENT,borderRadius:3,padding:'1px 5px',verticalAlign:'1px'}}>BETA</span>;
   const overlay={position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'};
   const box={background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:10,padding:'28px 32px',minWidth:340,maxWidth:420,color:'#e8eaf0',fontFamily:'inherit'};
   const title={fontSize:16,fontWeight:700,marginBottom:16,color:'#fff'};
@@ -1367,17 +1378,34 @@ function UpdateModal({status,onClose,onCheck,onInstall,setStatus}){
     <div style={overlay} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
       <div style={box}>
         <div style={title}>Software-Update</div>
+        <div style={{fontSize:12,color:'#7c8794',margin:'-8px 0 14px'}}>Installiert: Version {installiert}{betaTag(installiert)}</div>
         {status.type==='idle'&&<p style={{color:'#aab',margin:0}}>Auf neue Version prüfen?</p>}
         {status.type==='checking'&&<p style={{color:'#aab',margin:0}}>Suche nach Updates…</p>}
         {status.type==='up-to-date'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Du hast bereits die neueste Version.</p>}
-        {status.type==='available'&&!status.manual&&<p style={{color:'#f5a623',margin:0}}>Version {status.version} verfügbar – wird heruntergeladen…</p>}
+        {status.type==='available'&&!status.manual&&<p style={{color:'#f5a623',margin:0}}>Version {status.version}{betaTag(status.version)} verfügbar – wird heruntergeladen…</p>}
         {status.type==='available'&&status.manual&&<>
-          <p style={{color:'#f5a623',margin:'0 0 8px'}}>Version {status.version} ist verfügbar.</p>
+          <p style={{color:'#f5a623',margin:'0 0 8px'}}>Version {status.version}{betaTag(status.version)} ist verfügbar.</p>
           <p style={{color:'#aab',margin:0,fontSize:12,lineHeight:1.5}}>Auf dem Mac bitte manuell aktualisieren: Auf der Download-Seite die passende <strong>.dmg</strong> laden (Apple Silicon: <em>-arm64.dmg</em>, Intel: ohne Zusatz), öffnen und Stromplaner in den Programme-Ordner ziehen. Deine Daten bleiben erhalten.</p>
         </>}
         {status.type==='downloading'&&<p style={{color:'#5bb8f5',margin:0}}>Wird heruntergeladen… {status.percent!=null?status.percent+'%':''}</p>}
-        {status.type==='downloaded'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Version {status.version||''} bereit. Nach dem Neustart wird die neue Version installiert.</p>}
+        {status.type==='downloaded'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Version {status.version||''}{betaTag(status.version)} bereit. Nach dem Neustart wird die neue Version installiert.</p>}
         {status.type==='error'&&<p style={{color:'#e06c75',margin:0}}>Fehler: {status.message||'Update konnte nicht geprüft werden.'}</p>}
+        {kanal&&<div style={{marginTop:18,paddingTop:14,borderTop:'1px solid #2e3a4a'}}>
+          <div style={{fontSize:10,color:'#7c8794',letterSpacing:.5,textTransform:'uppercase',marginBottom:8}}>Update-Kanal</div>
+          <div role="radiogroup" aria-label="Update-Kanal" style={{display:'flex',border:'1px solid #2e3a4a',borderRadius:6,overflow:'hidden'}}>
+            {[['stabil','Stabil'],['beta','Beta']].map(([k,l])=>(
+              <button key={k} role="radio" aria-checked={kanal===k} disabled={busy} onClick={()=>kanal!==k&&onKanal(k)}
+                style={{flex:1,padding:'7px 10px',border:'none',cursor:busy?'default':'pointer',fontSize:13,fontWeight:600,
+                  background:kanal===k?'rgba(245,166,35,0.16)':'transparent',color:kanal===k?ACCENT:'#9aa4af'}}>{l}</button>
+            ))}
+          </div>
+          <p style={{fontSize:11,color:'#7c8794',margin:'8px 0 0',lineHeight:1.5}}>
+            {kanal==='beta'
+              ?'Du bekommst auch Beta-Versionen zum Testen – sie können noch Fehler enthalten. Fertige Versionen kommen weiterhin, sobald sie neuer sind.'
+              :'Nur fertige Versionen.'}
+            {istBeta&&kanal==='stabil'?' Du nutzt gerade eine Beta und bleibst darauf, bis eine neuere fertige Version erscheint.':''}
+          </p>
+        </div>}
         <div style={row}>
           {status.type==='downloaded'
             ?<button style={btn({background:'#3a7bd5',color:'#fff'})} onClick={onInstall}>Jetzt neu starten</button>

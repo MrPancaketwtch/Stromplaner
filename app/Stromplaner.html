@@ -29145,6 +29145,7 @@ button:active { filter: brightness(0.95); }
   var CHANGELOG = {
     "1.3.0": [
       "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig \xFCber den Planer-Server \u2013 Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbr\xFCchen (Header \u2192 Gemeinsam)",
+      "Update-Kanal w\xE4hlbar (Updates \u2192 Stabil / Beta): Wer m\xF6chte, bekommt Beta-Versionen zum Testen direkt als In-App-Update",
       "Header mit einheitlichen Icons statt Emojis",
       "Schaltbild: Multicore-Steckungen zeigen ihren Steckplatz deutlich als \u201ESP 1\u201C, \u201ESP 2\u201C \u2026 (fehlt die Zuordnung, erscheint \u201ESP ?\u201C)",
       "Eigener Dialog statt Windows-Meldungen: Textfelder bleiben nach Hinweisen, Speichern- und \xD6ffnen-Dialogen wieder bedienbar"
@@ -29596,6 +29597,16 @@ button:active { filter: brightness(0.95); }
         setUpdateStatus(msg);
       });
     }, []);
+    const [updateKanal, setUpdateKanal] = (0, import_react5.useState)(null);
+    (0, import_react5.useEffect)(() => {
+      window.electronAPI?.getUpdateChannel?.().then(setUpdateKanal).catch(() => {
+      });
+    }, []);
+    const kanalWaehlen = async (k) => {
+      const r = await window.electronAPI.setUpdateChannel(k);
+      setUpdateKanal(r.kanal);
+      if (r.geprueft) setUpdateStatus({ type: "checking" });
+    };
     (0, import_react5.useEffect)(() => {
       if (!localStorage.getItem("stromplaner_donated")) setShowDonateModal(true);
     }, []);
@@ -30498,7 +30509,7 @@ Fortfahren?`);
     )), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("help") }, /* @__PURE__ */ import_react5.default.createElement(AnleitungTab, null))), changelogVersion && /* @__PURE__ */ import_react5.default.createElement(ChangelogModal, { version: changelogVersion, onClose: () => setChangelogVersion(null) }), showDonateModal && /* @__PURE__ */ import_react5.default.createElement(DonateModal, { onClose: () => {
       localStorage.setItem("stromplaner_donated", "1");
       setShowDonateModal(false);
-    } }), showUpdateModal && /* @__PURE__ */ import_react5.default.createElement(UpdateModal, { status: updateStatus, onClose: () => setShowUpdateModal(false), onCheck: () => window.electronAPI.checkForUpdates(), onInstall: () => window.electronAPI.installUpdate(), setStatus: setUpdateStatus }), showSitzung && /* @__PURE__ */ import_react5.default.createElement(
+    } }), showUpdateModal && /* @__PURE__ */ import_react5.default.createElement(UpdateModal, { status: updateStatus, onClose: () => setShowUpdateModal(false), onCheck: () => window.electronAPI.checkForUpdates(), onInstall: () => window.electronAPI.installUpdate(), setStatus: setUpdateStatus, kanal: updateKanal, onKanal: kanalWaehlen }), showSitzung && /* @__PURE__ */ import_react5.default.createElement(
       SitzungDialog,
       {
         sitzung,
@@ -30515,8 +30526,11 @@ Fortfahren?`);
       goTab("help");
     } })));
   }
-  function UpdateModal({ status, onClose, onCheck, onInstall, setStatus }) {
+  function UpdateModal({ status, onClose, onCheck, onInstall, setStatus, kanal, onKanal }) {
     const busy = status.type === "checking" || status.type === "downloading";
+    const installiert = true ? "1.2.1" : "dev";
+    const istBeta = installiert.includes("-");
+    const betaTag = (v) => String(v || "").includes("-") && /* @__PURE__ */ import_react5.default.createElement("span", { style: { marginLeft: 6, fontSize: 10, fontWeight: 700, color: "#1c2127", background: ACCENT, borderRadius: 3, padding: "1px 5px", verticalAlign: "1px" } }, "BETA");
     const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1e3, display: "flex", alignItems: "center", justifyContent: "center" };
     const box = { background: "#1e2530", border: "1px solid #2e3a4a", borderRadius: 10, padding: "28px 32px", minWidth: 340, maxWidth: 420, color: "#e8eaf0", fontFamily: "inherit" };
     const title = { fontSize: 16, fontWeight: 700, marginBottom: 16, color: "#fff" };
@@ -30524,7 +30538,27 @@ Fortfahren?`);
     const btn = (c) => ({ padding: "7px 18px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, ...c });
     return /* @__PURE__ */ import_react5.default.createElement("div", { style: overlay, onClick: (e) => {
       if (e.target === e.currentTarget) onClose();
-    } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: box }, /* @__PURE__ */ import_react5.default.createElement("div", { style: title }, "Software-Update"), status.type === "idle" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#aab", margin: 0 } }, "Auf neue Version pr\xFCfen?"), status.type === "checking" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#aab", margin: 0 } }, "Suche nach Updates\u2026"), status.type === "up-to-date" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#6dbf7e", margin: 0 } }, "\u2713 Du hast bereits die neueste Version."), status.type === "available" && !status.manual && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#f5a623", margin: 0 } }, "Version ", status.version, " verf\xFCgbar \u2013 wird heruntergeladen\u2026"), status.type === "available" && status.manual && /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#f5a623", margin: "0 0 8px" } }, "Version ", status.version, " ist verf\xFCgbar."), /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#aab", margin: 0, fontSize: 12, lineHeight: 1.5 } }, "Auf dem Mac bitte manuell aktualisieren: Auf der Download-Seite die passende ", /* @__PURE__ */ import_react5.default.createElement("strong", null, ".dmg"), " laden (Apple Silicon: ", /* @__PURE__ */ import_react5.default.createElement("em", null, "-arm64.dmg"), ", Intel: ohne Zusatz), \xF6ffnen und Stromplaner in den Programme-Ordner ziehen. Deine Daten bleiben erhalten.")), status.type === "downloading" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#5bb8f5", margin: 0 } }, "Wird heruntergeladen\u2026 ", status.percent != null ? status.percent + "%" : ""), status.type === "downloaded" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#6dbf7e", margin: 0 } }, "\u2713 Version ", status.version || "", " bereit. Nach dem Neustart wird die neue Version installiert."), status.type === "error" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#e06c75", margin: 0 } }, "Fehler: ", status.message || "Update konnte nicht gepr\xFCft werden."), /* @__PURE__ */ import_react5.default.createElement("div", { style: row }, status.type === "downloaded" ? /* @__PURE__ */ import_react5.default.createElement("button", { style: btn({ background: "#3a7bd5", color: "#fff" }), onClick: onInstall }, "Jetzt neu starten") : status.type === "available" && status.manual ? /* @__PURE__ */ import_react5.default.createElement("button", { style: btn({ background: "#3a7bd5", color: "#fff" }), onClick: onInstall }, "Download-Seite \xF6ffnen") : /* @__PURE__ */ import_react5.default.createElement("button", { style: btn({ background: "#3a7bd5", color: "#fff", opacity: busy ? 0.6 : 1 }), disabled: busy, onClick: () => {
+    } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: box }, /* @__PURE__ */ import_react5.default.createElement("div", { style: title }, "Software-Update"), /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontSize: 12, color: "#7c8794", margin: "-8px 0 14px" } }, "Installiert: Version ", installiert, betaTag(installiert)), status.type === "idle" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#aab", margin: 0 } }, "Auf neue Version pr\xFCfen?"), status.type === "checking" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#aab", margin: 0 } }, "Suche nach Updates\u2026"), status.type === "up-to-date" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#6dbf7e", margin: 0 } }, "\u2713 Du hast bereits die neueste Version."), status.type === "available" && !status.manual && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#f5a623", margin: 0 } }, "Version ", status.version, betaTag(status.version), " verf\xFCgbar \u2013 wird heruntergeladen\u2026"), status.type === "available" && status.manual && /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#f5a623", margin: "0 0 8px" } }, "Version ", status.version, betaTag(status.version), " ist verf\xFCgbar."), /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#aab", margin: 0, fontSize: 12, lineHeight: 1.5 } }, "Auf dem Mac bitte manuell aktualisieren: Auf der Download-Seite die passende ", /* @__PURE__ */ import_react5.default.createElement("strong", null, ".dmg"), " laden (Apple Silicon: ", /* @__PURE__ */ import_react5.default.createElement("em", null, "-arm64.dmg"), ", Intel: ohne Zusatz), \xF6ffnen und Stromplaner in den Programme-Ordner ziehen. Deine Daten bleiben erhalten.")), status.type === "downloading" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#5bb8f5", margin: 0 } }, "Wird heruntergeladen\u2026 ", status.percent != null ? status.percent + "%" : ""), status.type === "downloaded" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#6dbf7e", margin: 0 } }, "\u2713 Version ", status.version || "", betaTag(status.version), " bereit. Nach dem Neustart wird die neue Version installiert."), status.type === "error" && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#e06c75", margin: 0 } }, "Fehler: ", status.message || "Update konnte nicht gepr\xFCft werden."), kanal && /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginTop: 18, paddingTop: 14, borderTop: "1px solid #2e3a4a" } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontSize: 10, color: "#7c8794", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 8 } }, "Update-Kanal"), /* @__PURE__ */ import_react5.default.createElement("div", { role: "radiogroup", "aria-label": "Update-Kanal", style: { display: "flex", border: "1px solid #2e3a4a", borderRadius: 6, overflow: "hidden" } }, [["stabil", "Stabil"], ["beta", "Beta"]].map(([k, l]) => /* @__PURE__ */ import_react5.default.createElement(
+      "button",
+      {
+        key: k,
+        role: "radio",
+        "aria-checked": kanal === k,
+        disabled: busy,
+        onClick: () => kanal !== k && onKanal(k),
+        style: {
+          flex: 1,
+          padding: "7px 10px",
+          border: "none",
+          cursor: busy ? "default" : "pointer",
+          fontSize: 13,
+          fontWeight: 600,
+          background: kanal === k ? "rgba(245,166,35,0.16)" : "transparent",
+          color: kanal === k ? ACCENT : "#9aa4af"
+        }
+      },
+      l
+    ))), /* @__PURE__ */ import_react5.default.createElement("p", { style: { fontSize: 11, color: "#7c8794", margin: "8px 0 0", lineHeight: 1.5 } }, kanal === "beta" ? "Du bekommst auch Beta-Versionen zum Testen \u2013 sie k\xF6nnen noch Fehler enthalten. Fertige Versionen kommen weiterhin, sobald sie neuer sind." : "Nur fertige Versionen.", istBeta && kanal === "stabil" ? " Du nutzt gerade eine Beta und bleibst darauf, bis eine neuere fertige Version erscheint." : "")), /* @__PURE__ */ import_react5.default.createElement("div", { style: row }, status.type === "downloaded" ? /* @__PURE__ */ import_react5.default.createElement("button", { style: btn({ background: "#3a7bd5", color: "#fff" }), onClick: onInstall }, "Jetzt neu starten") : status.type === "available" && status.manual ? /* @__PURE__ */ import_react5.default.createElement("button", { style: btn({ background: "#3a7bd5", color: "#fff" }), onClick: onInstall }, "Download-Seite \xF6ffnen") : /* @__PURE__ */ import_react5.default.createElement("button", { style: btn({ background: "#3a7bd5", color: "#fff", opacity: busy ? 0.6 : 1 }), disabled: busy, onClick: () => {
       setStatus({ type: "checking" });
       onCheck();
     } }, "Nach Updates suchen"), /* @__PURE__ */ import_react5.default.createElement("button", { style: btn({ background: "#2a3547", color: "#aab" }), onClick: onClose }, "Schlie\xDFen"))));
