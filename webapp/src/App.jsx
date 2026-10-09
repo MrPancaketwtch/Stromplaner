@@ -1215,6 +1215,54 @@ function InspDetail({ plan, inst, res, setRes, pos, total, onBack, onPrev, onNex
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Sync Tab                                                                  */
+/* ── QR-Scanner (Kamera) ───────────────────────────────────────────────── */
+function QrScanner({ onResult, onClose }) {
+  const videoRef  = useRef(null);
+  const canvasRef = useRef(null);
+  const streamRef = useRef(null);
+  const rafRef    = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(stream => {
+        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        const scan = () => {
+          if (!active) return;
+          const v = videoRef.current, c = canvasRef.current;
+          if (v && c && v.readyState === v.HAVE_ENOUGH_DATA) {
+            c.width = v.videoWidth; c.height = v.videoHeight;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(v, 0, 0);
+            const img = ctx.getImageData(0, 0, c.width, c.height);
+            const code = jsQR(img.data, img.width, img.height);
+            if (code?.data) { onResult(code.data); return; }
+          }
+          rafRef.current = requestAnimationFrame(scan);
+        };
+        rafRef.current = requestAnimationFrame(scan);
+      })
+      .catch(() => { alert('Kamera nicht verfügbar'); onClose(); });
+    return () => {
+      active = false;
+      cancelAnimationFrame(rafRef.current);
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, []);
+
+  return (
+    <div style={{ position:'fixed',inset:0,zIndex:1000,background:'#000',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16 }}>
+      <video ref={videoRef} playsInline muted style={{ width:'100%',maxWidth:400,borderRadius:8 }} />
+      <canvas ref={canvasRef} style={{ display:'none' }} />
+      <div style={{ color:'#aaa',fontSize:13 }}>QR-Code in den Rahmen halten</div>
+      <button onClick={onClose} style={{ padding:'10px 32px',background:'#2a3140',border:'none',borderRadius:8,color:'#fff',fontSize:15,cursor:'pointer' }}>Abbrechen</button>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Teilen Tab – Plan per QR-Code vom PC holen und zurücksenden (ohne Server)  */
 /* ══════════════════════════════════════════════════════════════════════════ */
