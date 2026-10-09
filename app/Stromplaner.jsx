@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
-import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, Cloud, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode } from "lucide-react";
+import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, Cloud, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode, TriangleAlert, Plug, Lightbulb, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info } from "lucide-react";
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 
 const PHASES = ["L1","L2","L3"];
@@ -980,7 +980,7 @@ export default function App() {
         <div style="height:5px;background:#eee;border-radius:3px;margin:3px 0"><div style="height:100%;width:${Math.min(pct,100)}%;background:${col};border-radius:3px"></div></div>
         <div style="font-size:9px;color:#666">${maxA?pct+"% von "+maxA+"A":""}</div></div>`;
     }).join("");
-    let body=`${corpLogo?`<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g,'&quot;')}" style="max-height:40px;max-width:140px;object-fit:contain"></div>`:""}<h1 style="font-size:18px;margin:0 0 4px">⚡ STROMPLAN</h1>
+    let body=`${corpLogo?`<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g,'&quot;')}" style="max-height:40px;max-width:140px;object-fit:contain"></div>`:""}<h1 style="font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 24 24" fill="#f5a623" stroke="#b05a00" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>STROMPLAN</h1>
       <div style="font-size:12px;color:#555;margin-bottom:16px">${meta.production} · ${meta.creator} · v${meta.version} · ${meta.date}</div>`;
     if(mainConns.length){
       body+=`<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Einspeisepunkte</h2>`;
@@ -1173,7 +1173,7 @@ export default function App() {
   const TABS=[
     ["config","1 · Konfiguration"],["plan","2 · Steckplan"],
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
-    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["help","ℹ Anleitung"],["erweitert","Erweitert"],
+    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["help",<span style={{display:"inline-flex",alignItems:"center",gap:5}}><Info size={13} aria-hidden="true"/>Anleitung</span>],["erweitert","Erweitert"],
   ];
   const goTab=(k)=>{
     const keys=TABS.map(([id])=>id);
@@ -1417,7 +1417,7 @@ function SitzungDialog({ sitzung, onClose, ...rest }){
       <div style={box} role="dialog" aria-modal="true" aria-label="Gemeinsam arbeiten">
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
           <div style={{fontSize:16,fontWeight:700,color:'#fff',display:'flex',alignItems:'center',gap:8}}><Users size={18} color={ACCENT} aria-hidden="true"/>Gemeinsam arbeiten</div>
-          <button onClick={onClose} aria-label="Schließen" style={{background:'none',border:'none',color:'#9aa4af',fontSize:16,cursor:'pointer'}}>✕</button>
+          <button onClick={onClose} aria-label="Schließen" style={{background:'none',border:'none',color:'#9aa4af',fontSize:16,cursor:'pointer'}}><X size={14} aria-hidden="true"/></button>
         </div>
         {sitzung.zustand
           ?<SitzungAktiv sitzung={sitzung} onClose={onClose}/>
@@ -1471,7 +1471,7 @@ function SitzungVerbinden({ sitzung, server, setServer, token, setToken, projekt
       <Field label="Server-Token (optional)"><input style={S.inputSm} type="password" value={token} onChange={e=>setToken(e.target.value)} spellCheck={false}/></Field>
       <Field label="Dein Name (sehen die anderen)"><input style={S.inputSm} value={name} onChange={e=>setName(e.target.value)} placeholder="z. B. Anna"/></Field>
       <div style={{display:"flex",alignItems:"flex-end"}}>
-        <button style={{...S.ghostBtn,width:"100%",justifyContent:"center",opacity:serverOk?1:.5}} disabled={busy||!serverOk} onClick={laden}>{busy?"Lade …":"↻ Sitzungen laden"}</button>
+        <button style={{...S.ghostBtn,width:"100%",justifyContent:"center",opacity:serverOk?1:.5}} disabled={busy||!serverOk} onClick={laden}><RefreshCw size={13} aria-hidden="true"/>{busy?"Lade …":"Sitzungen laden"}</button>
       </div>
     </div>
     {fehler&&<div style={SZ.fehler}>{fehler}</div>}
@@ -1485,7 +1485,7 @@ function SitzungVerbinden({ sitzung, server, setServer, token, setToken, projekt
         return(
           <div key={s.id} style={SZ.row}>
             <div style={{flex:1,minWidth:200}}>
-              <div style={{fontWeight:600,fontSize:13}}>{s.name}{s.codeNoetig&&<span title="Sitzungscode nötig"> 🔒</span>}</div>
+              <div style={{fontWeight:600,fontSize:13}}>{s.name}{s.codeNoetig&&<Lock size={12} style={{marginLeft:6,verticalAlign:"-1px"}} aria-label="Sitzungscode nötig"/>}</div>
               <div style={SZ.muted}>{s.users?`${s.users} online`:"niemand online"} · Version {s.appVersion||"?"}</div>
               {!b.ok&&<div style={{...SZ.muted,color:"#e67e22",marginTop:2}}>{b.grund}</div>}
             </div>
@@ -1493,7 +1493,7 @@ function SitzungVerbinden({ sitzung, server, setServer, token, setToken, projekt
               ?<form style={{display:"flex",gap:6,alignItems:"center"}} onSubmit={e=>{e.preventDefault(); if(abfrage.code.trim()) beitreten(s,abfrage.code.trim());}}>
                   <input autoFocus style={{...S.inputSm,width:120}} placeholder="Sitzungscode" value={abfrage.code} onChange={e=>setAbfrage({...abfrage,code:e.target.value,fehler:""})}/>
                   <button type="submit" style={S.primaryBtn} disabled={!abfrage.code.trim()}>Beitreten</button>
-                  <button type="button" style={S.ghostBtn} onClick={()=>setAbfrage(null)}>✕</button>
+                  <button type="button" style={S.ghostBtn} onClick={()=>setAbfrage(null)} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button>
                 </form>
               :<button style={{...S.primaryBtn,...(!bereit||!b.ok?{opacity:.4,cursor:"not-allowed"}:{})}} disabled={!bereit||!b.ok}
                   title={!b.ok?b.grund:!bereit?"Server-Adresse und Namen eintragen":""}
@@ -1576,11 +1576,11 @@ function DonateModal({ onClose }) {
   return (
     <div style={overlay}>
       <div style={box}>
-        <div style={{fontSize:42,marginBottom:12}}>☕</div>
+        <div style={{marginBottom:12}}><Coffee size={42} color={ACCENT} strokeWidth={1.5} aria-hidden="true"/></div>
         <div style={{fontSize:17,fontWeight:700,marginBottom:10,color:'#fff'}}>Stromplaner gefällt dir?</div>
         <p style={{fontSize:13,color:'#9aa4af',lineHeight:1.6,marginBottom:24}}>
           Das Tool ist kostenlos und wird in meiner Freizeit weiterentwickelt.<br/>
-          Wenn es dir bei deiner Arbeit hilft, freue ich mich über einen Kaffee. ☕
+          Wenn es dir bei deiner Arbeit hilft, freue ich mich über einen Kaffee.
         </p>
         <img src={BMC_QR} alt="Buy Me a Coffee QR" style={{width:180,height:180,display:'block',margin:'0 auto 16px',borderRadius:8}}/>
         <div style={{display:'flex',gap:10,justifyContent:'center'}}>
@@ -1621,7 +1621,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
             <input style={{...S.inputSm,flex:2,minWidth:150}} placeholder="Bezeichnung z.B. NH03-Halle 1" value={mc.name} onChange={e=>updateMainConn(mc.id,{name:e.target.value})}/>
             <input type="number" style={{...S.inputSm,width:90}} placeholder="Max A" value={mc.amp} onChange={e=>updateMainConn(mc.id,{amp:e.target.value})}/>
             <span style={{fontSize:12,color:"#9aa4af"}}>A</span>
-            <button style={S.dangerBtn} onClick={()=>removeMainConn(mc.id)}>✕</button>
+            <button style={S.dangerBtn} onClick={()=>removeMainConn(mc.id)} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button>
           </div>
         ))}
       </Section>
@@ -1669,9 +1669,9 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                 return (
                   <tr key={inst.id}>
                     <td style={S.td}>
-                      {ol&&<span title="Überlastet!" style={{color:"#e74c3c",fontWeight:800,fontSize:16}}>⚠</span>}
-                      {ud&&<span title={`Unterdimensioniert: Verteiler-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) größer als Anschluss`} style={{color:"#f5a623",fontWeight:800,fontSize:15,marginLeft:ol?4:0}}>⚡</span>}
-                      {isAdapted(inst.id)&&<span title="Adapter: Steckertyp des Verteilers stimmt nicht mit Anschluss überein" style={{color:"#a78bfa",fontWeight:800,fontSize:14,marginLeft:(ol||ud)?4:0}}>🔌</span>}
+                      {ol&&<span title="Überlastet!" style={{color:"#e74c3c",display:"inline-flex"}}><TriangleAlert size={16} aria-label="Überlastet"/></span>}
+                      {ud&&<span title={`Unterdimensioniert: Verteiler-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) größer als Anschluss`} style={{color:"#f5a623",display:"inline-flex",marginLeft:ol?4:0}}><Zap size={15} aria-label="Unterdimensioniert"/></span>}
+                      {isAdapted(inst.id)&&<span title="Adapter: Steckertyp des Verteilers stimmt nicht mit Anschluss überein" style={{color:"#a78bfa",display:"inline-flex",marginLeft:(ol||ud)?4:0}}><Plug size={15} aria-label="Adapter"/></span>}
                     </td>
                     <td style={S.td}><input style={S.inputSm} value={inst.name} onChange={e=>updateInstance(inst.id,{name:e.target.value})}/></td>
                     <td style={S.td}>{type?.name}</td>
@@ -1697,7 +1697,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
                         </select>
                       ) : <span style={{color:"#555",fontSize:11}}>via Parent</span>}
                     </td>
-                    <td style={S.td}><button style={S.dangerBtn} onClick={async()=>{if(await uiConfirm(`Verteiler „${inst.name}" wirklich löschen? Alle Steckungen dieses Verteilers gehen verloren.`))removeInstance(inst.id);}}>✕</button></td>
+                    <td style={S.td}><button style={S.dangerBtn} onClick={async()=>{if(await uiConfirm(`Verteiler „${inst.name}" wirklich löschen? Alle Steckungen dieses Verteilers gehen verloren.`))removeInstance(inst.id);}} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button></td>
                   </tr>
                 );
               })}
@@ -1708,7 +1708,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
         {instances.length>0&&<div style={{marginTop:8,display:"flex",justifyContent:"flex-end"}}>
           <button style={S.dangerBtn} onClick={clearAllInstances}>Alle Verteiler löschen</button>
         </div>}
-        <p style={S.hint}>💡 Phasen bleiben beim Aufstecken erhalten (L1→L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.</p>
+        <p style={{...S.hint,display:"flex",gap:6,alignItems:"flex-start"}}><Lightbulb size={14} color={ACCENT} style={{flexShrink:0,marginTop:1}} aria-hidden="true"/><span>Phasen bleiben beim Aufstecken erhalten (L1→L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.</span></p>
       </Section>
     </div>
   );
@@ -1822,9 +1822,9 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
           const ad=isAdapted(i.id);
           return (
             <button key={i.id} style={{...S.boxTab,...(i.id===inst.id?S.boxTabActive:{}),...(ol?{borderColor:"#e74c3c"}:ud?{borderColor:"#f5a623"}:ad?{borderColor:"#a78bfa"}:{})}} onClick={()=>setActivePlan(i.id)}>
-              {ol&&<span title="Überlastet!" style={{color:"#e74c3c",marginRight:4,fontWeight:800}}>⚠</span>}
-              {!ol&&ud&&<span title="Unterdimensioniert!" style={{color:"#f5a623",marginRight:4,fontWeight:800}}>⚡</span>}
-              {!ol&&!ud&&ad&&<span title="Adapter!" style={{color:"#a78bfa",marginRight:4,fontWeight:800}}>🔌</span>}
+              {ol&&<span title="Überlastet!" style={{color:"#e74c3c",marginRight:4,display:"inline-flex"}}><TriangleAlert size={13} aria-label="Überlastet"/></span>}
+              {!ol&&ud&&<span title="Unterdimensioniert!" style={{color:"#f5a623",marginRight:4,display:"inline-flex"}}><Zap size={13} aria-label="Unterdimensioniert"/></span>}
+              {!ol&&!ud&&ad&&<span title="Adapter!" style={{color:"#a78bfa",marginRight:4,display:"inline-flex"}}><Plug size={13} aria-label="Adapter"/></span>}
               {i.name}
             </button>
           );
@@ -1942,7 +1942,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
                     <td style={S.td}><span style={{fontSize:12,color:phDisplay==="—"?"#555":"#fff"}}>{phDisplay}</span></td>
                     <td style={S.td}>{l?l.watt:"-"}</td>
                     <td style={S.td}>{amp?(l?.threePhase?`${amp}/Ph`:amp):"-"}</td>
-                    <td style={S.td}><button style={S.dangerBtn} onClick={()=>removePlacement(p.id)}>✕</button></td>
+                    <td style={S.td}><button style={S.dangerBtn} onClick={()=>removePlacement(p.id)} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button></td>
                   </tr>
                 );
               })}
@@ -2032,8 +2032,8 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
     <Section title="Verteiler-Typen" subtitle="Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
         <button style={S.primaryBtn} onClick={addType}>+ Neuen Verteiler-Typ</button>
-        <button style={S.ghostBtn} onClick={exportBoxTypes}>⬇ Exportieren</button>
-        <label style={S.ghostBtn}>↥ Importieren<input type="file" accept=".json" onChange={importBoxTypes} style={{display:"none"}}/></label>
+        <button style={S.ghostBtn} onClick={exportBoxTypes}><Download size={14} aria-hidden="true"/>Exportieren</button>
+        <label style={S.ghostBtn}><Upload size={14} aria-hidden="true"/>Importieren<input type="file" accept=".json" onChange={importBoxTypes} style={{display:"none"}}/></label>
         {boxTypes.length>0&&<button style={S.dangerBtn} onClick={removeAllTypes}>Alle löschen</button>}
       </div>
       <div style={{marginTop:16}}>
@@ -2069,7 +2069,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                             <input style={{...S.inputSm,width:120}} value={rcd.label} placeholder="Bezeichnung" onChange={e=>updateRcd(b.id,rcd.id,{label:e.target.value})}/>
                             <input type="number" min={10} max={500} style={{...S.inputSm,width:58}} value={rcd.mA} onChange={e=>updateRcd(b.id,rcd.id,{mA:+e.target.value})}/>
                             <span style={{fontSize:10,color:"#7c8794",whiteSpace:"nowrap"}}>mA</span>
-                            <button style={S.dangerBtn} onClick={()=>removeRcd(b.id,rcd.id)}>✕</button>
+                            <button style={S.dangerBtn} onClick={()=>removeRcd(b.id,rcd.id)} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button>
                           </div>
                         ))}
                       </div>
@@ -2117,7 +2117,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                               </select>
                             : <span style={{color:"#555",fontSize:11}}>—</span>}
                         </td>
-                        <td style={S.td}><button style={S.dangerBtn} onClick={()=>removeOutlet(b.id,o.id)}>✕</button></td>
+                        <td style={S.td}><button style={S.dangerBtn} onClick={()=>removeOutlet(b.id,o.id)} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -2212,8 +2212,8 @@ function LoadsTab({ loads,setLoads }) {
     <Section title="Verbraucher-Stammdaten" subtitle="3-phasige Verbraucher werden gleichmäßig auf L1/L2/L3 verteilt und können nur auf CEE-Rot / Powerlock Anschlüsse gesteckt werden.">
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
         <button style={S.primaryBtn} onClick={add}>+ Verbraucher</button>
-        <button style={S.ghostBtn} onClick={exportLoads}>⬇ Exportieren</button>
-        <label style={S.ghostBtn}>↥ Importieren<input type="file" accept=".json" onChange={importLoads} style={{display:"none"}}/></label>
+        <button style={S.ghostBtn} onClick={exportLoads}><Download size={14} aria-hidden="true"/>Exportieren</button>
+        <label style={S.ghostBtn}><Upload size={14} aria-hidden="true"/>Importieren<input type="file" accept=".json" onChange={importLoads} style={{display:"none"}}/></label>
       </div>
       <table style={S.table}>
         <thead><tr><th style={S.th}>Name</th><th style={S.th}>W</th><th style={S.th}>A</th><th style={S.th}>3-phasig</th><th style={S.th}></th></tr></thead>
@@ -2224,7 +2224,7 @@ function LoadsTab({ loads,setLoads }) {
               <td style={S.td}><input type="number" style={{...S.inputSm,width:90}} value={l.watt} onChange={e=>update(l.id,{watt:e.target.value===""?"":+e.target.value})}/></td>
               <td style={S.td}>{l.watt?(l.threePhase?`${round2(l.watt/VOLT)}/Ph`:round2(l.watt/VOLT)):""}</td>
               <td style={S.td}><input type="checkbox" checked={l.threePhase||false} onChange={e=>update(l.id,{threePhase:e.target.checked})}/></td>
-              <td style={S.td}><button style={S.dangerBtn} onClick={()=>remove(l.id)}>✕</button></td>
+              <td style={S.td}><button style={S.dangerBtn} onClick={()=>remove(l.id)} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button></td>
             </tr>
           ))}
         </tbody>
@@ -2293,21 +2293,22 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
               const maxA=parentOutlet?Math.min(type?.feedAmp||0,parentOutlet.amp):(type?.feedAmp||0);
               const peak=Math.max(t.L1,t.L2,t.L3); const pct=maxA?(peak/maxA)*100:0;
               const conn=type?(CONN[type.feedConnector]?.label||""):"";
-              const stat=pct>100?"⚠ ÜBERLAST":pct>80?"●>80%":peak>0?"✓ OK":"–";
+              const stat=pct>100?"ÜBERLAST":pct>80?">80%":peak>0?"OK":"–";
+              const statIcon=pct>100?<TriangleAlert size={13} aria-hidden="true"/>:peak>0&&pct<=80?<Check size={13} aria-hidden="true"/>:null;
               const scol=pct>100?"#c0392b":pct>80?"#e67e22":peak>0?"#27ae60":"#999";
               return (
                 <tr key={inst.id}>
                   <td style={S.td}>
-                    {pct>100&&<span title="Überlastet!" style={{color:"#e74c3c",fontWeight:800}}>⚠</span>}
-                    {pct<=100&&isUnderdimensioned(inst.id)&&<span title="Unterdimensioniert!" style={{color:"#f5a623",fontWeight:800}}>⚡</span>}
-                    {pct<=100&&!isUnderdimensioned(inst.id)&&isAdapted(inst.id)&&<span title="Adapter!" style={{color:"#a78bfa",fontWeight:800}}>🔌</span>}
+                    {pct>100&&<span title="Überlastet!" style={{color:"#e74c3c",display:"inline-flex"}}><TriangleAlert size={15} aria-label="Überlastet"/></span>}
+                    {pct<=100&&isUnderdimensioned(inst.id)&&<span title="Unterdimensioniert!" style={{color:"#f5a623",display:"inline-flex"}}><Zap size={15} aria-label="Unterdimensioniert"/></span>}
+                    {pct<=100&&!isUnderdimensioned(inst.id)&&isAdapted(inst.id)&&<span title="Adapter!" style={{color:"#a78bfa",display:"inline-flex"}}><Plug size={15} aria-label="Adapter"/></span>}
                   </td>
                   <td style={S.td}>{inst.name}</td>
                   <td style={{...S.td,fontSize:11}}>{conn}</td>
                   <td style={S.td}>{inst.parentId?instById[inst.parentId]?.name:inst.mainConnectionId?mainConnById[inst.mainConnectionId]?.name:"— Einspeisung —"}</td>
                   <td style={S.td}>{round2(t.L1)}</td><td style={S.td}>{round2(t.L2)}</td><td style={S.td}>{round2(t.L3)}</td>
                   <td style={S.td}>{maxA}</td>
-                  <td style={{...S.td,color:scol,fontWeight:600}}>{stat}</td>
+                  <td style={{...S.td,color:scol,fontWeight:600}}><span style={{display:"inline-flex",alignItems:"center",gap:4}}>{statIcon}{stat}</span></td>
                 </tr>
               );
             })}
@@ -2937,21 +2938,21 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
       )}
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
       <div style={{display:"flex",gap:6,marginBottom:8,alignItems:"center",flexWrap:"wrap"}}>
-        <button style={toolBtnStyle("move")} onClick={()=>setTool("move")} title="Verteiler verschieben">✥ Bewegen</button>
-        <button style={toolBtnStyle("text")} onClick={()=>setTool("text")} title="Text-Annotation">T Text</button>
-        <button style={toolBtnStyle("rect")} onClick={()=>setTool("rect")} title="Rechteck zeichnen">▭ Rechteck</button>
-        <button style={toolBtnStyle("line")} onClick={()=>setTool("line")} title="Linie zeichnen">╱ Linie</button>
+        <button style={{...toolBtnStyle("move"),display:"inline-flex",alignItems:"center",gap:4}} onClick={()=>setTool("move")} title="Verteiler verschieben"><Move size={13} aria-hidden="true"/>Bewegen</button>
+        <button style={{...toolBtnStyle("text"),display:"inline-flex",alignItems:"center",gap:4}} onClick={()=>setTool("text")} title="Text-Annotation"><Type size={13} aria-hidden="true"/>Text</button>
+        <button style={{...toolBtnStyle("rect"),display:"inline-flex",alignItems:"center",gap:4}} onClick={()=>setTool("rect")} title="Rechteck zeichnen"><Square size={13} aria-hidden="true"/>Rechteck</button>
+        <button style={{...toolBtnStyle("line"),display:"inline-flex",alignItems:"center",gap:4}} onClick={()=>setTool("line")} title="Linie zeichnen"><Slash size={13} aria-hidden="true"/>Linie</button>
         {selectedAnnot && (
           <button onClick={()=>deleteAnnot(selectedAnnot)}
-            style={{padding:"3px 10px",fontSize:12,borderRadius:4,border:"1px solid #a04040",background:"#2a1818",color:"#f08080",cursor:"pointer"}}>
-            × Löschen
+            style={{padding:"3px 10px",fontSize:12,borderRadius:4,border:"1px solid #a04040",background:"#2a1818",color:"#f08080",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4}}>
+            <Trash2 size={12} aria-hidden="true"/>Löschen
           </button>
         )}
         <div style={{flex:1}}/>
         {hasOverrides && (
           <button onClick={async()=>{ if(await uiConfirm("Layout und Annotationen zurücksetzen?")) setSchaltbildLayout({ positions:{}, consumerPositions:{}, annotations:[] }); }}
-            style={{padding:"3px 10px",fontSize:11,borderRadius:4,border:"1px solid #3a5060",background:"#1a2830",color:"#5a8090",cursor:"pointer"}}>
-            ↺ Auto-Layout
+            style={{padding:"3px 10px",fontSize:11,borderRadius:4,border:"1px solid #3a5060",background:"#1a2830",color:"#5a8090",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4}}>
+            <RotateCcw size={12} aria-hidden="true"/>Auto-Layout
           </button>
         )}
       </div>
@@ -3012,11 +3013,9 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
                   </text>
                 )}
                 {e.staleCon&&(
-                  <text x={mx} y={my+10} textAnchor="middle"
-                        fill="#d97706" fontSize={9}
-                        style={{paintOrder:"stroke",stroke:"#1b2026",strokeWidth:3}}>
-                    ⚠
-                  </text>
+                  <TriangleAlert x={mx-6} y={my+2} width={12} height={12} color="#d97706" strokeWidth={2.5}>
+                    <title>Anschluss nicht eindeutig – über den Steckertyp zugeordnet</title>
+                  </TriangleAlert>
                 )}
               </g>
             );
@@ -3415,7 +3414,7 @@ function HelpModal({section,onClose,goToGuide}){
       <div style={{background:"#1b2026",border:"1px solid #3a424c",borderRadius:10,padding:24,maxWidth:500,width:"90%",boxShadow:"0 8px 40px rgba(0,0,0,.8)"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <h3 style={{margin:0,fontSize:15,color:"#f5a623",lineHeight:1.3}}>{s.title.replace(/^\d+\s*·\s*/,"")}</h3>
-          <button style={{background:"transparent",border:"none",color:"#9aa4af",fontSize:18,cursor:"pointer",padding:"0 0 0 14px",lineHeight:1}} onClick={onClose}>✕</button>
+          <button style={{background:"transparent",border:"none",color:"#9aa4af",fontSize:18,cursor:"pointer",padding:"0 0 0 14px",lineHeight:1}} onClick={onClose} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button>
         </div>
         <p style={{margin:s.extra?"0 0 10px":"0 0 16px",fontSize:13,color:"#c8ccd4",lineHeight:1.75}}>{s.text}</p>
         {s.extra&&<p style={{margin:"0 0 16px",fontSize:13,color:"#c8ccd4",lineHeight:1.75}}>{s.extra}</p>}
@@ -3602,12 +3601,12 @@ function ErweitertTab({ cableCalcs, setCableCalcs, voltCalcs, setVoltCalcs, subT
                     </div>
                     <div style={{display:"flex",flexDirection:"column",gap:5}}>
                       <div style={{fontSize:13,color:chk1?"#2ecc71":"#e74c3c",display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontWeight:700}}>{chk1?"✓":"✗"}</span>
+                        <span style={{display:"inline-flex"}}>{chk1?<Check size={15} aria-label="erfüllt"/>:<X size={15} aria-label="nicht erfüllt"/>}</span>
                         <span>Iʙ ({calc.I_B} A) {chk1?"≤":">"} Iₙ ({calc.I_n} A)</span>
                         {!chk1&&<span style={{fontSize:11,marginLeft:4}}>&mdash; Betriebsstrom übersteigt Sicherung!</span>}
                       </div>
                       <div style={{fontSize:13,color:chk2?"#2ecc71":"#e74c3c",display:"flex",alignItems:"center",gap:6}}>
-                        <span style={{fontWeight:700}}>{chk2?"✓":"✗"}</span>
+                        <span style={{display:"inline-flex"}}>{chk2?<Check size={15} aria-label="erfüllt"/>:<X size={15} aria-label="nicht erfüllt"/>}</span>
                         <span>Iₙ ({calc.I_n} A) {chk2?"≤":">"} Iₘ ({dim.izul} A)</span>
                         {!chk2&&<span style={{fontSize:11,marginLeft:4}}>&mdash; Kabel zu klein!</span>}
                       </div>
@@ -4179,11 +4178,11 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div style={{marginTop:10,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {inspSign&&<img src={inspSign} alt="Unterschrift" style={{height:36,maxWidth:160,objectFit:"contain",border:"1px solid #3a424c",borderRadius:4,padding:"2px 6px",background:"#fff"}}/>}
           <label style={{...S.ghostBtn,padding:"3px 9px",fontSize:11,cursor:"pointer"}} title={inspSign?"Unterschrift ersetzen":"Unterschrift hochladen"}>
-            {inspSign?"✎ Unterschrift":"+ Unterschrift"}<input type="file" accept="image/png,image/jpeg,image/svg+xml" style={{display:"none"}} onChange={uploadInspSign}/>
+            {inspSign?<PenLine size={12} aria-hidden="true"/>:<ImagePlus size={12} aria-hidden="true"/>}Unterschrift<input type="file" accept="image/png,image/jpeg,image/svg+xml" style={{display:"none"}} onChange={uploadInspSign}/>
           </label>
-          {inspSign&&<button style={{...S.ghostBtn,padding:"3px 7px",fontSize:11}} onClick={removeInspSign} title="Unterschrift entfernen">✕</button>}
+          {inspSign&&<button style={{...S.ghostBtn,padding:"3px 7px",fontSize:11}} onClick={removeInspSign} title="Unterschrift entfernen" aria-label="Unterschrift entfernen"><X size={14} aria-hidden="true"/></button>}
           <div style={{flex:1}}/>
-          <button style={S.exportBtn} onClick={exportInspectionPDF}>🖨 Prüfprotokoll PDF</button>
+          <button style={{...S.exportBtn,display:"inline-flex",alignItems:"center",gap:6}} onClick={exportInspectionPDF}><Printer size={15} aria-hidden="true"/>Prüfprotokoll PDF</button>
           <button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:22,height:22,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",justifyContent:"center"}} onClick={()=>openHelp("errichtungspruefung")} title="Hilfe zur Errichtungsprüfung">?</button>
         </div>
       </Section>
@@ -4218,7 +4217,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
 
           return (
             <Section key={inst.id}
-              title={`🔌 ${inst.name}`}
+              title={<span style={{display:"inline-flex",alignItems:"center",gap:8}}><Plug size={17} color={ACCENT} aria-hidden="true"/>{inst.name}</span>}
               subtitle={`${type?.name||"?"} · Einspeisung: ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A`}>
 
               {/* ── Sichtprüfung ── */}
@@ -4230,7 +4229,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                     return (
                       <div key={idx} onClick={()=>cycleSicht(inst.id,idx)} title={v===true?"OK – klicken zum Zurücksetzen":"Nicht eingetragen – klicken für OK"} style={{display:"flex",alignItems:"center",gap:7,background:v===true?"rgba(26,92,46,0.35)":"#1b2026",borderRadius:5,padding:"5px 8px",border:`1px solid ${v===true?"#2ecc71":LINE}`,cursor:"pointer",userSelect:"none",transition:"background .1s"}}>
                         <div style={{width:22,height:22,borderRadius:4,border:`2px solid ${v===true?"#2ecc71":"#3a424c"}`,fontWeight:700,fontSize:12,flexShrink:0,background:v===true?"#1a5c2e":"transparent",color:v===true?"#2ecc71":"#555",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                          {v===true?"✓":""}
+                          {v===true?<Check size={14} strokeWidth={3} aria-hidden="true"/>:null}
                         </div>
                         <span style={{fontSize:11,color:v===true?"#2ecc71":"#e8eaed"}}>{item}</span>
                       </div>
@@ -4352,10 +4351,10 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                               <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:3,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                                 <span>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></span>
                                 <button onClick={()=>updOR(inst.id,oid,hasOverride?resetPatch:activatePatch)} style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6,flexShrink:0,color:hasOverride?"#f5a623":"#9aa4af"}}>
-                                  {hasOverride?"↩ Ableitung":"✎ Nachtragen"}
+                                  {hasOverride?<><Undo2 size={11} aria-hidden="true"/>Ableitung</>:<><Pencil size={11} aria-hidden="true"/>Nachtragen</>}
                                 </button>
                               </div>
-                              <div style={{fontSize:10,color:"#f5a623",marginBottom:4}}>↳ <strong>{childName}</strong> · Messung aus angeschlossener Unterverteilung</div>
+                              <div style={{fontSize:10,color:"#f5a623",marginBottom:4,display:"flex",alignItems:"center",gap:4}}><CornerDownRight size={11} aria-hidden="true"/><span><strong>{childName}</strong> · Messung aus angeschlossener Unterverteilung</span></div>
                               {hasOverride?(
                                 <div>
                                   <div style={{fontSize:10,color:"#e67e22",marginBottom:4,fontStyle:"italic"}}>Separat gemessener Wert am Eingang (abgeleiteter Wert: {d.zs||"–"} Ω / {d.ik||"–"} A)</div>
@@ -4420,7 +4419,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                           <div key={oid} style={{background:"rgba(80,80,80,0.06)",border:`1px dashed #3a424c`,borderRadius:5,padding:"6px 8px"}}>
                             <div style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginBottom:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                               <span>{label}<span style={{fontWeight:400,marginLeft:5,color:"#555"}}>{subLabel}</span></span>
-                              <button onClick={()=>updOR(inst.id,oid,{notInUse:false})} style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6}}>↩ Reaktivieren</button>
+                              <button onClick={()=>updOR(inst.id,oid,{notInUse:false})} style={{...S.ghostBtn,fontSize:10,padding:"2px 6px",marginLeft:6}}><Undo2 size={11} aria-hidden="true"/>Reaktivieren</button>
                             </div>
                             <div style={{fontSize:11,color:"#555",fontStyle:"italic"}}>Nicht in Betrieb / nicht gemessen</div>
                           </div>
@@ -4515,8 +4514,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
                   <div style={{width:130,paddingBottom:2}}>
                     <Field label="Schweregrad">
                       <select style={S.input} value={ir.bemerkungSchwere||"bad"} onChange={e=>updIR(inst.id,{bemerkungSchwere:e.target.value})}>
-                        <option value="bad">✕ Mangel</option>
-                        <option value="warn">! Hinweis</option>
+                        <option value="bad">Mangel</option>
+                        <option value="warn">Hinweis</option>
                       </select>
                     </Field>
                   </div>

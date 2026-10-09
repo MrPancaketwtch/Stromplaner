@@ -57,7 +57,7 @@ html, body {
   z-index: 10;
 }
 
-.logo { font-size: 20px; }
+.logo { display: inline-flex; color: var(--accent); }
 
 .header-title {
   font-size: 18px;
@@ -108,7 +108,7 @@ html, body {
 
 .tab-btn.active { color: var(--accent); }
 
-.tab-icon { font-size: 20px; line-height: 1; }
+.tab-icon { display: inline-flex; line-height: 1; }
 .tab-label { font-size: 10px; font-weight: 500; }
 
 /* ── Page / section layout ──────────────────────────────────────────────── */
@@ -726,6 +726,16 @@ html, body {
 .insp-nav .btn { flex: 1; }
 
 textarea.field-input { resize: vertical; font-family: inherit; }
+
+/* ── Icons (lucide) ──────────────────────────────────────────────────────── */
+.btn, .seg-btn, .badge, .sheet-close, .picker-remove { gap: 6px; }
+.seg-btn { display: inline-flex; align-items: center; justify-content: center; }
+.badge { display: inline-flex; align-items: center; gap: 3px; }
+.sheet-close, .picker-remove { display: inline-flex; align-items: center; justify-content: center; }
+.sync-msg { display: flex; align-items: center; gap: 8px; }
+.sync-msg svg { flex-shrink: 0; }
+.inline-icon { display: inline-block; vertical-align: -2px; margin-right: 4px; flex-shrink: 0; }
+.sheet-title .inline-icon { margin: 0 0 0 4px; color: var(--muted); }
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; }

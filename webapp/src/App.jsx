@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import jsQR from 'jsqr';
+import { Zap, ClipboardCheck, Plug, ClipboardList, Cloud, X, Pencil, CornerDownRight, MonitorUp, Check, TriangleAlert, QrCode, Upload, Download, Trash2, CircleCheck, CircleAlert } from 'lucide-react';
 
 /* ── Shared constants ────────────────────────────────────────────────────── */
 const CONN = {
@@ -118,7 +119,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <span className="logo">⚡</span>
+        <span className="logo"><Zap size={20} fill="currentColor" strokeWidth={1.5} aria-hidden="true" /></span>
         <span className="header-title">Stromplaner</span>
         {plan.meta.production && (
           <span className="header-sub">{plan.meta.production}</span>
@@ -147,17 +148,17 @@ export default function App() {
 
       <nav className="tab-bar">
         {[
-          { id: 'pruefung',  icon: '✅', label: 'Prüfung'   },
-          { id: 'steckplan', icon: '🔌', label: 'Steckplan' },
-          { id: 'projekt',   icon: '📋', label: 'Projekt'   },
-          { id: 'sync',      icon: '☁️',  label: 'Sync'      },
+          { id: 'pruefung',  Icon: ClipboardCheck, label: 'Prüfung'   },
+          { id: 'steckplan', Icon: Plug,           label: 'Steckplan' },
+          { id: 'projekt',   Icon: ClipboardList,  label: 'Projekt'   },
+          { id: 'sync',      Icon: Cloud,          label: 'Sync'      },
         ].map(t => (
           <button
             key={t.id}
             className={'tab-btn' + (tab === t.id ? ' active' : '')}
             onClick={() => setTab(t.id)}
           >
-            <span className="tab-icon">{t.icon}</span>
+            <span className="tab-icon"><t.Icon size={22} aria-hidden="true" /></span>
             <span className="tab-label">{t.label}</span>
           </button>
         ))}
@@ -311,7 +312,7 @@ function AddInstModal({ plan, onAdd, onClose }) {
       <div className="sheet sheet--center" onClick={e => e.stopPropagation()}>
         <div className="sheet-header">
           <span className="sheet-title">Neuer Verteiler</span>
-          <button className="sheet-close" onClick={onClose}>✕</button>
+          <button className="sheet-close" aria-label="Schließen" onClick={onClose}><X size={20} /></button>
         </div>
         <div className="sheet-body">
           <label className="field-label">Typ</label>
@@ -370,7 +371,7 @@ function InstSheet({ inst, bt, plan, onPickSlot, onRename, onDelete, onClose }) 
         </div>
         <div className="outlet-consumer">
           <div className="consumer-stack">
-            {kids.length > 0 && <span className="consumer-kid">↳ {kids.map(instName).join(', ')}</span>}
+            {kids.length > 0 && <span className="consumer-kid"><CornerDownRight size={12} className="inline-icon" aria-hidden="true" />{kids.map(instName).join(', ')}</span>}
             {pls.length > 0 && <span className="consumer-name">{loadSummary(plan, pls)}</span>}
             {!filled && <span className="consumer-empty">Leer</span>}
           </div>
@@ -396,10 +397,10 @@ function InstSheet({ inst, bt, plan, onPickSlot, onRename, onDelete, onClose }) 
             />
           ) : (
             <span className="sheet-title" onClick={() => setEditing(true)}>
-              {instName(inst)} ✏️
+              {instName(inst)} <Pencil size={14} className="inline-icon" aria-label="umbenennen" />
             </span>
           )}
-          <button className="sheet-close" onClick={onClose}>✕</button>
+          <button className="sheet-close" aria-label="Schließen" onClick={onClose}><X size={20} /></button>
         </div>
         <div className="sheet-sub">
           {bt?.name || '?'} · {CONN[bt?.feedConnector]?.label || bt?.feedConnector || ''} {bt?.feedAmp}A
@@ -415,7 +416,7 @@ function InstSheet({ inst, bt, plan, onPickSlot, onRename, onDelete, onClose }) 
                 <div className="outlet-group">
                   <span className="outlet-label">{outlet.label}</span>
                   <span className="outlet-type">Multicore · {slots.length} Steckplätze</span>
-                  {kids.length > 0 && <span className="consumer-kid">↳ {kids.map(instName).join(', ')}</span>}
+                  {kids.length > 0 && <span className="consumer-kid"><CornerDownRight size={12} className="inline-icon" aria-hidden="true" />{kids.map(instName).join(', ')}</span>}
                 </div>
                 {slots.map(slotRow)}
               </React.Fragment>
@@ -473,7 +474,7 @@ function PickerSheet({ plan, title, threePhase, placements, onAdd, onRemove, onC
         <div className="sheet-handle" />
         <div className="sheet-header">
           <span className="sheet-title">Verbraucher — {title}</span>
-          <button className="sheet-close" onClick={onClose}>✕</button>
+          <button className="sheet-close" aria-label="Schließen" onClick={onClose}><X size={20} /></button>
         </div>
         <div className="picker-search">
           <input
@@ -498,7 +499,7 @@ function PickerSheet({ plan, title, threePhase, placements, onAdd, onRemove, onC
                     <span className="picker-name">{l?.name || '(unbekannt)'}</span>
                     <span className="picker-actions">
                       {l && <span className="picker-meta">{l.watt || '?'} W{l.threePhase ? ' 3ph' : ''}</span>}
-                      <button className="picker-remove" aria-label="Entfernen" onClick={() => onRemove(p.id)}>✕</button>
+                      <button className="picker-remove" aria-label="Entfernen" onClick={() => onRemove(p.id)}><X size={18} /></button>
                     </span>
                   </div>
                 );
@@ -791,7 +792,7 @@ function SendToPc({ plan, pcUrl }) {
       });
       const res = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(res.error || `HTTP ${r.status}`);
-      setMsg({ text: res.mode === 'insp' ? '✓ Prüfergebnisse am PC übernommen' : '✓ Plan am PC übernommen', err: false });
+      setMsg({ text: res.mode === 'insp' ? 'Prüfergebnisse am PC übernommen' : 'Plan am PC übernommen', err: false });
     } catch (e) {
       const offline = e instanceof TypeError;
       setMsg({ text: offline ? 'PC nicht erreichbar. Läuft am PC „Lokal im WLAN teilen“ und ist das Handy im selben WLAN?' : e.message, err: true });
@@ -806,14 +807,14 @@ function SendToPc({ plan, pcUrl }) {
       {pcUrl ? (
         <>
           <button className="btn btn--primary" style={{ width: '100%' }} disabled={busy} onClick={send}>
-            {busy ? 'Warte auf PC…' : '⇪ An PC zurücksenden'}
+            {busy ? 'Warte auf PC…' : <><MonitorUp size={18} aria-hidden="true" />An PC zurücksenden</>}
           </button>
           <div className="meas-hint" style={{ marginTop: 6 }}>Ziel: {pcUrl.replace(/^https?:\/\//, '').replace(/\/plan\.json$/, '')}</div>
         </>
       ) : (
         <div className="meas-hint">Zuerst am PC „Lokal im WLAN teilen“ starten und im Tab Sync den QR-Code scannen.</div>
       )}
-      {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')} style={{ margin: '10px 0 0', padding: 0, background: 'none' }}>{msg.text}</div>}
+      {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')} style={{ margin: '10px 0 0', padding: 0, background: 'none' }}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
     </div>
   );
 }
@@ -901,14 +902,14 @@ function PruefungTab({ plan, setPlan, pcUrl }) {
                   style={{ marginLeft: ind, width: `calc(100% - ${ind}px)` }}
                   onClick={() => setOpenId(inst.id)}
                 >
-                  <div className="inst-name">{depth > 0 && <span className="insp-branch">↳ </span>}{instName(inst)}</div>
+                  <div className="inst-name">{depth > 0 && <CornerDownRight size={14} className="inline-icon insp-branch" aria-hidden="true" />}{instName(inst)}</div>
                   <div className="inst-meta">
                     <span className="inst-type">{type?.name || '?'}</span>
                     <span className="insp-badges">
                       <span className={'badge' + (ev.sichtOk === SICHT_ITEMS.length ? ' badge--ok' : '')}>Sicht {ev.sichtOk}/{SICHT_ITEMS.length}</span>
                       <span className="badge">{ev.filled} Werte</span>
-                      {ev.bad > 0 && <span className="badge badge--bad">✕ {ev.bad}</span>}
-                      {ev.remark && <span className={'badge ' + (ev.remark === 'warn' ? 'badge--warn' : 'badge--bad')}>{ev.remark === 'warn' ? '! Hinweis' : '✕ Mangel'}</span>}
+                      {ev.bad > 0 && <span className="badge badge--bad"><TriangleAlert size={11} aria-hidden="true" />{ev.bad}</span>}
+                      {ev.remark && <span className={'badge ' + (ev.remark === 'warn' ? 'badge--warn' : 'badge--bad')}>{ev.remark === 'warn' ? <><TriangleAlert size={11} aria-hidden="true" />Hinweis</> : <><X size={11} aria-hidden="true" />Mangel</>}</span>}
                     </span>
                   </div>
                 </button>
@@ -979,7 +980,7 @@ function InspDetail({ plan, inst, res, setRes, pos, total, onBack, onPrev, onNex
               className={'sicht-item' + (ir.sicht[i] === true ? ' sicht-item--ok' : '')}
               onClick={() => setSicht(s => s.map((v, k) => (k === i ? (v === true ? null : true) : v)))}
             >
-              <span className="sicht-box">{ir.sicht[i] === true ? '✓' : ''}</span>
+              <span className="sicht-box">{ir.sicht[i] === true ? <Check size={16} strokeWidth={3} aria-hidden="true" /> : null}</span>
               {label}
             </button>
           ))}
@@ -1075,7 +1076,7 @@ function InspDetail({ plan, inst, res, setRes, pos, total, onBack, onPrev, onNex
               return (
                 <div key={row.oid} className={'sub-row loop-kid' + (okZ === false || okI === false ? ' sub-row--bad' : '')}>
                   {head(null)}
-                  <div className="meas-hint">↳ {row.kids.map(instName).join(', ')} · {v.override ? 'am PC nachgetragener Wert' : 'schlechtester Wert aus Unterverteilung'}</div>
+                  <div className="meas-hint"><CornerDownRight size={11} className="inline-icon" aria-hidden="true" />{row.kids.map(instName).join(', ')} · {v.override ? 'am PC nachgetragener Wert' : 'schlechtester Wert aus Unterverteilung'}</div>
                   <div className="kid-vals">
                     Z_s <strong className={okZ === false ? 'txt-bad' : okZ ? 'txt-ok' : ''}>{v.zs || '–'} Ω</strong>
                     {' · '}
@@ -1150,7 +1151,7 @@ function InspDetail({ plan, inst, res, setRes, pos, total, onBack, onPrev, onNex
         />
         <div style={{ marginTop: 8 }}>
           <Segmented
-            options={[['bad', '✕ Mangel'], ['warn', '! Hinweis']]}
+            options={[['bad', <><X size={14} aria-hidden="true" />Mangel</>], ['warn', <><TriangleAlert size={14} aria-hidden="true" />Hinweis</>]]}
             value={ir.bemerkungSchwere || 'bad'}
             onChange={v => updIR({ bemerkungSchwere: v })}
           />
@@ -1229,7 +1230,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
     return h;
   };
 
-  const status = (text, isErr = false) => setMsg((isErr ? '⚠️ ' : '✓ ') + text);
+  const status = (text, isErr = false) => setMsg({ text, err: isErr });
 
   const fetchPlans = async () => {
     if (!server) return;
@@ -1238,7 +1239,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
       const r = await fetch(apiUrl('/api/plans'), { headers: headers() });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       setPlans(await r.json());
-      setMsg('');
+      setMsg(null);
     } catch (e) {
       status('Verbindung fehlgeschlagen: ' + e.message, true);
       setPlans(null);
@@ -1301,7 +1302,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
   const newLocal = () => {
     if (window.confirm('Lokalen Plan verwerfen und neu beginnen?')) {
       setPlan(newPlan());
-      setMsg('Neuer Plan erstellt.');
+      setMsg({ text: 'Neuer Plan erstellt.', err: false });
     }
   };
 
@@ -1343,7 +1344,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
           className="btn btn--secondary"
           style={{ width: '100%', marginBottom: 12 }}
           onClick={() => setShowScanner(true)}
-        >📷 QR-Code scannen</button>
+        ><QrCode size={18} aria-hidden="true" />QR-Code scannen</button>
         <label className="field-label">Server-URL</label>
         <input
           className="field-input"
@@ -1383,7 +1384,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button className="btn btn--primary" style={{ flex: 1 }} disabled={!server || loading} onClick={push}>
-            ↑ Hochladen
+            <Upload size={16} aria-hidden="true" />Hochladen
           </button>
           <button className="btn btn--secondary" style={{ flex: 1 }} onClick={newLocal}>
             Neu
@@ -1394,7 +1395,7 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
       <SendToPc plan={plan} pcUrl={pcUrl} />
 
       {/* ── Status message ── */}
-      {msg && <div className={'sync-msg' + (msg.startsWith('⚠️') ? ' sync-msg--err' : '')}>{msg}</div>}
+      {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
 
       {/* ── Server plans list ── */}
       {plans !== null && (
@@ -1409,10 +1410,10 @@ function SyncTab({ plan, setPlan, server, setServer, token, setToken, pcUrl, set
               </div>
               <div className="plan-row-actions">
                 <button className="btn btn--small btn--primary" disabled={loading} onClick={() => pull(p.id)}>
-                  ↓ Laden
+                  <Download size={14} aria-hidden="true" />Laden
                 </button>
-                <button className="btn btn--small btn--danger" disabled={loading} onClick={() => del(p.id, p.name)}>
-                  ✕
+                <button className="btn btn--small btn--danger" disabled={loading} onClick={() => del(p.id, p.name)} aria-label="Vom Server löschen">
+                  <Trash2 size={14} />
                 </button>
               </div>
             </div>
