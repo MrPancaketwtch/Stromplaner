@@ -81,6 +81,7 @@ const CHANGELOG = {
     "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → Sitzung); auch die Android-App kann beitreten",
     "Android-App: neuer Tab „Sitzung“ – Prüfwerte vom Handy erscheinen live am PC",
     "Android-App hat die neue Kennung „de.stromplaner.app“ und wird einmalig neben der alten installiert – Prüfergebnisse aus der alten App vorher an den PC senden, dann die alte deinstallieren",
+    "Android-App: aktualisiert auf Android 16 (API 36) – Vorbereitung für den Google Play Store",
     "„Sync“ (Pläne über den Server hoch-/herunterladen) entfernt – ersetzt durch Sitzungen. Das Teilen per QR-Code im WLAN heißt jetzt „Teilen“ (PC und Handy)",
     "Update-Kanal wählbar (Updates → Stabil / Beta): Wer möchte, bekommt Beta-Versionen zum Testen direkt als In-App-Update",
     "Header mit einheitlichen Icons statt Emojis",
