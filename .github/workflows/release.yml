@@ -9,7 +9,27 @@ permissions:
   contents: write
 
 jobs:
+  # Release vorab anlegen: Sonst wollen Windows- und Mac-Job ihn gleichzeitig erstellen,
+  # und der langsamere scheitert mit 422 "already_exists".
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG existiert bereits."
+            exit 0
+          fi
+          PRE=""
+          case "$TAG" in *-*) PRE="--prerelease" ;; esac
+          gh release create "$TAG" --verify-tag --title "${TAG#v}" --notes "Wird gebaut …" $PRE
+
   release:
+    needs: create-release
     strategy:
       matrix:
         os: [windows-latest, macos-latest]
