@@ -1358,7 +1358,7 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken }) {
   const [abfrage, setAbfrage] = useState(null); // { id, code, fehler }
   useEffect(() => { speichereName(name); }, [name]);
   const basis = serverBasis(server);
-  const bereit = !!basis && !!name.trim();
+  const nameRef = useRef(null);
   // Eine https-Seite (PWA im Browser) darf keinen http-Server ansprechen – die Android-App schon
   const blockiert = window.location.protocol === 'https:' && !window.location.hostname.match(/^localhost$/) && basis.startsWith('http:');
 
@@ -1390,10 +1390,11 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken }) {
         <label className="field-label" style={{ marginTop: 12 }}>Server-Token (optional)</label>
         <input className="field-input" type="password" value={token} onChange={e => setToken(e.target.value)} />
         <label className="field-label" style={{ marginTop: 12 }}>Dein Name (sehen die anderen)</label>
-        <input className="field-input" value={name} onChange={e => setName(e.target.value)} placeholder="z. B. Anna" />
+        <input ref={nameRef} className="field-input" value={name} onChange={e => { setName(e.target.value); setFehler(''); }} placeholder="z. B. Anna" />
         <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} disabled={busy || !basis || blockiert} onClick={laden}>
           <RefreshCw size={16} aria-hidden="true" />{busy ? 'Lade …' : 'Sitzungen laden'}
         </button>
+        <p className="meas-hint" style={{ marginTop: 8 }}>Deine App-Version: {APP_VERSION} – die Sitzung muss dieselbe Version haben.</p>
         {blockiert && <div className="sync-msg sync-msg--err" style={{ marginTop: 12 }}><CircleAlert size={16} aria-hidden="true" />Im Browser lässt sich ein Server mit http:// nicht erreichen. Bitte die Android-App nutzen oder den Server über https erreichbar machen.</div>}
         {fehler && <div className="sync-msg sync-msg--err" style={{ marginTop: 12 }}><CircleAlert size={16} aria-hidden="true" />{fehler}</div>}
       </div>
@@ -1419,8 +1420,15 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken }) {
                     {abfrage.fehler && <span className="plan-date" style={{ color: 'var(--danger)', flexBasis: '100%' }}>{abfrage.fehler}</span>}
                   </form>
                 ) : (
-                  <button className="btn btn--primary btn--small" disabled={!bereit || !b.ok}
-                    onClick={() => (s.codeNoetig ? setAbfrage({ id: s.id, code: '', fehler: '' }) : beitreten(s))}>Beitreten</button>
+                  <button className="btn btn--primary btn--small" disabled={!basis || !b.ok}
+                    onClick={() => {
+                      if (!name.trim()) {
+                        setFehler('Bitte oben deinen Namen eintragen – den sehen die anderen in der Sitzung.');
+                        nameRef.current?.focus();
+                        return;
+                      }
+                      if (s.codeNoetig) setAbfrage({ id: s.id, code: '', fehler: '' }); else beitreten(s);
+                    }}>Beitreten</button>
                 )}
               </div>
             );
