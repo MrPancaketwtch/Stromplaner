@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'webapp/**'
+      # Version kommt aus der Haupt-package.json, Sitzung und Prüfprotokoll werden mit der Desktop-App geteilt
+      - 'package.json'
+      - 'app/sync/**'
+      - 'app/shared/**'
       - '.github/workflows/webapp.yml'
   workflow_dispatch:
 
