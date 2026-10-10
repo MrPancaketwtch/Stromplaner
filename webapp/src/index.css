@@ -837,3 +837,15 @@ textarea.field-input { resize: vertical; font-family: inherit; }
 .typ-row-meta { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .sheet-footer--split > .btn--danger { margin-right: auto; }
 .sheet-footer > .btn:disabled { opacity: .45; }
+
+/* ── Logo / Unterschrift / Hängt an ──────────────────────────────────────── */
+.bild-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bild-vorschau {
+  height: 44px; max-width: 160px; object-fit: contain;
+  background: #fff; border-radius: 6px; padding: 4px; margin-right: auto;
+}
+.sign-pad {
+  display: block; width: 100%; height: 180px;
+  background: #fff; border-radius: 8px; touch-action: none; cursor: crosshair;
+}
+.haengt-an { padding: 0 16px 12px; }

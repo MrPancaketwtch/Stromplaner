@@ -44,6 +44,31 @@ export async function protokollPdf(plan, { logo = '', signatur = '', fortschritt
   }
 }
 
+// Druckansicht: Hintergründe (dunkle Balken, Mängel-Zeilen) mitdrucken wie am PC (printBackground)
+const druckHtml = (plan, opts) => pruefprotokollHtml(plan, opts)
+  .replace('</style>', '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>');
+
+// Vektor-PDF mit markierbarem Text über den Druckdialog („Als PDF speichern“ oder Drucker)
+export async function protokollDrucken(plan, { logo = '', signatur = '' } = {}) {
+  const html = druckHtml(plan, { logo, signatur });
+  const name = pdfDateiname(plan).replace(/\.pdf$/, '');
+  if (Capacitor.isNativePlatform()) {
+    const { Druck } = await import('stromplaner-druck');
+    await Druck.html({ html, name });
+    return;
+  }
+  // Browser / PWA: über ein unsichtbares iframe drucken
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  Object.assign(frame.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' });
+  document.body.appendChild(frame);
+  await new Promise((ok) => { frame.onload = ok; frame.srcdoc = html; });
+  frame.contentDocument.title = name;
+  frame.contentWindow.focus();
+  frame.contentWindow.print();
+  setTimeout(() => frame.remove(), 60000);
+}
+
 const alsBase64 = (blob) => new Promise((ok, fehler) => {
   const r = new FileReader();
   r.onload = () => ok(String(r.result).split(',')[1]);

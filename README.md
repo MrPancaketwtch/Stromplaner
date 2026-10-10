@@ -47,18 +47,19 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 ### Tabs in der Handy-App
 | Tab | Inhalt |
 |-----|--------|
-| **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **Verteiler hinzufügen** legt direkt hier einen Verteiler an, **Prüfprotokoll als PDF** erzeugt das Protokoll im selben Layout wie am PC und öffnet das Teilen-Menü (Mail, Messenger, Drive …). |
-| **Steckplan** | Verteiler und Steckungen ansehen und anpassen |
-| **Projekt** | **Neuer Plan**, Projektdaten und **Verteiler-Typen** (anlegen und bearbeiten) |
+| **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **Verteiler hinzufügen** legt direkt hier einen Verteiler an. **PDF speichern / drucken** öffnet den Android-Druckdialog („Als PDF speichern“ oder Drucker) – das PDF ist identisch mit dem vom PC, Text markierbar. **PDF direkt teilen** schickt eine Bild-Fassung sofort per Mail oder Messenger. Unter *Prüfungsdetails* lässt sich mit dem Finger unterschreiben. |
+| **Steckplan** | Verteiler und Steckungen ansehen und anpassen; unter **Hängt an** einen Verteiler als Unterverteiler an einen Abgang eines anderen hängen |
+| **Projekt** | **Neuer Plan**, Projektdaten, **Firmenlogo** fürs PDF und **Verteiler-Typen** (anlegen und bearbeiten) |
 | **Teilen** | Plan per QR-Code vom PC holen, An PC zurücksenden – ohne Server |
 | **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten oder selbst eine starten: Prüfwerte erscheinen sofort bei allen (siehe „Sitzung“ weiter unten) |
 
 ### Spontane Prüfung nur mit dem Handy
 1. **Projekt** → **Neuer Plan**, Veranstaltung eintragen.
 2. **Prüfung** → **Verteiler hinzufügen** → Typ wählen. Fehlt der Typ, über **Neuen Typ anlegen** Name, Einspeisung und Abgänge antippen (Schuko, CEE, Multicore …; Schutz LS/RCBO und Auslösecharakteristik je Abgang).
-3. Prüfen wie gewohnt, danach **Prüfprotokoll als PDF**.
+3. Unterverteiler im Tab **Steckplan** unter **Hängt an** zuordnen.
+4. Prüfen wie gewohnt, danach **PDF speichern / drucken** oder **PDF direkt teilen**.
 
-Das Handy merkt sich die Verteiler-Typen und Verbraucher aller Pläne, die es je geladen hat oder in denen es in einer Sitzung war – ein neuer Plan startet mit dieser Bibliothek. Firmenlogo und Unterschrift kommen nur ins PDF vom PC.
+Das Handy merkt sich die Verteiler-Typen und Verbraucher aller Pläne, die es je geladen hat oder in denen es in einer Sitzung war – ein neuer Plan startet mit dieser Bibliothek. Firmenlogo (Tab Projekt) und Unterschrift (Prüfungsdetails) bleiben wie am PC nur auf dem jeweiligen Gerät gespeichert.
 
 ### Plan vom PC aufs Handy und zurück (WLAN)
 1. **PC:** Header → **Teilen** → **QR-Code anzeigen**.
@@ -345,7 +346,7 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | Persistenz | localStorage (Autosave, 600 ms debounce) |
 | Diagramm | SVG (manuelles Layout, kein D3 o. ä.) |
 | CI/CD | GitHub Actions (baut Windows + macOS + Android bei Tag-Push) |
-| Handy-App | React 18 + Vite, Capacitor 8 (Android-APK), PWA via GitHub Pages; PDF mit html2canvas + jsPDF |
+| Handy-App | React 18 + Vite, Capacitor 8 (Android-APK), PWA via GitHub Pages; PDF über den Android-Druckdienst (eigenes Capacitor-Plugin `webapp/plugins/druck`) bzw. html2canvas + jsPDF |
 | QR / Datenaustausch | `qrcode` (PC), `jsQR` (Handy), lokaler HTTP-Server auf Port 4747 |
 | Sitzungen | WebSocket zum [Planer-Server](https://github.com/Nomisimo/Planer-Server); Client in `app/sync/` (`sync-client.js`, `ops.js` unverändert aus dem Planer-Server übernommen, Apache 2.0 – siehe `app/sync/LICENSE` und `NOTICE`; Änderungen dort pflegen und hierher kopieren) |
 

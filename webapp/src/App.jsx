@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import jsQR from 'jsqr';
-import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, MonitorUp, Check, TriangleAlert, QrCode, CircleCheck, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, FileText, Play, Power } from 'lucide-react';
+import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, MonitorUp, Check, TriangleAlert, QrCode, CircleCheck, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, Play, Power, Printer, PenLine, ImagePlus } from 'lucide-react';
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from '@sync/sitzung.js';
 import { migrateOutlet } from '@shared/pruefprotokoll.js';
-import { protokollPdf, pdfTeilen, pdfDateiname } from './pdf.js';
+import { protokollPdf, pdfTeilen, pdfDateiname, protokollDrucken } from './pdf.js';
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
@@ -31,6 +31,13 @@ const SERVER_KEY = 'sp_sync_server';
 const TOKEN_KEY  = 'sp_sync_token';
 const PC_URL_KEY = 'sp_pc_share_url';
 const LIB_KEY    = 'sp_mobile_lib';
+const LOGO_KEY   = 'sp_corp_logo';
+const SIGN_KEY   = 'sp_insp_sign';
+
+const speichereBild = (key, wert) => {
+  try { wert ? localStorage.setItem(key, wert) : localStorage.removeItem(key); return true; }
+  catch { return false; }
+};
 
 /* ── Empty plan ──────────────────────────────────────────────────────────── */
 // Alle Teile eines Plans wie in der Desktop-App. Fehlt einer, würde ihn der Abgleich in einer Sitzung für alle löschen.
@@ -132,6 +139,9 @@ export default function App() {
   const [pcUrl,   setPcUrl]   = useState(() => localStorage.getItem(PC_URL_KEY) || '');
   const [toasts,  setToasts]  = useState([]);
   const [lib,     setLib]     = useState(ladeBibliothek);
+  // Firmenlogo und Unterschrift bleiben wie am PC nur auf diesem Gerät (gleiche Schlüssel wie die Desktop-App)
+  const [logo,    setLogo]    = useState(() => localStorage.getItem(LOGO_KEY) || '');
+  const [sign,    setSign]    = useState(() => localStorage.getItem(SIGN_KEY) || '');
 
   /* load */
   useEffect(() => {
@@ -159,6 +169,11 @@ export default function App() {
     setLib(l => ({ boxTypes: mergeById(l.boxTypes, plan.boxTypes), loads: mergeById(l.loads, plan.loads) }));
   }, [plan?.boxTypes, plan?.loads]);
   useEffect(() => { try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); } catch { /* Speicher voll – Bibliothek ist nur ein Komfort */ } }, [lib]);
+  const bild = useMemo(() => ({
+    logo, sign,
+    setLogo: (v) => { if (speichereBild(LOGO_KEY, v)) setLogo(v); else notify('Logo zu groß für den Speicher des Handys.', 'err'); },
+    setSign: (v) => { if (speichereBild(SIGN_KEY, v)) setSign(v); else notify('Unterschrift konnte nicht gespeichert werden.', 'err'); },
+  }), [logo, sign]);
 
   const typen = useMemo(() => ({
     alle: mergeById(lib.boxTypes, plan?.boxTypes || []).sort(byName),
@@ -211,13 +226,13 @@ export default function App() {
 
       <main className="app-main">
         {tab === 'pruefung' && (
-          <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} sitzungAktiv={sitzung.aktiv} typen={typen} notify={notify} />
+          <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} sitzungAktiv={sitzung.aktiv} typen={typen} notify={notify} bild={bild} />
         )}
         {tab === 'steckplan' && (
           <SteckplanTab plan={plan} setPlan={setPlan} typen={typen} />
         )}
         {tab === 'projekt' && (
-          <ProjektTab plan={plan} setPlan={setPlan} lib={lib} typen={typen} sitzungAktiv={sitzung.aktiv} notify={notify} />
+          <ProjektTab plan={plan} setPlan={setPlan} lib={lib} typen={typen} sitzungAktiv={sitzung.aktiv} notify={notify} bild={bild} />
         )}
         {tab === 'teilen' && (
           <TeilenTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} setPcUrl={setPcUrl} sitzungAktiv={sitzung.aktiv} />
@@ -337,6 +352,7 @@ function SteckplanTab({ plan, setPlan, typen }) {
             inst={inst} bt={getBoxType(plan, inst.typeId)} plan={plan}
             onPickSlot={(slotKey) => setModal({ kind: 'pick', instId: inst.id, slotKey })}
             onRename={(name) => updateInstance(inst.id, { name })}
+            onSetParent={(parentId, parentOutletId) => updateInstance(inst.id, { parentId, parentOutletId })}
             onDelete={() => removeInstance(inst.id)}
             onClose={() => setModal(null)}
           />
@@ -444,6 +460,79 @@ function AddInstModal({ plan, typen, onAdd, onClose }) {
   );
 }
 
+/* ── Unterschrift mit dem Finger ─────────────────────────────────────────── */
+function UnterschriftPad({ onSave, onClose }) {
+  const ref  = useRef(null);
+  const zug  = useRef(null);
+  const [leer, setLeer] = useState(true);
+
+  useEffect(() => {
+    const c = ref.current, r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
+    const g = c.getContext('2d');
+    g.scale(dpr, dpr);
+    Object.assign(g, { lineWidth: 2.4, lineCap: 'round', lineJoin: 'round', strokeStyle: '#1c2127' });
+  }, []);
+
+  const pos  = (e) => { const r = ref.current.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const linie = (a, b) => { const g = ref.current.getContext('2d'); g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke(); };
+  const down = (e) => { try { ref.current.setPointerCapture(e.pointerId); } catch { /* ohne Capture zeichnet es trotzdem */ } const p = pos(e); zug.current = p; linie(p, [p[0] + 0.1, p[1]]); setLeer(false); };
+  const move = (e) => { if (!zug.current) return; const p = pos(e); linie(zug.current, p); zug.current = p; };
+  const up   = () => { zug.current = null; };
+  const loeschen = () => { const c = ref.current; c.getContext('2d').clearRect(0, 0, c.width, c.height); setLeer(true); };
+
+  // Auf die gezeichnete Fläche zuschneiden, damit die Unterschrift im PDF groß genug erscheint
+  const speichern = () => {
+    const c = ref.current, d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
+    for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+      if (d[(y * c.width + x) * 4 + 3] > 0) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0) return;
+    const rand = 8, w = x1 - x0 + 1 + 2 * rand, h = y1 - y0 + 1 + 2 * rand;
+    const out = Object.assign(document.createElement('canvas'), { width: w, height: h });
+    out.getContext('2d').drawImage(c, x0 - rand, y0 - rand, w, h, 0, 0, w, h);
+    onSave(out.toDataURL('image/png'));
+  };
+
+  // Kein Schließen per Tipp daneben: ein Strich, der außerhalb des Felds endet, würde sonst alles verwerfen
+  return (
+    <div className="overlay">
+      <div className="sheet sheet--center">
+        <div className="sheet-header">
+          <span className="sheet-title">Unterschrift</span>
+          <button className="sheet-close" aria-label="Schließen" onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="sheet-body">
+          <canvas ref={ref} className="sign-pad" aria-label="Unterschriftenfeld"
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
+          <p className="meas-hint" style={{ marginTop: 6 }}>Mit dem Finger unterschreiben. Erscheint im PDF über deinem Namen als Prüfer.</p>
+        </div>
+        <div className="sheet-footer">
+          <button className="btn btn--secondary" disabled={leer} onClick={loeschen}>Leeren</button>
+          <button className="btn btn--secondary" onClick={onClose}>Abbrechen</button>
+          <button className="btn btn--primary" disabled={leer} onClick={speichern}>Übernehmen</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Bild aus der Galerie verkleinern (max. 600 px), damit es in den Gerätespeicher der App passt
+const bildEinlesen = (datei) => new Promise((ok, fehler) => {
+  const url = URL.createObjectURL(datei);
+  const img = new Image();
+  img.onload = () => {
+    const s = Math.min(1, 600 / Math.max(img.width, img.height));
+    const c = Object.assign(document.createElement('canvas'), { width: Math.max(1, Math.round(img.width * s)), height: Math.max(1, Math.round(img.height * s)) });
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    ok(c.toDataURL('image/png'));
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); fehler(new Error('Bild konnte nicht gelesen werden')); };
+  img.src = url;
+});
+
 /* ── Verteiler-Typ anlegen / bearbeiten ──────────────────────────────────── */
 // Beschriftung neuer Abgänge wie in den mitgelieferten Desktop-Typen („Schuko 3“, „32A-1“, „16A 1ph-2“ …)
 const ABGANG_PREFIX = { SCHUKO: 'Schuko ', MC: 'Multicore ', CEE16: '16A-', CEE32: '32A-', CEE63: '63A-', CEE125: '125A-', CEE16_1: '16A 1ph-', CEE32_1: '32A 1ph-', PL200: 'Powerlock ', PL400: 'Powerlock ', PL660: 'Powerlock ', PL1000: 'Powerlock ' };
@@ -538,7 +627,57 @@ function TypEditor({ typ, inUse, onSave, onDelete, onClose }) {
 }
 
 /* ── Instance detail sheet ───────────────────────────────────────────────── */
-function InstSheet({ inst, bt, plan, onPickSlot, onRename, onDelete, onClose }) {
+// Wo ein Verteiler angeschlossen werden kann: alle Steckplätze der anderen Verteiler, außer bei ihm selbst und seinen Unterverteilern
+const anschlussZiele = (plan, inst) => {
+  const unter = new Set([inst.id]);
+  let neu = true;
+  while (neu) {
+    neu = false;
+    plan.instances.forEach(i => { if (i.parentId && unter.has(i.parentId) && !unter.has(i.id)) { unter.add(i.id); neu = true; } });
+  }
+  return sortTopo(plan.instances).map(s => s.inst).filter(p => !unter.has(p.id)).map(p => ({
+    inst: p,
+    slots: slotGroups(getBoxType(plan, p.typeId)).flatMap(g => g.slots).map(s => ({
+      ...s,
+      name: s.mcSlot ? `${s.outlet.label} – ${s.label}` : s.label,
+      belegt: slotKids(plan, p.id, s.key).filter(k => k.id !== inst.id).map(instName).join(', '),
+    })),
+  }));
+};
+
+function HaengtAn({ inst, bt, plan, onSetParent }) {
+  const ziele = anschlussZiele(plan, inst);
+  const wert  = inst.parentId ? `${inst.parentId}|${inst.parentOutletId || ''}` : '';
+  const waehlen = (v) => {
+    if (!v) { onSetParent(null, null); return; }
+    const [pid, key] = v.split('|');
+    const slot = ziele.find(z => z.inst.id === pid)?.slots.find(s => s.key === key);
+    // Wie am PC: Warnung, wenn ein größerer Verteiler an einem kleiner abgesicherten Abgang hängt
+    if (slot && bt?.feedAmp > (slot.outlet.amp || 0) &&
+      !window.confirm(`${bt.name} (${bt.feedAmp} A) wird auf einen ${slot.outlet.amp} A Anschluss gesteckt.\nEffektive Absicherung: ${slot.outlet.amp} A.\n\nFortfahren?`)) return;
+    onSetParent(pid, key);
+  };
+  return (
+    <div className="haengt-an">
+      <label className="field-label" htmlFor={`haengt-${inst.id}`}>Hängt an</label>
+      <select id={`haengt-${inst.id}`} className="field-select" value={wert} onChange={e => waehlen(e.target.value)}>
+        <option value="">— Einspeisung (an keinem Verteiler) —</option>
+        {inst.parentId && !ziele.some(z => z.inst.id === inst.parentId && z.slots.some(s => s.key === inst.parentOutletId)) && (
+          <option value={wert}>{instName(plan.instances.find(i => i.id === inst.parentId))} (Anschluss unbekannt)</option>
+        )}
+        {ziele.map(z => (
+          <optgroup key={z.inst.id} label={instName(z.inst)}>
+            {z.slots.map(s => (
+              <option key={s.key} value={`${z.inst.id}|${s.key}`}>{instName(z.inst)} › {s.name}{s.belegt ? ` (schon: ${s.belegt})` : ''}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function InstSheet({ inst, bt, plan, onPickSlot, onRename, onSetParent, onDelete, onClose }) {
   const [editing, setEditing] = useState(false);
   const [nameVal, setNameVal] = useState(inst.name || '');
 
@@ -601,6 +740,7 @@ function InstSheet({ inst, bt, plan, onPickSlot, onRename, onDelete, onClose }) 
           {bt?.name || '?'} · {CONN[bt?.feedConnector]?.label || bt?.feedConnector || ''} {bt?.feedAmp}A
           {parent && ` · an ${instName(parent)}`}
         </div>
+        <HaengtAn inst={inst} bt={bt} plan={plan} onSetParent={onSetParent} />
 
         <div className="outlet-list">
           {slotGroups(bt).map(({ outlet, slots }) => {
@@ -734,8 +874,16 @@ function PickerSheet({ plan, title, threePhase, placements, onAdd, onRemove, onC
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Projekt Tab                                                               */
 /* ══════════════════════════════════════════════════════════════════════════ */
-function ProjektTab({ plan, setPlan, lib, typen, sitzungAktiv, notify }) {
+function ProjektTab({ plan, setPlan, lib, typen, sitzungAktiv, notify, bild }) {
   const [edit, setEdit] = useState(null); // null | { typ } (typ null = neu)
+  const logoInput = useRef(null);
+  const logoWaehlen = async (e) => {
+    const datei = e.target.files?.[0];
+    e.target.value = '';
+    if (!datei) return;
+    try { bild.setLogo(await bildEinlesen(datei)); }
+    catch (err) { notify(err.message, 'err'); }
+  };
   const set = (key, val) => setPlan(p => ({ ...p, meta: { ...p.meta, [key]: val } }));
 
   const neuerPlan = () => {
@@ -788,6 +936,21 @@ function ProjektTab({ plan, setPlan, lib, typen, sitzungAktiv, notify }) {
             />
           </div>
         ))}
+      </div>
+
+      <div className="section">
+        <div className="section-title">Firmenlogo fürs PDF</div>
+        <p className="meas-hint" style={{ marginBottom: 8 }}>Erscheint oben rechts auf jeder Seite des Prüfprotokolls. Bleibt nur auf diesem Handy.</p>
+        <div className="bild-row">
+          {bild.logo
+            ? <img className="bild-vorschau" src={bild.logo} alt="Firmenlogo" />
+            : <span className="meas-hint">Kein Logo</span>}
+          <button className="btn btn--secondary btn--small" onClick={() => logoInput.current?.click()}>
+            <ImagePlus size={14} aria-hidden="true" />{bild.logo ? 'Ersetzen' : 'Logo wählen'}
+          </button>
+          {bild.logo && <button className="btn btn--secondary btn--small" aria-label="Logo entfernen" onClick={() => bild.setLogo('')}><Trash2 size={14} /></button>}
+          <input ref={logoInput} type="file" accept="image/*" hidden onChange={logoWaehlen} />
+        </div>
       </div>
 
       <div className="section">
@@ -1053,11 +1216,13 @@ function SendToPc({ plan, pcUrl }) {
   );
 }
 
-function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify }) {
+function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify, bild }) {
   const [openId,   setOpenId]   = useState(null);
   const [metaOpen, setMetaOpen] = useState(false);
   const [adding,   setAdding]   = useState(false);
   const [pdf,      setPdf]      = useState(null); // null | 'Seite 2/5' …
+  const [signPad,  setSignPad]  = useState(false);
+  const bilder = { logo: bild.logo, signatur: bild.sign };
 
   const addInstance = (type, name) => {
     const inst = verteilerAnlegen(setPlan, plan, type, name);
@@ -1068,7 +1233,7 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify }) {
   const pdfErstellen = async () => {
     setPdf('wird vorbereitet …');
     try {
-      const blob = await protokollPdf(plan, { fortschritt: (i, n) => setPdf(`Seite ${i}/${n}`) });
+      const blob = await protokollPdf(plan, { ...bilder, fortschritt: (i, n) => setPdf(`Seite ${i}/${n}`) });
       setPdf('wird geteilt …');
       await pdfTeilen(blob, pdfDateiname(plan));
     } catch (e) {
@@ -1076,6 +1241,11 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify }) {
     } finally {
       setPdf(null);
     }
+  };
+
+  const drucken = async () => {
+    try { await protokollDrucken(plan, bilder); }
+    catch (e) { notify('Drucken nicht möglich: ' + (e?.message || e), 'err'); }
   };
 
   const res    = plan.inspResults || {};
@@ -1134,10 +1304,21 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify }) {
               value={meta.netType || ''}
               onChange={v => updMeta({ netType: meta.netType === v ? '' : v })}
             />
+            <label className="field-label" style={{ marginTop: 12 }}>Unterschrift fürs PDF (bleibt auf diesem Handy)</label>
+            <div className="bild-row">
+              {bild.sign
+                ? <img className="bild-vorschau" src={bild.sign} alt="Gespeicherte Unterschrift" />
+                : <span className="meas-hint">Noch keine Unterschrift</span>}
+              <button className="btn btn--secondary btn--small" onClick={() => setSignPad(true)}>
+                <PenLine size={14} aria-hidden="true" />{bild.sign ? 'Neu' : 'Unterschreiben'}
+              </button>
+              {bild.sign && <button className="btn btn--secondary btn--small" aria-label="Unterschrift entfernen" onClick={() => bild.setSign('')}><Trash2 size={14} /></button>}
+            </div>
           </div>
         )}
       </div>
 
+      {signPad && <UnterschriftPad onSave={(d) => { bild.setSign(d); setSignPad(false); }} onClose={() => setSignPad(false)} />}
       {adding && <AddInstModal plan={plan} typen={typen} onAdd={addInstance} onClose={() => setAdding(false)} />}
 
       {sorted.length === 0 ? (
@@ -1181,9 +1362,14 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify }) {
           <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} onClick={() => setAdding(true)}>
             <Plus size={16} aria-hidden="true" />Verteiler hinzufügen
           </button>
-          <button className="btn btn--primary" style={{ width: '100%', marginTop: 16 }} disabled={!!pdf} onClick={pdfErstellen}>
-            <FileText size={18} aria-hidden="true" />{pdf ? `PDF ${pdf}` : 'Prüfprotokoll als PDF'}
+          <div className="section-title" style={{ margin: '20px 4px 8px' }}>Prüfprotokoll</div>
+          <button className="btn btn--primary" style={{ width: '100%' }} onClick={drucken}>
+            <Printer size={18} aria-hidden="true" />PDF speichern / drucken
           </button>
+          <button className="btn btn--secondary" style={{ width: '100%', marginTop: 8 }} disabled={!!pdf} onClick={pdfErstellen}>
+            <Share2 size={16} aria-hidden="true" />{pdf ? `PDF ${pdf}` : 'PDF direkt teilen'}
+          </button>
+          <p className="meas-hint" style={{ margin: '6px 4px 0' }}>„Speichern / drucken“ erzeugt dasselbe PDF wie am PC (Text markierbar) – im Druckdialog „Als PDF speichern“ wählen. „Direkt teilen“ schickt eine Bild-Fassung sofort per Mail oder Messenger.</p>
           <div style={{ marginTop: 16 }}>
             {sitzungAktiv
               ? <div className="sync-msg"><Users size={16} aria-hidden="true" />Du bist in einer Sitzung – deine Werte erscheinen sofort am PC.</div>
