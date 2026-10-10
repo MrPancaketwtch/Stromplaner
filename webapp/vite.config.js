@@ -13,8 +13,11 @@ export default defineConfig({
   base,
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
   resolve: {
-    // Sitzungslogik wird mit der Desktop-App geteilt (app/sync); React muss trotzdem nur einmal vorkommen
-    alias: { '@sync': fileURLToPath(new URL('../app/sync', import.meta.url)) },
+    // Sitzungslogik (app/sync) und Prüfprotokoll (app/shared) werden mit der Desktop-App geteilt; React muss trotzdem nur einmal vorkommen
+    alias: {
+      '@sync':   fileURLToPath(new URL('../app/sync', import.meta.url)),
+      '@shared': fileURLToPath(new URL('../app/shared', import.meta.url)),
+    },
     dedupe: ['react', 'react-dom'],
   },
   server: { fs: { allow: [repoRoot] } },

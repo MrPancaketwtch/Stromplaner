@@ -29080,11 +29080,475 @@ button:active { filter: brightness(0.95); }
     return { zustand, aktiv, verbinden, erstellen, verlassen, beenden };
   }
 
-  // app/Stromplaner.jsx
+  // app/shared/pruefprotokoll.js
   var PHASES = ["L1", "L2", "L3"];
+  var CONN = {
+    CEE16: { label: "16A 3LNPE 400V", amp: 16, phases: 3 },
+    CEE32: { label: "32A 3LNPE 400V", amp: 32, phases: 3 },
+    CEE63: { label: "63A 3LNPE 400V", amp: 63, phases: 3 },
+    CEE125: { label: "125A 3LNPE 400V", amp: 125, phases: 3 },
+    CEE16_1: { label: "16A 1LNPE 230V", amp: 16, phases: 1 },
+    CEE32_1: { label: "32A 1LNPE 230V", amp: 32, phases: 1 },
+    PL200: { label: "200A Powerlock", amp: 200, phases: 3 },
+    PL400: { label: "400A Powerlock", amp: 400, phases: 3 },
+    PL660: { label: "660A Powerlock", amp: 660, phases: 3 },
+    PL1000: { label: "1000A Powerlock", amp: 1e3, phases: 3 },
+    MC: { label: "Multicore", amp: 16, phases: 1, isMulticore: true },
+    SCHUKO: { label: "Schuko", amp: 16, phases: 1 }
+  };
+  var KAPPA_CU = 56;
+  var is3ph = (c) => (CONN[c]?.phases || 1) === 3;
+  var isMulticore = (c) => !!CONN[c]?.isMulticore;
+  var round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  var alphaSort = (arr, key) => [...arr].sort((a, b) => (a[key] || "").localeCompare(b[key] || "", "de", { numeric: true, sensitivity: "base" }));
+  var sortOutlets = (outlets) => [...outlets].sort((a, b) => {
+    const as = a.connector === "SCHUKO" ? 0 : 1, bs = b.connector === "SCHUKO" ? 0 : 1;
+    if (as !== bs) return as - bs;
+    return a.label.localeCompare(b.label, "de", { numeric: true });
+  });
+  var calcVoltDrop = (I, l, A, cosPhi, threePhase) => {
+    if (!+l || !+A || !+cosPhi) return null;
+    const fac = threePhase ? Math.sqrt(3) : 2;
+    const duV = fac * +I * +l * +cosPhi / (KAPPA_CU * +A);
+    return { V: round2(duV), pct: round2(duV / 230 * 100) };
+  };
+  var SICHT_ITEMS = [
+    "Schaltger\xE4te",
+    "Steckverbinder",
+    "Leitungen",
+    "Geh\xE4use",
+    "Kennzeichnung",
+    "Basisschutz"
+  ];
+  var migrateOutlet = (o, idx) => {
+    const prot = o.protection === "RCD" ? "Keine" : o.protection || (o.connector === "SCHUKO" || o.connector === "MC" ? "RCBO" : "LS");
+    return {
+      ...o,
+      phase: o.phase || (is3ph(o.connector) ? "L1L2L3" : PHASES[idx % 3]),
+      breaker: o.breaker || "C",
+      protection: prot,
+      rcdId: o.rcdId ?? null,
+      rcdMa: prot === "RCBO" ? o.rcdMa ?? 30 : void 0,
+      // Multicore: number of slots (default 6 if not set)
+      mcSlots: isMulticore(o.connector) ? o.mcSlots || 6 : void 0
+    };
+  };
+  function pruefprotokollHtml(plan, { logo = "", signatur = "" } = {}) {
+    const instances = plan.instances || [];
+    const placements = plan.placements || [];
+    const mainConns = plan.mainConns || [];
+    const meta = plan.meta || {};
+    const inspMeta = plan.inspMeta || {};
+    const inspResults = plan.inspResults || {};
+    const byId = (arr) => {
+      const m = {};
+      arr.forEach((x) => m[x.id] = x);
+      return m;
+    };
+    const boxTypeById = byId((plan.boxTypes || []).map((bt) => ({ ...bt, rcds: bt.rcds || [], outlets: (bt.outlets || []).map(migrateOutlet) })));
+    const loadById = byId(plan.loads || []);
+    const instById = byId(instances);
+    const mainConnById = byId(mainConns);
+    const IR_DEF = { voltL1N: "", voltL2N: "", voltL3N: "", voltL1L2: "", voltL2L3: "", voltL1L3: "", voltNPE: "", voltL1PE: "", voltL2PE: "", voltL3PE: "", phaseRot: "", rPE: "", rIso: "", zs: "", ik: "", sicht: [null, null, null, null, null, null], bemerkung: "", bemerkungSchwere: "bad", outlets: {} };
+    const getIR = (iid) => {
+      const sv = inspResults[iid] || {};
+      return { ...IR_DEF, ...sv, sicht: sv.sicht ? [...sv.sicht] : [...IR_DEF.sicht], outlets: sv.outlets || {} };
+    };
+    const OR_DEF = { rcdT1: "", rcdIan: "", ok: false, zs: "", ik: "", zsL1: "", zsL2: "", zsL3: "", ikL1: "", ikL2: "", ikL3: "", notInUse: false, zsOverride: "", ikOverride: "", zsOverrideL1: "", zsOverrideL2: "", zsOverrideL3: "", ikOverrideL1: "", ikOverrideL2: "", ikOverrideL3: "", overrideActive: false, cableLen: "", cableA: "", cosPhi: "0.95" };
+    const getOR = (iid, oid) => ({ ...OR_DEF, ...(getIR(iid).outlets || {})[oid] || {} });
+    const worstZs = (...vs) => {
+      const v = vs.filter((x) => x !== "").map(Number);
+      return v.length ? Math.max(...v).toFixed(2) : "";
+    };
+    const worstIk = (...vs) => {
+      const v = vs.filter((x) => x !== "").map(Number);
+      return v.length ? Math.min(...v).toFixed(0) : "";
+    };
+    const childDerived = (childInstIds) => {
+      const zsVals = [], ikVals = [];
+      childInstIds.forEach((cid) => {
+        const cType = boxTypeById[instById[cid]?.typeId];
+        (cType?.outlets || []).forEach((co) => {
+          if (isMulticore(co.connector)) {
+            for (let s = 1; s <= (co.mcSlots || 6); s++) {
+              const slotId = `${co.id}_s${s}`;
+              const gcInsts = instances.filter((ci) => ci.parentId === cid && ci.parentOutletId === slotId);
+              if (gcInsts.length > 0) {
+                const d = childDerived(gcInsts.map((ci) => ci.id));
+                if (d.zs) zsVals.push(Number(d.zs));
+                if (d.ik) ikVals.push(Number(d.ik));
+              } else {
+                const cor = getOR(cid, slotId);
+                if (!cor.notInUse) {
+                  if (cor.zs) zsVals.push(Number(cor.zs));
+                  if (cor.ik) ikVals.push(Number(cor.ik));
+                }
+              }
+            }
+          } else {
+            const grandChildInsts = instances.filter((ci) => ci.parentId === cid && ci.parentOutletId === co.id);
+            if (grandChildInsts.length > 0) {
+              const d = childDerived(grandChildInsts.map((ci) => ci.id));
+              if (d.zs) zsVals.push(Number(d.zs));
+              if (d.ik) ikVals.push(Number(d.ik));
+            } else {
+              const collect = (cor) => {
+                if (cor.notInUse) return;
+                if (is3ph(co.connector)) {
+                  ["zsL1", "zsL2", "zsL3"].forEach((k) => {
+                    if (cor[k]) zsVals.push(Number(cor[k]));
+                  });
+                  ["ikL1", "ikL2", "ikL3"].forEach((k) => {
+                    if (cor[k]) ikVals.push(Number(cor[k]));
+                  });
+                } else {
+                  if (cor.zs) zsVals.push(Number(cor.zs));
+                  if (cor.ik) ikVals.push(Number(cor.ik));
+                }
+              };
+              collect(getOR(cid, co.id));
+            }
+          }
+        });
+      });
+      return { zs: zsVals.length ? Math.max(...zsVals).toFixed(2) : "", ik: ikVals.length ? Math.min(...ikVals).toFixed(0) : "" };
+    };
+    const _cl = logo;
+    const _sig = signatur;
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const pdfChk = (val, lo, hi) => {
+      if (val === "" || val === void 0 || val === null) return "";
+      const n = parseFloat(val);
+      if (isNaN(n)) return "";
+      if (lo !== void 0 && n < lo) return "bad";
+      if (hi !== void 0 && n > hi) return "bad";
+      return "ok";
+    };
+    const pdfChkAll = (vals, lo, hi) => {
+      const vs = vals.filter((v) => v !== "");
+      if (!vs.length) return "";
+      return vs.some((v) => pdfChk(v, lo, hi) === "bad") ? "bad" : "ok";
+    };
+    const badge = (r) => r === "ok" ? `<span class="ok">\u2713 ok</span>` : r === "bad" ? `<span class="bad">\u2715 Mangel</span>` : `<span class="muted">\u2013</span>`;
+    const sichtBadge = (v) => v === true ? `<span class="ok">\u2713 ok</span>` : `<span class="muted">\u2013</span>`;
+    const fv = (...vals) => vals.filter((v) => v !== "").map((v) => esc(v) + "&thinsp;V").join(" / ") || "\u2013";
+    const css = `:root{--ep-accent:#f5a623;--ep-dark:#1c2127;--ep-ink:#1c2127;--ep-ink2:#4a5159;--ep-ink3:#7a8290;--ep-rule:#c8ccd1;--ep-rule2:#e6e9ec;--ep-band:#f3f4f6;--ep-paper:#ffffff;--ep-ok:#1c7a3e;--ep-bad:#b91c1c;--ep-warn:#8a5500;--ep-badrow:#fcf2f2;--ep-warnrow:#fdf7e6;--ep-font:'Segoe UI',system-ui,-apple-system,sans-serif;--ep-pad-x:44px;--ep-row-pad:4px 10px;--ep-gap-y:10px}
+html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box-sizing:border-box}
+.ep-stage{min-height:100vh;padding:28px 0 80px;display:flex;flex-direction:column;align-items:center;gap:18px}
+.page{width:794px;min-height:1123px;background:var(--ep-paper);color:var(--ep-ink);font-size:9.5px;line-height:1.45;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(0,0,0,.05),0 18px 40px -22px rgba(0,0,0,.4)}
+.page-body{flex:1;padding:10px var(--ep-pad-x) 0;display:flex;flex-direction:column;min-height:0}.spacer-auto{flex:1;min-height:8px}
+.page-h,.page-f{display:flex;justify-content:space-between;align-items:center;padding:8px var(--ep-pad-x);font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase}
+.page-h{border-bottom:1px solid var(--ep-rule)}.page-f{border-top:1px solid var(--ep-rule);padding-bottom:10px;padding-top:6px;letter-spacing:.08em}.page-h strong{color:var(--ep-ink)}
+.page-title{margin:4px 0 6px}.page-title .kicker{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ep-ink3)}.page-title h1{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em;line-height:1.2}.page-title .muted{color:var(--ep-ink3);font-weight:400}.page-title .muted-h1{font-size:13px}.page-title .id-h1{color:var(--ep-warn)}.page-title-row{display:flex;justify-content:space-between;align-items:baseline}
+.befund-label{font-size:11px;font-weight:600}.befund-label.ok{color:var(--ep-ok)}.befund-label.bad{color:var(--ep-bad)}.befund-label.warn{color:var(--ep-warn)}
+.block{margin-top:var(--ep-gap-y)}.bar{display:flex;justify-content:space-between;align-items:center;background:var(--ep-dark);color:#fff;padding:5px 10px;font-size:11px;border-left:3px solid var(--ep-accent)}.bar strong{font-weight:600}.bar-sub{margin-left:8px;color:#a8b0bb;font-weight:400;font-size:9.5px}.bar-right{font-size:9.5px;color:#cdd3da}.block-body{border:1px solid var(--ep-rule);border-top:none}
+.ok{color:var(--ep-ok);font-weight:600;white-space:nowrap}.bad{color:var(--ep-bad);font-weight:600;white-space:nowrap}.warn{color:var(--ep-warn);font-weight:600;white-space:nowrap}
+.kv{display:grid}.kv-2{grid-template-columns:repeat(2,1fr)}.kv-3{grid-template-columns:repeat(3,1fr)}.kv-row{display:grid;grid-template-columns:110px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);border-right:1px solid var(--ep-rule2)}.kv-row.kv-right{border-right:none}.kv-row.kv-last{border-bottom:none}.kv-row .k{color:var(--ep-ink3)}.kv-row .v{color:var(--ep-ink)}
+.thead{display:grid;padding:4px 10px;background:var(--ep-band);border-bottom:1px solid var(--ep-rule2);font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.thead .r{text-align:right}
+.trow{display:grid;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);align-items:center}.trow.row-last{border-bottom:none}.trow.row-bad{background:var(--ep-badrow)}.trow .r{text-align:right}.trow .muted{color:var(--ep-ink3)}.trow .no{margin-right:8px}
+.id{color:var(--ep-warn);font-weight:600}.muted{color:var(--ep-ink3)}.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dual{display:grid;grid-template-columns:1fr 1fr}.sicht-cell{display:grid;grid-template-columns:36px 1fr 60px;padding:var(--ep-row-pad);align-items:center}.sicht-cell .r{text-align:right}.sicht-cell.row-bad{background:var(--ep-badrow)}.sicht-cell.row-warn{background:var(--ep-warnrow)}.sicht-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.sicht-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}.abg-cell{display:grid;grid-template-columns:70px 1fr;padding:var(--ep-row-pad);align-items:center}.abg-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.abg-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr)}.kpi{padding:8px 12px}.kpi.kpi-sep{border-right:1px solid var(--ep-rule2)}.kpi-k{font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.kpi-v{font-size:16px;font-weight:700;margin-top:2px}.kpi-s{font-size:9px}
+.num-row{display:grid;grid-template-columns:30px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2)}.num-row.row-last{border-bottom:none}
+.confirm{padding:8px 12px;color:var(--ep-ink2);line-height:1.55}.confirm strong{color:var(--ep-ink)}.bemerkung{padding:var(--ep-row-pad);background:var(--ep-warnrow)}.bemerkung.small{background:transparent;font-size:9px;color:var(--ep-ink2);line-height:1.5;padding:6px 10px}
+.sign-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--ep-rule2)}.sign{padding:8px 12px}.sign.sign-r{border-left:1px solid var(--ep-rule2)}.sign-role{font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:28px}.sign-line{border-bottom:1px solid var(--ep-ink);height:24px}.sign-name{margin-top:4px;font-weight:600}.sign .muted{font-size:9px}
+@media print{html,body,.ep-stage{background:#fff;padding:0;gap:0}.page{box-shadow:none;break-after:page;page-break-after:always}.page:last-child{break-after:auto;page-break-after:auto}}@page{size:A4 portrait;margin:0}`;
+    const sorted2 = (() => {
+      const result = [];
+      const visited = /* @__PURE__ */ new Set();
+      const visit = (parentId) => {
+        alphaSort(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
+          if (!visited.has(inst.id)) {
+            visited.add(inst.id);
+            result.push(inst);
+            visit(inst.id);
+          }
+        });
+      };
+      alphaSort(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
+        if (!visited.has(inst.id)) {
+          visited.add(inst.id);
+          result.push(inst);
+          visit(inst.id);
+        }
+      });
+      return result;
+    })();
+    const total = sorted2.length;
+    const hdr = `<strong>Stromplaner</strong> \xB7 Errichtungspr\xFCfung \xB7 DIN VDE 0100-600`;
+    const subR = `${esc(meta?.production || "Planung")} \xB7 ${esc(inspMeta.date || "")}`;
+    const ftrL = esc(inspMeta.inspector || "\u2013");
+    const ftrC = `EP-${(meta?.production || "Plan").replace(/[^A-Za-z0-9]/g, "-").slice(0, 30)}`;
+    const _logoHtml = _cl ? `<img src="${_cl}" style="height:20px;max-width:90px;object-fit:contain;vertical-align:middle">` : "";
+    const pageH = _logoHtml ? `<header class="page-h"><span>${hdr}</span><span style="display:flex;align-items:center;gap:8px"><span>${subR}</span>${_logoHtml}</span></header>` : `<header class="page-h"><span>${hdr}</span><span>${subR}</span></header>`;
+    const maengel = [];
+    sorted2.forEach((inst) => {
+      const ir = getIR(inst.id);
+      if (ir.bemerkung) maengel.push({ inst, item: ir.bemerkung, type: ir.bemerkungSchwere || "bad" });
+    });
+    let totalPunkte = 0, totalMangel = 0, totalRCD = 0;
+    sorted2.forEach((inst) => {
+      const ir = getIR(inst.id);
+      const type = boxTypeById[inst.typeId];
+      const outlets = type ? sortOutlets(type.outlets) : [];
+      totalPunkte += (ir.sicht || []).filter((v) => v !== null).length;
+      if (ir.bemerkung) totalMangel++;
+      (type?.rcds || []).forEach((rcd) => {
+        if (getOR(inst.id, `rcd_${rcd.id}`).rcdT1 !== "") totalRCD++;
+      });
+      outlets.filter((o) => o.protection === "RCBO").forEach((o) => {
+        if (isMulticore(o.connector)) {
+          const sl = o.mcSlots || 6;
+          for (let s = 1; s <= sl; s++) {
+            if (getOR(inst.id, `${o.id}_s${s}`).rcdT1 !== "") totalRCD++;
+          }
+        } else {
+          if (getOR(inst.id, o.id).rcdT1 !== "") totalRCD++;
+        }
+      });
+    });
+    let pages = `<article class="page">
+  ${pageH}
+  <main class="page-body">
+    <div class="page-title"><div class="kicker">Errichtungspr\xFCfung \xB7 DIN VDE 0100-600 \xB7 mobile Stromverteilung</div>
+      <h1>${esc(meta?.production || "Planung")}<span class="muted"> \xB7 ${esc(inspMeta.address || inspMeta.location || "")}</span></h1></div>
+    <section class="block"><header class="bar"><span><strong>Produktion</strong></span><span class="bar-right">${esc(inspMeta.date || "")}</span></header>
+      <div class="block-body"><div class="kv kv-2">
+        <div class="kv-row"><span class="k">Produktion</span><span class="v">${esc(meta?.production || "\u2013")}</span></div>
+        <div class="kv-row kv-right"><span class="k">Ersteller</span><span class="v">${esc(meta?.creator || "\u2013")}</span></div>
+        <div class="kv-row kv-last"><span class="k">Adresse</span><span class="v">${esc(inspMeta.address || "\u2013")}</span></div>
+        <div class="kv-row kv-last kv-right"><span class="k">Ort des Anschlusses</span><span class="v">${esc(inspMeta.location || "\u2013")}</span></div>
+      </div></div></section>
+    <section class="block"><header class="bar"><span><strong>Pr\xFCfung</strong><span class="bar-sub">DIN VDE 0100-600</span></span></header>
+      <div class="block-body"><div class="kv kv-2">
+        <div class="kv-row"><span class="k">Pr\xFCfer</span><span class="v">${esc(inspMeta.inspector || "\u2013")}</span></div>
+        <div class="kv-row kv-right"><span class="k">Netzform</span><span class="v">${esc(inspMeta.netType || "\u2013")}</span></div>
+        <div class="kv-row kv-last"><span class="k">Datum / Uhrzeit</span><span class="v">${esc(inspMeta.date || "\u2013")}${inspMeta.time ? " \xB7 " + esc(inspMeta.time) : ""}</span></div>
+        <div class="kv-row kv-last kv-right"><span class="k">Norm</span><span class="v">DIN VDE 0100-600</span></div>
+      </div></div></section>
+    ${inspMeta.equipment ? `<section class="block"><header class="bar"><span><strong>Pr\xFCfmittel</strong></span></header>
+      <div class="block-body"><div class="num-row row-last"><span class="muted">01</span><span>${esc(inspMeta.equipment)}</span></div></div></section>` : ""}
+    <section class="block"><header class="bar"><span><strong>Umfang</strong><span class="bar-sub">${total} Verteiler</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span>Bezeichnung</span><span>Typ</span><span>Eingang</span><span>H\xE4ngt an</span></div>
+        ${sorted2.map((inst, i) => {
+      const type = boxTypeById[inst.typeId];
+      const parent = inst.parentId ? instById[inst.parentId] : null;
+      const feedLbl = parent ? esc(parent.name) : inst.mainConnectionId ? esc(mainConnById[inst.mainConnectionId]?.name || "\u2013") : "\u2014 Einspeisung \u2014";
+      return `<div class="trow${i === sorted2.length - 1 ? " row-last" : ""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name || "\u2013")}</span><span class="muted">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span><span class="muted">${feedLbl}</span></div>`;
+    }).join("")}
+      </div></section>
+    <div class="spacer-auto"></div>
+  </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / PTOT</span></footer>
+</article>`;
+    let pdfPC = 1;
+    sorted2.forEach((inst, instIdx) => {
+      const type = boxTypeById[inst.typeId];
+      const outlets = type ? sortOutlets(type.outlets) : [];
+      const ir = getIR(inst.id);
+      const sicht = ir.sicht || Array(6).fill(null);
+      const pdfRcdRows = [];
+      (type?.rcds || []).forEach((rcd) => pdfRcdRows.push({ rowType: "rcd", rcd, outlet: null, oid: `rcd_${rcd.id}`, rowLabel: rcd.label, iAnLimit: rcd.mA, protLabel: `RCD ${rcd.mA} mA` }));
+      outlets.filter((o) => o.protection === "RCBO").forEach((o) => {
+        const rMa = o.rcdMa ?? 30;
+        if (isMulticore(o.connector)) {
+          const slots = o.mcSlots || 6;
+          for (let s = 1; s <= slots; s++) pdfRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: `${o.id}_s${s}`, rowLabel: `${o.label} \u2013 SP ${s} (${PHASES[(s - 1) % 3]})`, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
+        } else pdfRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: o.id, rowLabel: o.label, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
+      });
+      const parent = inst.parentId ? instById[inst.parentId] : null;
+      const n = instIdx + 1;
+      const hasMangel = !!(ir.bemerkung && (ir.bemerkungSchwere || "bad") === "bad");
+      const hasHinweis = !!(ir.bemerkung && ir.bemerkungSchwere === "warn");
+      const phaseR = ir.phaseRot === "rechts" ? "ok" : ir.phaseRot === "links" ? "bad" : "";
+      const ckVLN = pdfChkAll([ir.voltL1N, ir.voltL2N, ir.voltL3N], 207, 244);
+      const ckVLL = pdfChkAll([ir.voltL1L2, ir.voltL2L3, ir.voltL1L3], 360, 424);
+      const ckVNPE = pdfChk(ir.voltNPE, void 0, 1);
+      const ckVLPE = pdfChkAll([ir.voltL1PE, ir.voltL2PE, ir.voltL3PE], 207, 244);
+      const hasInletMeas = !!(ir.zs || ir.ik);
+      let secIdx = 4;
+      const rcdSec = pdfRcdRows.length ? secIdx++ : 0;
+      const abgSec = secIdx++;
+      const cableRows = outlets.filter((o) => getOR(inst.id, o.id).cableLen !== "");
+      const cableSec = cableRows.length ? secIdx++ : 0;
+      const bemSec = ir.bemerkung ? secIdx : 0;
+      const abgRows = [];
+      outlets.forEach((o) => {
+        if (isMulticore(o.connector)) {
+          const slots = o.mcSlots || 6;
+          for (let s = 1; s <= slots; s++) {
+            const oid = `${o.id}_s${s}`;
+            const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id && p.mcSlot === s);
+            const lbl = pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
+            abgRows.push({ oid, label: `${o.label} SP${s}`, lbl, amp: o.amp || 16, is3p: false, hasChild: false, hasRcd: o.protection === "RCBO" || !!o.rcdId, breaker: o.breaker || "C" });
+          }
+        } else {
+          const childInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === o.id);
+          const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id);
+          const lbl = childInsts.length ? childInsts[0].name : pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
+          abgRows.push({ oid: o.id, label: o.label, lbl, amp: o.amp || type?.feedAmp || 16, is3p: is3ph(o.connector), hasChild: childInsts.length > 0, childInstIds: childInsts.map((ci) => ci.id), hasRcd: o.protection === "RCBO" || !!o.rcdId, breaker: o.breaker || "C" });
+        }
+      });
+      const _rcdH = pdfRcdRows.length ? 72 + pdfRcdRows.length * 30 : 0;
+      const _rowsFst = Math.max(4, Math.floor((1018 - 420 - _rcdH - 72) / 30));
+      const _rowsCnt = Math.max(4, Math.floor((1018 - 50 - 72) / 30));
+      const _chunks = [];
+      const _todo = [...abgRows];
+      _chunks.push(_todo.splice(0, _rowsFst));
+      while (_todo.length) _chunks.push(_todo.splice(0, _rowsCnt));
+      const pdfWorstZs = (...vs) => {
+        const v = vs.filter((x) => x !== "").map(Number);
+        return v.length ? Math.max(...v).toFixed(2) : "";
+      };
+      const pdfWorstIk = (...vs) => {
+        const v = vs.filter((x) => x !== "").map(Number);
+        return v.length ? Math.min(...v).toFixed(0) : "";
+      };
+      const renderChunk = (chunk, isLastChunk) => `<section class="block"><header class="bar"><span><strong>${n}.${abgSec} \xB7 Abg\xE4nge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Verteiler</span><span class="r">Z_s (\u03A9)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">\u2265 In\xD710 A</span></span><span class="r">Befund</span></div>
+        ${chunk.map(({ oid, label, lbl, amp, is3p, hasChild, childInstIds, hasRcd, breaker }, i) => {
+        const or = getOR(inst.id, oid);
+        const ikFactorO = breaker === "B" ? 5 : breaker === "D" ? 20 : breaker === "K" ? 14 : 10;
+        const ikLimO = amp * ikFactorO;
+        const zsLimO = hasRcd ? 2 : parseFloat((230 / (amp * ikFactorO)).toFixed(2));
+        const last = i === chunk.length - 1 && isLastChunk ? " row-last" : "";
+        if (or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
+        if (hasChild) {
+          const d = childDerived(childInstIds || []);
+          const hasOv = or.overrideActive || !!(or.zsOverride || or.ikOverride || or.zsOverrideL1 || or.zsOverrideL2 || or.zsOverrideL3 || or.ikOverrideL1 || or.ikOverrideL2 || or.ikOverrideL3);
+          const zsVal2 = (hasOv ? (is3p ? worstZs(or.zsOverrideL1, or.zsOverrideL2, or.zsOverrideL3) || or.zsOverride : or.zsOverride) || d.zs : d.zs) || "";
+          const ikVal2 = (hasOv ? (is3p ? worstIk(or.ikOverrideL1, or.ikOverrideL2, or.ikOverrideL3) || or.ikOverride : or.ikOverride) || d.ik : d.ik) || "";
+          const ckZs = zsVal2 ? pdfChk(zsVal2, void 0, zsLimO) : "";
+          const ckIk = ikVal2 ? pdfChk(ikVal2, ikLimO, void 0) : "";
+          const ck = ckIk === "bad" || ckZs === "bad" ? "bad" : ckIk === "ok" || ckZs === "ok" ? "ok" : "";
+          const uvNote = `<span style="font-size:8px;color:#888"> (UV)</span>`;
+          const ovMark = hasOv ? `<span style="font-size:8px;color:#e67e22"> \u270E</span>` : "";
+          const lblTxt = hasOv ? `Separat gemessen am Eingang \u2013 abgel. Wert (${d.zs || "\u2013"} \u03A9 / ${d.ik || "\u2013"} A) \xFCberschritt Grenzwert (DIN VDE 0100-600 \xA7643)` : `Messung aus angeschlossener Unterverteilung (ung\xFCnstigster Punkt, DIN VDE 0100-600 \xA7643)`;
+          return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="muted" style="font-style:italic;min-width:0">${lblTxt}</span><span class="r">${zsVal2 ? esc(zsVal2) + " &Omega;" + (hasOv ? ovMark : uvNote) : "\u2013"}</span><span class="r"><strong>${ikVal2 ? esc(ikVal2) + " A" + (hasOv ? "" : uvNote) : "\u2013"}</strong>${ikVal2 ? `<br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span>` : ""}</span><span class="r">${ck ? badge(ck) : "\u2014"}</span></div>`;
+        }
+        const zsVal = is3p ? pdfWorstZs(or.zsL1, or.zsL2, or.zsL3) : or.zs || "";
+        const ikVal = is3p ? pdfWorstIk(or.ikL1, or.ikL2, or.ikL3) : or.ik || "";
+        const zsNote = is3p && zsVal ? `<br><span style="font-size:8px;color:#888">${[or.zsL1, or.zsL2, or.zsL3].filter((x) => x).join(" / ")} \u03A9</span>` : "";
+        const ikNote = is3p && ikVal ? `<br><span style="font-size:8px;color:#888">${[or.ikL1, or.ikL2, or.ikL3].filter((x) => x).join(" / ")} A</span>` : ``;
+        const ckZsO = pdfChk(zsVal, void 0, zsLimO);
+        const ckIkO = pdfChk(ikVal, ikLimO, void 0);
+        const ckO = ckIkO === "bad" || ckZsO === "bad" ? "bad" : ckIkO === "ok" || ckZsO === "ok" ? "ok" : "";
+        return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span style="min-width:0">${esc(lbl)}</span><span class="r">${zsVal ? esc(zsVal) + " \u03A9" + zsNote : "\u2013"}</span><span class="r"><strong>${ikVal ? esc(ikVal) + " A" + ikNote : "\u2013"}</strong>${ikVal ? `<br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span>` : ""}</span><span class="r">${badge(ckO)}</span></div>`;
+      }).join("")}
+      </div></section>`;
+      const cableHTML = cableRows.length ? `<section class="block"><header class="bar"><span><strong>${n}.${cableSec} \xB7 Leitungen &amp; Spannungsfall</strong><span class="bar-sub">${cableRows.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span>Abgang</span><span class="r">I_N</span><span class="r">&ell; (m)</span><span class="r">A (mm&sup2;)</span><span class="r">&Delta;U (V)</span><span class="r">&Delta;U (%)</span><span class="r">Befund</span></div>
+        ${cableRows.map((o, i) => {
+        const or = getOR(inst.id, o.id);
+        const du = calcVoltDrop(o.amp, or.cableLen, or.cableA, or.cosPhi, is3ph(o.connector));
+        const befund = du ? du.pct <= 3 ? "ok" : du.pct <= 5 ? "warn" : "bad" : "";
+        return `<div class="trow${i === cableRows.length - 1 ? " row-last" : ""}" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span class="id">${esc(o.label)}</span><span class="r muted">${o.amp}A</span><span class="r">${esc(or.cableLen) || "\u2013"}&thinsp;m</span><span class="r">${esc(or.cableA) || "\u2013"}&thinsp;mm&sup2;</span><span class="r">${du ? du.V.toFixed(2) + "&thinsp;V" : "\u2013"}</span><span class="r${du && du.pct > 5 ? " bad" : du && du.pct > 3 ? " warn" : ""}"><strong>${du ? du.pct.toFixed(2) + "&thinsp;%" : "\u2013"}</strong></span><span class="r">${badge(befund)}</span></div>`;
+      }).join("")}
+      </div></section>` : "";
+      const bemHTML = ir.bemerkung ? `<section class="block"><header class="bar"><span><strong>${n}.${bemSec} \xB7 Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere || "bad") === "warn" ? `<span class="warn">! Hinweis</span>` : `<span class="bad">\u2715 Mangel</span>`}</span></header>
+      <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere || "bad") === "warn" ? "" : " row-bad"}">${esc(ir.bemerkung)}</div></div></section>` : "";
+      _chunks.forEach((chunk, ci) => {
+        pdfPC++;
+        const pNum = String(pdfPC).padStart(2, "0");
+        const isFirst = ci === 0;
+        const isLast = ci === _chunks.length - 1;
+        if (isFirst) {
+          pages += `<article class="page">
+  ${pageH}
+  <main class="page-body">
+    <div class="page-title"><div class="page-title-row">
+      <div><div class="kicker">Verteiler ${n} von ${total} \xB7 ${esc(type?.name || "")}</div>
+        <h1><span class="id-h1">${esc(inst.name)}</span><span class="muted muted-h1"> \xB7 ${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A \xB7 ${esc(type?.name || "")}</span></h1></div>
+      ${hasMangel ? `<span class="befund-label bad">\u2715 Mangel</span>` : hasHinweis ? `<span class="befund-label warn">! Hinweis</span>` : ""}
+    </div></div>
+    <section class="block"><header class="bar"><span><strong>${n}.1 \xB7 Stammdaten</strong></span></header>
+      <div class="block-body"><div class="kv kv-3">
+        <div class="kv-row"><span class="k">Typ</span><span class="v">${esc(type?.name || "\u2013")}</span></div>
+        <div class="kv-row"><span class="k">Eingang</span><span class="v">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span></div>
+        <div class="kv-row kv-right"><span class="k">Netzform</span><span class="v">${esc(inspMeta.netType || "\u2013")}</span></div>
+        <div class="kv-row kv-last"><span class="k">H\xE4ngt an</span><span class="v">${parent ? esc(parent.name) : inst.mainConnectionId ? esc(mainConnById[inst.mainConnectionId]?.name || "\u2013") : "\u2014 Einspeisung \u2014"}</span></div>
+        <div class="kv-row kv-last" style="grid-column:span 2"><span class="k">Anschl\xFCsse</span><span class="v">${outlets.length} Stk.</span></div>
+      </div></div></section>
+    <section class="block"><header class="bar"><span><strong>${n}.2 \xB7 Sichtpr\xFCfung</strong><span class="bar-sub">6 Punkte</span></span></header>
+      <div class="block-body"><div class="dual">
+        ${SICHT_ITEMS.map((item, idx) => `<div class="sicht-cell${sicht[idx] === false ? " row-bad" : ""}${idx % 2 === 0 ? " cell-bright" : ""}${idx >= 4 ? " cell-blast" : ""}"><span class="muted">${n}.2.${idx + 1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
+      </div></div></section>
+    <section class="block"><header class="bar"><span><strong>${n}.3 \xB7 Messungen</strong><span class="bar-sub">Drehfeld \xB7 U</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:1fr 210px 130px 80px"><span>Pr\xFCfung</span><span class="r">Wert</span><span class="r">Grenzwert</span><span class="r">Befund</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.1</span>Drehfeldrichtung</span><span class="r"><strong>${ir.phaseRot === "rechts" ? "rechts" : ir.phaseRot === "links" ? "links" : "\u2013"}</strong></span><span class="r muted">rechts</span><span class="r">${badge(phaseR)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.2</span>U L\u2013N (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1N, ir.voltL2N, ir.voltL3N)}</strong></span><span class="r muted">207\u2013244 V</span><span class="r">${badge(ckVLN)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.3</span>U L\u2013L (L1-L2 / L2-L3 / L1-L3)</span><span class="r"><strong>${fv(ir.voltL1L2, ir.voltL2L3, ir.voltL1L3)}</strong></span><span class="r muted">360\u2013424 V</span><span class="r">${badge(ckVLL)}</span></div>
+        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.4</span>U N\u2013PE</span><span class="r"><strong>${ir.voltNPE ? esc(ir.voltNPE) + "&thinsp;V" : "\u2013"}</strong></span><span class="r muted">Spannungsfrei</span><span class="r">${badge(ckVNPE)}</span></div>
+        <div class="trow${!hasInletMeas ? " row-last" : ""}" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U L\u2013PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE, ir.voltL2PE, ir.voltL3PE)}</strong></span><span class="r muted">207\u2013244 V</span><span class="r">${badge(ckVLPE)}</span></div>
+        ${hasInletMeas ? `<div class="trow${!ir.ik ? " row-last" : ""}" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.6</span>Z_s Eingang</span><span class="r"><strong>${ir.zs ? esc(ir.zs) + "&thinsp;\u03A9" : "\u2013"}</strong></span><span class="r muted">\u2013</span><span class="r"><span class="muted">\u2013</span></span></div>${ir.ik ? `<div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.7</span>I_k Eingang</span><span class="r"><strong>${esc(ir.ik)}&thinsp;A</strong></span><span class="r muted">\u2013</span><span class="r"><span class="muted">\u2013</span></span></div>` : ""}` : ""}
+
+      </div></section>
+    ${pdfRcdRows.length ? `<section class="block"><header class="bar"><span><strong>${n}.${rcdSec} \xB7 RCD-Pr\xFCfung</strong><span class="bar-sub">${pdfRcdRows.length} Stk.</span></span></header>
+      <div class="block-body">
+        <div class="thead" style="grid-template-columns:1fr 80px 100px 90px"><span>Anschluss / RCD</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">\xBDN \u2013 N</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">&le; 300 ms</span></span></div>
+        ${pdfRcdRows.map(({ rowType, rcd, outlet, oid, rowLabel, iAnLimit, protLabel }, i) => {
+            const or = getOR(inst.id, oid);
+            const okT = pdfChk(or.rcdT1, void 0, 300);
+            const okIan = iAnLimit ? pdfChk(or.rcdIan, iAnLimit / 2, iAnLimit) : "";
+            const bgStyle = rowType === "rcd" ? "background:rgba(245,166,35,0.04);" : "";
+            return `<div class="trow${i === pdfRcdRows.length - 1 ? " row-last" : ""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan === "bad" ? " bad" : ""}"><strong>${esc(or.rcdIan) || "\u2013"}</strong>${iAnLimit ? `<br><span class="muted" style="font-size:8px">${iAnLimit / 2}\u2013${iAnLimit}&thinsp;mA</span>` : ""}</span><span class="r${okT === "bad" ? " bad" : ""}"><strong>${esc(or.rcdT1) || "\u2013"}</strong></span></div>`;
+          }).join("")}
+      </div></section>` : ""}
+    ${renderChunk(chunk, isLast)}
+    ${isLast ? cableHTML : ""}
+    ${isLast ? bemHTML : ""}
+  </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pNum} / PTOT</span></footer>
+</article>`;
+        } else {
+          pages += `<article class="page">
+  ${pageH}
+  <main class="page-body">
+    <div style="margin:4px 0 8px"><div class="kicker">${esc(inst.name)} \xB7 Verteiler ${n} von ${total} \u2013 Fortsetzung</div></div>
+    ${renderChunk(chunk, isLast)}
+    ${isLast ? cableHTML : ""}
+    ${isLast ? bemHTML : ""}
+  </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pNum} / PTOT</span></footer>
+</article>`;
+        }
+      });
+    });
+    pdfPC++;
+    const lastNum = String(pdfPC).padStart(2, "0");
+    pages += `<article class="page">
+  ${pageH}
+  <main class="page-body">
+    <div class="page-title"><div class="kicker">Abschluss \xB7 M\xE4ngelliste \xB7 Best\xE4tigung</div><h1>Befund &amp; Unterschrift</h1></div>
+    <section class="block"><header class="bar"><span><strong>E \xB7 M\xE4ngel und Auflagen</strong><span class="bar-sub">${maengel.length} Eintr${maengel.length === 1 ? "ag" : "\xE4ge"}</span></span></header>
+      <div class="block-body">${maengel.length === 0 ? `<div style="padding:6px 10px;color:#7a8290;font-size:9.5px">Keine M\xE4ngel protokolliert.</div>` : `
+        <div class="thead" style="grid-template-columns:40px 200px 1fr 80px"><span>Nr.</span><span>Verteiler</span><span>Beschreibung</span><span class="r">Schwere</span></div>
+        ${maengel.map((m, i) => `<div class="trow${i === maengel.length - 1 ? " row-last" : ""}" style="grid-template-columns:40px 200px 1fr 80px"><span class="muted">M${String(i + 1).padStart(2, "0")}</span><span>${esc(m.inst.name)}</span><span>${esc(m.item)}</span><span class="r">${m.type === "bad" ? `<span class="bad">\u2715 Mangel</span>` : `<span class="warn">! Hinweis</span>`}</span></div>`).join("")}`}
+      </div></section>
+    <section class="block"><header class="bar"><span><strong>F \xB7 Unterschrift</strong><span class="bar-sub">Pr\xFCfende Elektrofachkraft</span></span></header>
+      <div class="block-body">
+        <div class="sign" style="padding:12px 12px 8px"><div class="sign-role">Pr\xFCfende Elektrofachkraft \xB7 DIN VDE 0100-600</div>${_sig ? `<img src="${_sig.replace(/"/g, "&quot;")}" style="height:48px;max-width:200px;object-fit:contain;display:block;margin-bottom:4px">` : `<div class="sign-line"></div>`}<div class="sign-name">${esc(inspMeta.inspector || "\u2013")}</div><div class="muted">${esc(inspMeta.location || "")}${inspMeta.date ? " \xB7 " + esc(inspMeta.date) : ""}</div></div>
+      </div></section>
+    <div class="spacer-auto"></div>
+    <section class="block"><header class="bar"><span><strong>Hinweis</strong></span></header>
+      <div class="block-body"><div class="bemerkung small">Dieses Protokoll ist im Zuge der Veranstaltung mitzuf\xFChren und bei der pr\xFCfenden Elektrofachkraft zu archivieren. Bei Erweiterung oder Umbau der Anlage ist eine erneute Pr\xFCfung der betroffenen Anlagenteile gem\xE4\xDF DIN VDE 0100-600 erforderlich.</div></div></section>
+  </main>
+  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${lastNum} / PTOT</span></footer>
+</article>`;
+    pages = pages.replace(/PTOT/g, String(pdfPC));
+    const fullHtml = `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`;
+    return fullHtml;
+  }
+
+  // app/Stromplaner.jsx
+  var PHASES2 = ["L1", "L2", "L3"];
   var VOLT = 230;
   var LS_KEY = "stromplaner_autosave";
-  var CONN = {
+  var CONN2 = {
     CEE16: { label: "16A 3LNPE 400V", amp: 16, phases: 3 },
     CEE32: { label: "32A 3LNPE 400V", amp: 32, phases: 3 },
     CEE63: { label: "63A 3LNPE 400V", amp: 63, phases: 3 },
@@ -29114,7 +29578,7 @@ button:active { filter: brightness(0.95); }
   };
   var BREAKER_TYPES = ["B", "C", "D", "K"];
   var PROTECTION_TYPES = ["LS", "RCBO", "Keine"];
-  var KAPPA_CU = 56;
+  var KAPPA_CU2 = 56;
   var CABLE_CS_H07 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95];
   var I_CAP_H07 = { 1.5: 23, 2.5: 30, 4: 38, 6: 48, 10: 64, 16: 84, 25: 109, 35: 135, 50: 162, 70: 202, 95: 245 };
   var F_TEMP = { 10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71 };
@@ -29133,20 +29597,20 @@ button:active { filter: brightness(0.95); }
       const tbl = fArt === "einl" ? F_HAE_EINL : F_HAE_GEBUND;
       if (tbl[Math.min(+fN, 10)]) f *= tbl[Math.min(+fN, 10)];
     }
-    return { base, fTotal: round2(f), izul: round2(base * f) };
+    return { base, fTotal: round22(f), izul: round22(base * f) };
   };
-  var calcVoltDrop = (I, l, A, cosPhi, threePhase) => {
+  var calcVoltDrop2 = (I, l, A, cosPhi, threePhase) => {
     if (!+l || !+A || !+cosPhi) return null;
     const fac = threePhase ? Math.sqrt(3) : 2;
-    const duV = fac * +I * +l * +cosPhi / (KAPPA_CU * +A);
-    return { V: round2(duV), pct: round2(duV / 230 * 100) };
+    const duV = fac * +I * +l * +cosPhi / (KAPPA_CU2 * +A);
+    return { V: round22(duV), pct: round22(duV / 230 * 100) };
   };
   var minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct = 3) => {
     if (!+l || !+cosPhi || !+I) return null;
     const fac = threePhase ? Math.sqrt(3) : 2;
-    return round2(fac * +I * +l * +cosPhi / (KAPPA_CU * (maxPct / 100) * 230));
+    return round22(fac * +I * +l * +cosPhi / (KAPPA_CU2 * (maxPct / 100) * 230));
   };
-  var CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
+  var CONN_SORTED_ENTRIES = Object.entries(CONN2).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
   var changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v || "").split("-")[0]] || [];
   var CHANGELOG = {
     "1.3.0": [
@@ -29154,6 +29618,10 @@ button:active { filter: brightness(0.95); }
       "Android-App: neuer Tab \u201ESitzung\u201C \u2013 Pr\xFCfwerte vom Handy erscheinen live am PC",
       "Android-App hat die neue Kennung \u201Ede.stromplaner.app\u201C und wird einmalig neben der alten installiert \u2013 Pr\xFCfergebnisse aus der alten App vorher an den PC senden, dann die alte deinstallieren",
       "Android-App: aktualisiert auf Android 16 (API 36) \u2013 Vorbereitung f\xFCr den Google Play Store",
+      "Android-App: spontan pr\xFCfen ohne PC \u2013 neuen Plan anlegen, Verteiler direkt in der Pr\xFCfung hinzuf\xFCgen und Verteiler-Typen am Handy anlegen; das Handy merkt sich alle Typen aus geladenen Pl\xE4nen",
+      "Android-App: Pr\xFCfprotokoll als PDF direkt am Handy (gleiches Layout wie am PC) und \xFCber das Teilen-Men\xFC verschicken",
+      "Android-App: Sitzungen auch vom Handy starten und f\xFCr alle beenden",
+      "Bibliothek: Laden eines Plans oder Beitreten einer Sitzung erg\xE4nzt die gespeicherten Verteiler-Typen und Verbraucher nur noch, statt sie zu ersetzen",
       "\u201ESync\u201C (Pl\xE4ne \xFCber den Server hoch-/herunterladen) entfernt \u2013 ersetzt durch Sitzungen. Das Teilen per QR-Code im WLAN hei\xDFt jetzt \u201ETeilen\u201C (PC und Handy)",
       "Update-Kanal w\xE4hlbar (Updates \u2192 Stabil / Beta): Wer m\xF6chte, bekommt Beta-Versionen zum Testen direkt als In-App-Update",
       "Header mit einheitlichen Icons statt Emojis",
@@ -29236,28 +29704,28 @@ button:active { filter: brightness(0.95); }
     a.click();
     URL.revokeObjectURL(url);
   };
-  var is3ph = (c) => (CONN[c]?.phases || 1) === 3;
-  var isMulticore = (c) => !!CONN[c]?.isMulticore;
+  var is3ph2 = (c) => (CONN2[c]?.phases || 1) === 3;
+  var isMulticore2 = (c) => !!CONN2[c]?.isMulticore;
   var uid = () => Math.random().toString(36).slice(2, 9);
   var clone3 = (x) => JSON.parse(JSON.stringify(x));
-  var round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
-  var alphaSort = (arr, key) => [...arr].sort((a, b) => (a[key] || "").localeCompare(b[key] || "", "de", { numeric: true, sensitivity: "base" }));
-  var sortOutlets = (outlets) => [...outlets].sort((a, b) => {
+  var round22 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  var alphaSort2 = (arr, key) => [...arr].sort((a, b) => (a[key] || "").localeCompare(b[key] || "", "de", { numeric: true, sensitivity: "base" }));
+  var sortOutlets2 = (outlets) => [...outlets].sort((a, b) => {
     const as = a.connector === "SCHUKO" ? 0 : 1, bs = b.connector === "SCHUKO" ? 0 : 1;
     if (as !== bs) return as - bs;
     return a.label.localeCompare(b.label, "de", { numeric: true });
   });
-  var migrateOutlet = (o, idx) => {
+  var migrateOutlet2 = (o, idx) => {
     const prot = o.protection === "RCD" ? "Keine" : o.protection || (o.connector === "SCHUKO" || o.connector === "MC" ? "RCBO" : "LS");
     return {
       ...o,
-      phase: o.phase || (is3ph(o.connector) ? "L1L2L3" : PHASES[idx % 3]),
+      phase: o.phase || (is3ph2(o.connector) ? "L1L2L3" : PHASES2[idx % 3]),
       breaker: o.breaker || "C",
       protection: prot,
       rcdId: o.rcdId ?? null,
       rcdMa: prot === "RCBO" ? o.rcdMa ?? 30 : void 0,
       // Multicore: number of slots (default 6 if not set)
-      mcSlots: isMulticore(o.connector) ? o.mcSlots || 6 : void 0
+      mcSlots: isMulticore2(o.connector) ? o.mcSlots || 6 : void 0
     };
   };
   var migrateBoxType = (bt) => {
@@ -29272,7 +29740,7 @@ button:active { filter: brightness(0.95); }
     });
     const outlets = bt.outlets.map((o, i) => {
       const extra = rcdMigMap[o.id] ? { rcdId: rcdMigMap[o.id] } : {};
-      return migrateOutlet({ ...o, ...extra }, i);
+      return migrateOutlet2({ ...o, ...extra }, i);
     });
     return { ...bt, rcds, outlets };
   };
@@ -29291,7 +29759,7 @@ button:active { filter: brightness(0.95); }
     return Array.from({ length: n }, (_, i) => ({
       slotNum: i + 1,
       label: `Steckplatz ${i + 1}`,
-      phase: PHASES[i % 3]
+      phase: PHASES2[i % 3]
     }));
   };
   function InlineSelect({ options, value, onChange, placeholder, style }) {
@@ -29509,8 +29977,8 @@ button:active { filter: brightness(0.95); }
     const [showDonateModal, setShowDonateModal] = (0, import_react5.useState)(false);
     const [changelogVersion, setChangelogVersion] = (0, import_react5.useState)(null);
     const [mainConns, setMainConns] = (0, import_react5.useState)([]);
-    const [boxTypes, setBoxTypes] = (0, import_react5.useState)(alphaSort(clone3(DEFAULT_BOX_TYPES), "name"));
-    const [loads, setLoads] = (0, import_react5.useState)(alphaSort(clone3(DEFAULT_LOADS), "name"));
+    const [boxTypes, setBoxTypes] = (0, import_react5.useState)(alphaSort2(clone3(DEFAULT_BOX_TYPES), "name"));
+    const [loads, setLoads] = (0, import_react5.useState)(alphaSort2(clone3(DEFAULT_LOADS), "name"));
     const [instances, setInstances] = (0, import_react5.useState)([]);
     const [placements, setPlacements] = (0, import_react5.useState)([]);
     const [schaltbildLayout, setSchaltbildLayout] = (0, import_react5.useState)({ positions: {}, consumerPositions: {}, annotations: [] });
@@ -29556,6 +30024,8 @@ button:active { filter: brightness(0.95); }
     const [erweiterSubTab, setErweiterSubTab] = (0, import_react5.useState)("dim");
     const [erweitertOpen, setErweitertOpen] = (0, import_react5.useState)(false);
     const [loaded, setLoaded] = (0, import_react5.useState)(false);
+    const libBasis = (0, import_react5.useRef)(null);
+    const libGeloescht = (0, import_react5.useRef)({ boxTypes: /* @__PURE__ */ new Set(), loads: /* @__PURE__ */ new Set() });
     const [helpSection, setHelpSection] = (0, import_react5.useState)(null);
     const [syncServer, setSyncServer] = (0, import_react5.useState)(() => localStorage.getItem("sp_sync_server") || "");
     const [syncToken, setSyncToken] = (0, import_react5.useState)(() => localStorage.getItem("sp_sync_token") || "");
@@ -29577,8 +30047,8 @@ button:active { filter: brightness(0.95); }
           if (d._format === "stromplaner") {
             if (d.meta) setMeta(d.meta);
             if (d.mainConns) setMainConns(d.mainConns);
-            if (d.boxTypes) setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType), "name"));
-            if (d.loads) setLoads(alphaSort(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
+            if (d.boxTypes) setBoxTypes(alphaSort2(d.boxTypes.map(migrateBoxType), "name"));
+            if (d.loads) setLoads(alphaSort2(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
             if (d.instances) setInstances(d.instances.map(migrateInstance));
             if (d.placements) setPlacements(d.placements);
             if (d.inspMeta) setInspMeta(d.inspMeta);
@@ -29593,8 +30063,9 @@ button:active { filter: brightness(0.95); }
       }
       if (window.electronAPI?.loadLibrary) {
         window.electronAPI.loadLibrary().then((d) => {
-          if (d?.boxTypes) setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType), "name"));
-          if (d?.loads) setLoads(alphaSort(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
+          libBasis.current = d || null;
+          if (d?.boxTypes) setBoxTypes(alphaSort2(d.boxTypes.map(migrateBoxType), "name"));
+          if (d?.loads) setLoads(alphaSort2(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
         }).catch(() => {
         }).finally(() => setLoaded(true));
       } else {
@@ -29637,11 +30108,29 @@ button:active { filter: brightness(0.95); }
       if (!loaded || !window.electronAPI?.saveLibrary) return;
       clearTimeout(libSaveTimer.current);
       libSaveTimer.current = setTimeout(() => {
-        window.electronAPI.saveLibrary({ boxTypes, loads }).catch(() => {
+        const merge = (basis, aktuell, weg) => {
+          const m = new Map((basis || []).filter((x) => !weg.has(x.id)).map((x) => [x.id, x]));
+          aktuell.forEach((x) => m.set(x.id, x));
+          return alphaSort2([...m.values()], "name");
+        };
+        const lib = { boxTypes: merge(libBasis.current?.boxTypes, boxTypes, libGeloescht.current.boxTypes), loads: merge(libBasis.current?.loads, loads, libGeloescht.current.loads) };
+        libBasis.current = lib;
+        window.electronAPI.saveLibrary(lib).catch(() => {
         });
       }, 1e3);
       return () => clearTimeout(libSaveTimer.current);
     }, [boxTypes, loads, loaded]);
+    const libLoeschenMerken = (art, setter) => (upd) => setter((prev) => {
+      const next = typeof upd === "function" ? upd(prev) : upd;
+      const ids = new Set(next.map((x) => x.id));
+      prev.forEach((x) => {
+        if (!ids.has(x.id)) libGeloescht.current[art].add(x.id);
+      });
+      next.forEach((x) => libGeloescht.current[art].delete(x.id));
+      return next;
+    });
+    const setBoxTypesBib = (0, import_react5.useCallback)(libLoeschenMerken("boxTypes", setBoxTypes), []);
+    const setLoadsBib = (0, import_react5.useCallback)(libLoeschenMerken("loads", setLoads), []);
     const saveTimer = (0, import_react5.useRef)(null);
     const schematicSvgRef = (0, import_react5.useRef)(null);
     (0, import_react5.useEffect)(() => {
@@ -29735,9 +30224,9 @@ button:active { filter: brightness(0.95); }
         r.L1 = totalAmp;
         r.L2 = totalAmp;
         r.L3 = totalAmp;
-      } else if (isMulticore(outlet.connector)) {
+      } else if (isMulticore2(outlet.connector)) {
         const slot = p.mcSlot || 1;
-        const ph = PHASES[(slot - 1) % 3];
+        const ph = PHASES2[(slot - 1) % 3];
         r[ph] = totalAmp;
       } else {
         const ph = outlet.phase || "L1";
@@ -29867,8 +30356,8 @@ Fortfahren?`);
       }
       if (d.meta) setMeta(d.meta);
       if (d.mainConns) setMainConns(d.mainConns || []);
-      if (d.boxTypes) setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType), "name"));
-      if (d.loads) setLoads(alphaSort(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
+      if (d.boxTypes) setBoxTypes(alphaSort2(d.boxTypes.map(migrateBoxType), "name"));
+      if (d.loads) setLoads(alphaSort2(d.loads.map((l) => ({ ...l, threePhase: l.threePhase || false })), "name"));
       if (d.instances) setInstances(d.instances.map(migrateInstance));
       if (d.placements) setPlacements(d.placements);
       if (d.inspMeta) setInspMeta(d.inspMeta);
@@ -29880,7 +30369,7 @@ Fortfahren?`);
       return true;
     };
     const saveJSON = async () => {
-      const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances: alphaSort(instances, "name"), placements, inspMeta, inspResults, cableCalcs, voltCalcs, schaltbildLayout };
+      const data = { _format: "stromplaner", _version: 4, meta, mainConns, boxTypes, loads, instances: alphaSort2(instances, "name"), placements, inspMeta, inspResults, cableCalcs, voltCalcs, schaltbildLayout };
       if (window.electronAPI?.savePlan) {
         const result = await window.electronAPI.savePlan({ json: JSON.stringify(data, null, 2), suggestedName: `Stromplan_${meta.production.replace(/\s+/g, "_")}` });
         if (result?.recents) setRecents(result.recents);
@@ -29933,7 +30422,7 @@ Fortfahren?`);
         mainConns,
         boxTypes,
         loads,
-        instances: alphaSort(instances, "name"),
+        instances: alphaSort2(instances, "name"),
         placements,
         inspMeta,
         inspResults,
@@ -29975,7 +30464,7 @@ Fortfahren?`);
           mainConns,
           boxTypes,
           loads,
-          instances: alphaSort(instances, "name"),
+          instances: alphaSort2(instances, "name"),
           placements,
           inspMeta,
           inspResults,
@@ -30018,12 +30507,12 @@ Fortfahren?`);
         const type = boxTypeById[inst.typeId];
         const pOut = inst.parentId ? boxTypeById[instById[inst.parentId]?.typeId]?.outlets?.find((o) => o.id === inst.parentOutletId) : null;
         const maxA = pOut ? Math.min(type?.feedAmp || 0, pOut.amp) : type?.feedAmp || 0;
-        const conn = type ? CONN[type.feedConnector]?.label || "" : "";
+        const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
         const peak = Math.max(t.L1, t.L2, t.L3);
         const pct = maxA ? Math.round(peak / maxA * 100) : 0;
         const note = maxA && peak > maxA ? "\xDCBERLAST!" : pct > 80 ? ">80%" : "";
         const mainC = inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name : "\u2014";
-        ovRows.push([inst.name, type?.name, conn, inst.parentId ? instById[inst.parentId]?.name : "Einspeisung", mainC, round2(t.L1), round2(t.L2), round2(t.L3), maxA, note]);
+        ovRows.push([inst.name, type?.name, conn, inst.parentId ? instById[inst.parentId]?.name : "Einspeisung", mainC, round22(t.L1), round22(t.L2), round22(t.L3), maxA, note]);
       });
       const ovWs = utils.aoa_to_sheet(ovRows);
       utils.book_append_sheet(wb, ovWs, "\xDCbersicht");
@@ -30039,7 +30528,7 @@ Fortfahren?`);
         });
         const peak = Math.max(tot.L1, tot.L2, tot.L3);
         const pct = mc.amp ? Math.round(peak / mc.amp * 100) : 0;
-        haRows.push([mc.name, mc.amp || "\u2013", round2(tot.L1), round2(tot.L2), round2(tot.L3), mc.amp ? `${pct}%` : "\u2013"]);
+        haRows.push([mc.name, mc.amp || "\u2013", round22(tot.L1), round22(tot.L2), round22(tot.L3), mc.amp ? `${pct}%` : "\u2013"]);
       });
       const haWs = utils.aoa_to_sheet(haRows);
       utils.book_append_sheet(wb, haWs, "Einspeisepunkte");
@@ -30047,7 +30536,7 @@ Fortfahren?`);
         const type = boxTypeById[inst.typeId];
         const own = ownLoad(inst.id);
         const tot = totalLoad(inst.id);
-        const conn = type ? CONN[type.feedConnector]?.label || "" : "";
+        const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
         const rows = [
           [inst.name],
           ["Typ", type?.name],
@@ -30059,28 +30548,28 @@ Fortfahren?`);
         placements.filter((p) => p.instanceId === inst.id).forEach((p) => {
           const l = loadById[p.loadId];
           const out = type?.outlets.find((o) => o.id === p.outletId);
-          const amp = l && l.watt ? round2(l.watt / VOLT) : "";
+          const amp = l && l.watt ? round22(l.watt / VOLT) : "";
           let ph = "";
           let slot = "";
           if (l?.threePhase) {
             ph = "L1+L2+L3";
-          } else if (out && isMulticore(out.connector)) {
+          } else if (out && isMulticore2(out.connector)) {
             const s = p.mcSlot || 1;
-            ph = PHASES[(s - 1) % 3];
+            ph = PHASES2[(s - 1) % 3];
             slot = `Steckplatz ${s}`;
           } else {
             ph = out?.phase || "";
           }
           rows.push([l?.name || "", out?.label || "", slot, ph, l?.watt || "", amp, out?.breaker || "", out?.protection || ""]);
         });
-        rows.push([], ["EIGENLAST", "", "", "L1", round2(own.L1), "L2", round2(own.L2), "L3", round2(own.L3)]);
-        rows.push(["GESAMTLAST", "", "", "L1", round2(tot.L1), "L2", round2(tot.L2), "L3", round2(tot.L3)]);
+        rows.push([], ["EIGENLAST", "", "", "L1", round22(own.L1), "L2", round22(own.L2), "L3", round22(own.L3)]);
+        rows.push(["GESAMTLAST", "", "", "L1", round22(tot.L1), "L2", round22(tot.L2), "L3", round22(tot.L3)]);
         const ws = utils.aoa_to_sheet(rows);
         const safeName = (inst.name || inst.id).slice(0, 28).replace(/[\\/?*[\]:]/g, "");
         utils.book_append_sheet(wb, ws, safeName || inst.id);
       });
       const lRows = [["VERBRAUCHER"], [], ["Name", "W", "A", "3-phasig"]];
-      loads.forEach((l) => lRows.push([l.name, l.watt || "", l.watt ? round2(l.watt / VOLT) : "", l.threePhase ? "Ja" : "Nein"]));
+      loads.forEach((l) => lRows.push([l.name, l.watt || "", l.watt ? round22(l.watt / VOLT) : "", l.threePhase ? "Ja" : "Nein"]));
       utils.book_append_sheet(wb, utils.aoa_to_sheet(lRows), "Verbraucher");
       writeFileSync(wb, `Stromplan_${meta.production.replace(/\s+/g, "_")}.xlsx`);
     };
@@ -30090,8 +30579,8 @@ Fortfahren?`);
         uiAlert("Popup-Blocker aktiv \u2013 bitte erlauben.");
         return;
       }
-      const phBar = (vals, maxA) => PHASES.map((ph) => {
-        const a = round2(vals[ph]);
+      const phBar = (vals, maxA) => PHASES2.map((ph) => {
+        const a = round22(vals[ph]);
         const pct = maxA ? Math.round(a / maxA * 100) : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
         return `<div style="flex:1;text-align:center;padding:4px 8px;background:#f8f8f8;border:1px solid #ddd;border-radius:4px">
@@ -30121,18 +30610,18 @@ Fortfahren?`);
         const own = ownLoad(inst.id);
         const tot = totalLoad(inst.id);
         const maxA = type?.feedAmp || 0;
-        const conn = type ? CONN[type.feedConnector]?.label || "" : "";
+        const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
         const rows2 = placements.filter((p) => p.instanceId === inst.id).map((p) => {
           const l = loadById[p.loadId];
           const out = type?.outlets.find((o) => o.id === p.outletId);
           if (!l) return null;
-          const amp = l.watt ? round2(l.watt / VOLT) : 0;
+          const amp = l.watt ? round22(l.watt / VOLT) : 0;
           let ph = "", slot = "";
           if (l.threePhase) {
             ph = "L1+L2+L3";
-          } else if (out && isMulticore(out.connector)) {
+          } else if (out && isMulticore2(out.connector)) {
             const s = p.mcSlot || 1;
-            ph = PHASES[(s - 1) % 3];
+            ph = PHASES2[(s - 1) % 3];
             slot = `Steckplatz ${s}`;
           } else {
             ph = out?.phase || "";
@@ -30207,7 +30696,7 @@ Fortfahren?`);
         voltCalcs.forEach((c) => {
           const is3 = c.threePhase === "3ph";
           const ready = c.I !== "" && c.l !== "" && c.cosPhi !== "" && c.cableA !== "" && c.threePhase !== "";
-          const du = ready ? calcVoltDrop(+c.I, +c.l, +c.cableA, +c.cosPhi, is3) : null;
+          const du = ready ? calcVoltDrop2(+c.I, +c.l, +c.cableA, +c.cosPhi, is3) : null;
           const minA = ready ? minCsVoltDrop(+c.I, +c.l, +c.cosPhi, is3, 3) : null;
           const pct = du ? du.pct : null;
           const col = pct === null ? "#666" : pct <= 3 ? "#1a7a3a" : pct <= 5 ? "#b05a00" : "#c0392b";
@@ -30409,7 +30898,7 @@ Fortfahren?`);
         ownLoad,
         meta
       }
-    )), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("overview") }, /* @__PURE__ */ import_react5.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("schematic") }, /* @__PURE__ */ import_react5.default.createElement(SchematicTab, { ...sharedProps, meta, svgRef: schematicSvgRef, placements, loadById, schaltbildLayout, setSchaltbildLayout })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("boxtypes") }, /* @__PURE__ */ import_react5.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes, instances })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("loads") }, /* @__PURE__ */ import_react5.default.createElement(LoadsTab, { loads, setLoads })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("inspection") }, /* @__PURE__ */ import_react5.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults, inspSign, uploadInspSign, removeInspSign })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("erweitert") }, /* @__PURE__ */ import_react5.default.createElement(
+    )), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("overview") }, /* @__PURE__ */ import_react5.default.createElement(OverviewTab, { ...sharedProps, meta, placements, loads, loadById })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("schematic") }, /* @__PURE__ */ import_react5.default.createElement(SchematicTab, { ...sharedProps, meta, svgRef: schematicSvgRef, placements, loadById, schaltbildLayout, setSchaltbildLayout })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("boxtypes") }, /* @__PURE__ */ import_react5.default.createElement(BoxTypesTab, { boxTypes, setBoxTypes: setBoxTypesBib, instances })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("loads") }, /* @__PURE__ */ import_react5.default.createElement(LoadsTab, { loads, setLoads: setLoadsBib })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("inspection") }, /* @__PURE__ */ import_react5.default.createElement(InspectionTab, { ...sharedProps, meta, placements, loadById, inspMeta, setInspMeta, inspResults, setInspResults, inspSign, uploadInspSign, removeInspSign })), /* @__PURE__ */ import_react5.default.createElement("div", { style: panelStyle("erweitert") }, /* @__PURE__ */ import_react5.default.createElement(
       ErweitertTab,
       {
         cableCalcs,
@@ -30621,8 +31110,8 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       const parentType = inst.parentId ? boxTypeById[instById[inst.parentId]?.typeId] : null;
       const ol = isOverloaded(inst.id);
       const ud = isUnderdimensioned(inst.id);
-      const sortedOther = alphaSort(instances.filter((o) => o.id !== inst.id), "name");
-      const parentOutlets = parentType ? sortOutlets(parentType.outlets) : [];
+      const sortedOther = alphaSort2(instances.filter((o) => o.id !== inst.id), "name");
+      const parentOutlets = parentType ? sortOutlets2(parentType.outlets) : [];
       const takenOutletIds = new Set(instances.filter((i) => i.id !== inst.id && i.parentId === inst.parentId && i.parentId).map((i) => i.parentOutletId).filter(Boolean));
       const availableOutlets = parentOutlets.filter((o) => {
         if (takenOutletIds.has(o.id) && o.id !== inst.parentOutletId) return false;
@@ -30635,7 +31124,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
         return a.label.localeCompare(b.label, "de", { numeric: true });
       });
       const isRoot = !inst.parentId;
-      return /* @__PURE__ */ import_react5.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, ol && /* @__PURE__ */ import_react5.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(TriangleAlert, { size: 16, "aria-label": "\xDCberlastet" })), ud && /* @__PURE__ */ import_react5.default.createElement("span", { title: `Unterdimensioniert: Verteiler-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) gr\xF6\xDFer als Anschluss`, style: { color: "#f5a623", display: "inline-flex", marginLeft: ol ? 4 : 0 } }, /* @__PURE__ */ import_react5.default.createElement(Zap, { size: 15, "aria-label": "Unterdimensioniert" })), isAdapted(inst.id) && /* @__PURE__ */ import_react5.default.createElement("span", { title: "Adapter: Steckertyp des Verteilers stimmt nicht mit Anschluss \xFCberein", style: { color: "#a78bfa", display: "inline-flex", marginLeft: ol || ud ? 4 : 0 } }, /* @__PURE__ */ import_react5.default.createElement(Plug, { size: 15, "aria-label": "Adapter" }))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.inputSm, value: inst.name, onChange: (e) => updateInstance(inst.id, { name: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, type?.name), /* @__PURE__ */ import_react5.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, type ? CONN[type.feedConnector]?.label : ""), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("select", { style: S.selectSm, value: inst.parentId || "", onChange: (e) => setParentWithValidation(inst.id, e.target.value, null) }, /* @__PURE__ */ import_react5.default.createElement("option", { value: "" }, "\u2014 Einspeisung \u2014"), sortedOther.map((o) => /* @__PURE__ */ import_react5.default.createElement("option", { key: o.id, value: o.id }, o.name)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement(
+      return /* @__PURE__ */ import_react5.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, ol && /* @__PURE__ */ import_react5.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(TriangleAlert, { size: 16, "aria-label": "\xDCberlastet" })), ud && /* @__PURE__ */ import_react5.default.createElement("span", { title: `Unterdimensioniert: Verteiler-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) gr\xF6\xDFer als Anschluss`, style: { color: "#f5a623", display: "inline-flex", marginLeft: ol ? 4 : 0 } }, /* @__PURE__ */ import_react5.default.createElement(Zap, { size: 15, "aria-label": "Unterdimensioniert" })), isAdapted(inst.id) && /* @__PURE__ */ import_react5.default.createElement("span", { title: "Adapter: Steckertyp des Verteilers stimmt nicht mit Anschluss \xFCberein", style: { color: "#a78bfa", display: "inline-flex", marginLeft: ol || ud ? 4 : 0 } }, /* @__PURE__ */ import_react5.default.createElement(Plug, { size: 15, "aria-label": "Adapter" }))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.inputSm, value: inst.name, onChange: (e) => updateInstance(inst.id, { name: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, type?.name), /* @__PURE__ */ import_react5.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, type ? CONN2[type.feedConnector]?.label : ""), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("select", { style: S.selectSm, value: inst.parentId || "", onChange: (e) => setParentWithValidation(inst.id, e.target.value, null) }, /* @__PURE__ */ import_react5.default.createElement("option", { value: "" }, "\u2014 Einspeisung \u2014"), sortedOther.map((o) => /* @__PURE__ */ import_react5.default.createElement("option", { key: o.id, value: o.id }, o.name)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement(
         "select",
         {
           style: S.selectSm,
@@ -30673,14 +31162,14 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
     const own = ownLoad(inst.id);
     const tot = totalLoad(inst.id);
     const maxA = type?.feedAmp || 0;
-    const connLabel = type ? CONN[type.feedConnector]?.label || "" : "";
-    const sortedOutlets = type ? sortOutlets(type.outlets) : [];
+    const connLabel = type ? CONN2[type.feedConnector]?.label || "" : "";
+    const sortedOutlets = type ? sortOutlets2(type.outlets) : [];
     const getAvailableOutlets = (loadId) => {
       const load = loadById[loadId];
       if (!load) return sortedOutlets;
-      return load.threePhase ? sortedOutlets.filter((o) => is3ph(o.connector)) : sortedOutlets.filter((o) => !is3ph(o.connector));
+      return load.threePhase ? sortedOutlets.filter((o) => is3ph2(o.connector)) : sortedOutlets.filter((o) => !is3ph2(o.connector));
     };
-    const sortedLoads = alphaSort(loads, "name");
+    const sortedLoads = alphaSort2(loads, "name");
     const loadOptions = sortedLoads.map((l) => ({ value: l.id, label: `${l.name} (${l.watt || "?"}W${l.threePhase ? " 3ph" : ""})` }));
     const mainConnTotals = mainConns.map((mc) => {
       const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
@@ -30693,39 +31182,39 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       });
       return { mc, tot: tot2 };
     });
-    return /* @__PURE__ */ import_react5.default.createElement("div", null, (mainConns.length > 0 || rootInstances.length > 0) && /* @__PURE__ */ import_react5.default.createElement(Section, { title: "Einspeisepunkte \u2013 Gesamtlast" }, mainConnTotals.map(({ mc, tot: t }) => /* @__PURE__ */ import_react5.default.createElement("div", { key: mc.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6 } }, mc.name, mc.amp ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontWeight: 400, color: "#9aa4af", fontSize: 12 } }, " (max ", mc.amp, "A)") : ""), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
+    return /* @__PURE__ */ import_react5.default.createElement("div", null, (mainConns.length > 0 || rootInstances.length > 0) && /* @__PURE__ */ import_react5.default.createElement(Section, { title: "Einspeisepunkte \u2013 Gesamtlast" }, mainConnTotals.map(({ mc, tot: t }) => /* @__PURE__ */ import_react5.default.createElement("div", { key: mc.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6 } }, mc.name, mc.amp ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontWeight: 400, color: "#9aa4af", fontSize: 12 } }, " (max ", mc.amp, "A)") : ""), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
       const a = t[ph];
       const pct = mc.amp ? a / mc.amp * 100 : 0;
       const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-      return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round2(a), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phasePct }, mc.amp ? `${Math.round(pct)}% von ${mc.amp}A` : ""));
+      return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round22(a), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phasePct }, mc.amp ? `${Math.round(pct)}% von ${mc.amp}A` : ""));
     })))), rootInstances.filter((i) => !i.mainConnectionId).map((ri) => {
       const rt = totalLoad(ri.id);
       const rType = boxTypeById[ri.typeId];
       const rMax = rType?.feedAmp || 0;
-      return /* @__PURE__ */ import_react5.default.createElement("div", { key: ri.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontWeight: 400, fontSize: 11 } }, "(kein Einspeisepunkt zugewiesen)")), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
+      return /* @__PURE__ */ import_react5.default.createElement("div", { key: ri.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontWeight: 400, fontSize: 11 } }, "(kein Einspeisepunkt zugewiesen)")), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
         const a = rt[ph];
         const pct = rMax ? a / rMax * 100 : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-        return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col, fontSize: 16 } }, round2(a), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phasePct }, rMax ? `${Math.round(pct)}% von ${rMax}A` : ""));
+        return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col, fontSize: 16 } }, round22(a), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phasePct }, rMax ? `${Math.round(pct)}% von ${rMax}A` : ""));
       })));
     })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.boxTabs }, activeInstances.map((i) => {
       const ol = isOverloaded(i.id);
       const ud = isUnderdimensioned(i.id);
       const ad = isAdapted(i.id);
       return /* @__PURE__ */ import_react5.default.createElement("button", { key: i.id, style: { ...S.boxTab, ...i.id === inst.id ? S.boxTabActive : {}, ...ol ? { borderColor: "#e74c3c" } : ud ? { borderColor: "#f5a623" } : ad ? { borderColor: "#a78bfa" } : {} }, onClick: () => setActivePlan(i.id) }, ol && /* @__PURE__ */ import_react5.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", marginRight: 4, display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(TriangleAlert, { size: 13, "aria-label": "\xDCberlastet" })), !ol && ud && /* @__PURE__ */ import_react5.default.createElement("span", { title: "Unterdimensioniert!", style: { color: "#f5a623", marginRight: 4, display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(Zap, { size: 13, "aria-label": "Unterdimensioniert" })), !ol && !ud && ad && /* @__PURE__ */ import_react5.default.createElement("span", { title: "Adapter!", style: { color: "#a78bfa", marginRight: 4, display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(Plug, { size: 13, "aria-label": "Adapter" })), i.name);
-    })), /* @__PURE__ */ import_react5.default.createElement(Section, { title: inst.name, subtitle: `Eingang: ${connLabel} (${maxA}A)` }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.stickyPhase }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
+    })), /* @__PURE__ */ import_react5.default.createElement(Section, { title: inst.name, subtitle: `Eingang: ${connLabel} (${maxA}A)` }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.stickyPhase }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
       const a = own[ph];
       const tA = tot[ph];
       const pct = maxA ? tA / maxA * 100 : 0;
       const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-      return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round2(tA), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phasePct }, maxA ? `${Math.round(pct)}% von ${maxA}A` : ""), a !== tA && /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontSize: 10, color: "#555", marginTop: 2 } }, "Eigen: ", round2(a), "A"));
+      return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round22(tA), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phasePct }, maxA ? `${Math.round(pct)}% von ${maxA}A` : ""), a !== tA && /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontSize: 10, color: "#555", marginTop: 2 } }, "Eigen: ", round22(a), "A"));
     }))), (() => {
       const bulkLoad = bulkLoadId ? loadById[bulkLoadId] : null;
       const bulkAvail = bulkLoad ? getAvailableOutlets(bulkLoadId) : sortedOutlets;
-      const bulkOutletOpts = bulkAvail.map((o) => ({ value: o.id, label: `${o.label} (${CONN[o.connector]?.label || o.connector} \xB7 ${o.breaker || ""}${o.amp}A \xB7 ${o.protection})` }));
+      const bulkOutletOpts = bulkAvail.map((o) => ({ value: o.id, label: `${o.label} (${CONN2[o.connector]?.label || o.connector} \xB7 ${o.breaker || ""}${o.amp}A \xB7 ${o.protection})` }));
       const canAdd = !!bulkLoadId;
       const bulkOutletObj = bulkOutletId ? type?.outlets.find((o) => o.id === bulkOutletId) : null;
-      const isBulkMC = bulkOutletObj && isMulticore(bulkOutletObj.connector);
+      const isBulkMC = bulkOutletObj && isMulticore2(bulkOutletObj.connector);
       const getNextMcSlot = (outletId) => {
         const obj = type?.outlets.find((o) => o.id === outletId);
         const maxSlots = obj?.mcSlots || 6;
@@ -30758,14 +31247,14 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       const avail = getAvailableOutlets(p.loadId);
       const outletOptions = avail.map((o) => ({
         value: o.id,
-        label: `${o.label} (${CONN[o.connector]?.label || o.connector} \xB7 ${o.breaker}${o.amp}A \xB7 ${o.protection})`
+        label: `${o.label} (${CONN2[o.connector]?.label || o.connector} \xB7 ${o.breaker}${o.amp}A \xB7 ${o.protection})`
       }));
       let phDisplay = "\u2014";
       if (l?.threePhase) phDisplay = "L1+L2+L3";
-      else if (outlet && isMulticore(outlet.connector) && p.mcSlot) phDisplay = PHASES[(p.mcSlot - 1) % 3];
+      else if (outlet && isMulticore2(outlet.connector) && p.mcSlot) phDisplay = PHASES2[(p.mcSlot - 1) % 3];
       else if (outlet) phDisplay = outlet.phase || "\u2014";
-      const amp = l && l.watt ? round2(l.watt / VOLT) : "";
-      const showMcSlot = outlet && isMulticore(outlet.connector);
+      const amp = l && l.watt ? round22(l.watt / VOLT) : "";
+      const showMcSlot = outlet && isMulticore2(outlet.connector);
       const mcOptions = showMcSlot ? mcSlotOptions(outlet) : [];
       return /* @__PURE__ */ import_react5.default.createElement("tr", { key: p.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement(FilterSelect, { options: outletOptions, value: p.outletId, onChange: (v) => updatePlacement(p.id, { outletId: v, mcSlot: null }), placeholder: "Anschluss\u2026", style: { minWidth: 200 } })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, showMcSlot ? /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 120 }, value: p.mcSlot || "", onChange: (e) => updatePlacement(p.id, { mcSlot: e.target.value ? Number(e.target.value) : null }) }, /* @__PURE__ */ import_react5.default.createElement("option", { value: "" }, "\u2014 w\xE4hlen \u2014"), mcOptions.map((s) => /* @__PURE__ */ import_react5.default.createElement("option", { key: s.slotNum, value: s.slotNum }, "Steckplatz ", s.slotNum, " (", s.phase, ")"))) : /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement(InlineSelect, { options: loadOptions, value: p.loadId, onChange: (v) => updatePlacement(p.id, { loadId: v }), placeholder: "Verbraucher\u2026", style: { minWidth: 180 } })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: 12, color: phDisplay === "\u2014" ? "#555" : "#fff" } }, phDisplay)), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, l ? l.watt : "-"), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, amp ? l?.threePhase ? `${amp}/Ph` : amp : "-"), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: () => removePlacement(p.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react5.default.createElement(X, { size: 14, "aria-hidden": "true" }))));
     }))))));
@@ -30776,8 +31265,8 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
     const updBulk = (patch) => setBulk((s) => {
       const n = { ...s, ...patch };
       if (patch.connector) {
-        n.amp = CONN[patch.connector]?.amp || n.amp;
-        n.phase = is3ph(patch.connector) ? "L1L2L3" : isMulticore(patch.connector) ? "L1" : n.phase === "L1L2L3" ? "L1" : n.phase;
+        n.amp = CONN2[patch.connector]?.amp || n.amp;
+        n.phase = is3ph2(patch.connector) ? "L1L2L3" : isMulticore2(patch.connector) ? "L1" : n.phase === "L1L2L3" ? "L1" : n.phase;
       }
       return n;
     });
@@ -30797,10 +31286,10 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
           const box = s.find((bb) => bb.id === boxId);
           if (box && upd.amp > box.feedAmp) return o;
           if (patch.connector) {
-            upd.phase = is3ph(patch.connector) ? "L1L2L3" : o.phase === "L1L2L3" ? "L1" : o.phase;
-            upd.amp = CONN[patch.connector]?.amp || upd.amp;
-            if (isMulticore(patch.connector) && !upd.mcSlots) upd.mcSlots = 6;
-            if (!isMulticore(patch.connector)) upd.mcSlots = void 0;
+            upd.phase = is3ph2(patch.connector) ? "L1L2L3" : o.phase === "L1L2L3" ? "L1" : o.phase;
+            upd.amp = CONN2[patch.connector]?.amp || upd.amp;
+            if (isMulticore2(patch.connector) && !upd.mcSlots) upd.mcSlots = 6;
+            if (!isMulticore2(patch.connector)) upd.mcSlots = void 0;
           }
           return upd;
         }) };
@@ -30860,7 +31349,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
           setBoxTypes((s) => {
             const ids = new Set(s.map((b) => b.id));
             const neu = imported.filter((b) => !ids.has(b.id));
-            return alphaSort([...neu, ...s], "name");
+            return alphaSort2([...neu, ...s], "name");
           });
         } catch (err) {
           uiAlert("Fehler: " + err.message);
@@ -30869,12 +31358,12 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       r.readAsText(file);
       e.target.value = "";
     };
-    return /* @__PURE__ */ import_react5.default.createElement(Section, { title: "Verteiler-Typen", subtitle: "Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3)." }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.primaryBtn, onClick: addType }, "+ Neuen Verteiler-Typ"), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.ghostBtn, onClick: exportBoxTypes }, /* @__PURE__ */ import_react5.default.createElement(Download, { size: 14, "aria-hidden": "true" }), "Exportieren"), /* @__PURE__ */ import_react5.default.createElement("label", { style: S.ghostBtn }, /* @__PURE__ */ import_react5.default.createElement(Upload, { size: 14, "aria-hidden": "true" }), "Importieren", /* @__PURE__ */ import_react5.default.createElement("input", { type: "file", accept: ".json", onChange: importBoxTypes, style: { display: "none" } })), boxTypes.length > 0 && /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: removeAllTypes }, "Alle l\xF6schen")), /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginTop: 16 } }, boxTypes.map((b) => /* @__PURE__ */ import_react5.default.createElement("div", { key: b.id, style: S.card }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.cardHead, onClick: () => setOpenId(openId === b.id ? null : b.id) }, /* @__PURE__ */ import_react5.default.createElement("span", { style: S.cardTitle }, openId === b.id ? "\u25BE" : "\u25B8", " ", b.name), /* @__PURE__ */ import_react5.default.createElement("span", { style: S.cardSub }, CONN[b.feedConnector]?.label || b.feedConnector, " \xB7 ", b.outlets.length, " Anschl\xFCsse")), openId === b.id && /* @__PURE__ */ import_react5.default.createElement("div", { style: S.cardBody }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Name" }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.input, value: b.name, onChange: (e) => update(b.id, { name: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Einspeisung" }, /* @__PURE__ */ import_react5.default.createElement("select", { style: S.input, value: b.feedConnector, onChange: (e) => update(b.id, { feedConnector: e.target.value, feedAmp: CONN[e.target.value]?.amp || b.feedAmp }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react5.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Max (A)" }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", style: S.input, value: b.feedAmp, onChange: (e) => update(b.id, { feedAmp: +e.target.value }) }))), /* @__PURE__ */ import_react5.default.createElement("div", { style: { textAlign: "right", marginTop: 4 } }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtnWide, onClick: () => removeType(b.id) }, "L\xF6schen")), /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginTop: 12, marginBottom: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 8 } }, /* @__PURE__ */ import_react5.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "RCCB-Gruppen"), /* @__PURE__ */ import_react5.default.createElement("button", { style: { background: "transparent", border: "1px solid #3a424c", borderRadius: 10, width: 18, height: 18, padding: 0, color: "#9aa4af", cursor: "pointer", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }, onClick: () => openHelp("rccb"), title: "Hilfe" }, "?")), (b.rcds || []).length === 0 ? /* @__PURE__ */ import_react5.default.createElement("p", { style: { ...S.hint, margin: "0 0 6px" } }, "Keine RCCB-Gruppen \u2014 Anschl\xFCsse werden nur per LS / RCBO gesch\xFCtzt.") : /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 } }, (b.rcds || []).map((rcd) => /* @__PURE__ */ import_react5.default.createElement("div", { key: rcd.id, style: { display: "flex", gap: 4, alignItems: "center", background: "#252b33", border: "1px solid #3a424c", borderRadius: 5, padding: "4px 6px" } }, /* @__PURE__ */ import_react5.default.createElement("input", { style: { ...S.inputSm, width: 120 }, value: rcd.label, placeholder: "Bezeichnung", onChange: (e) => updateRcd(b.id, rcd.id, { label: e.target.value }) }), /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", min: 10, max: 500, style: { ...S.inputSm, width: 58 }, value: rcd.mA, onChange: (e) => updateRcd(b.id, rcd.id, { mA: +e.target.value }) }), /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: 10, color: "#7c8794", whiteSpace: "nowrap" } }, "mA"), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: () => removeRcd(b.id, rcd.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react5.default.createElement(X, { size: 14, "aria-hidden": "true" }))))), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.secondaryBtn, onClick: () => addRcd(b.id) }, "+ RCD hinzuf\xFCgen")), /* @__PURE__ */ import_react5.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react5.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react5.default.createElement("thead", null, /* @__PURE__ */ import_react5.default.createElement("tr", null, /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Name / Steckplatz"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Steckpl.*"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Sich."), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "FI\xA0mA"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "RCCB-Gruppe"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react5.default.createElement("tbody", null, b.outlets.map((o) => /* @__PURE__ */ import_react5.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.inputSm, value: o.label, onChange: (e) => updateOutlet(b.id, o.id, { label: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("select", { style: S.selectSm, value: o.connector, onChange: (e) => updateOutlet(b.id, o.id, { connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react5.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 55 }, value: o.amp, onChange: (e) => updateOutlet(b.id, o.id, { amp: +e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, is3ph(o.connector) ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "L1+L2+L3") : isMulticore(o.connector) ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "rotiert") : /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 60 }, value: o.phase || "L1", onChange: (e) => updateOutlet(b.id, o.id, { phase: e.target.value }) }, PHASES.map((ph) => /* @__PURE__ */ import_react5.default.createElement("option", { key: ph, value: ph }, ph)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, isMulticore(o.connector) ? /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 55 }, value: o.mcSlots || 6, onChange: (e) => updateOutlet(b.id, o.id, { mcSlots: +e.target.value }) }) : /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: o.breaker || "C", onChange: (e) => updateOutlet(b.id, o.id, { breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react5.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 70 }, value: o.protection || "LS", onChange: (e) => updateOutlet(b.id, o.id, { protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react5.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, o.protection === "RCBO" ? /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", min: 1, max: 500, style: { ...S.inputSm, width: 58 }, value: o.rcdMa ?? 30, onChange: (e) => updateOutlet(b.id, o.id, { rcdMa: +e.target.value }) }) : /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, (b.rcds || []).length > 0 ? /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: o.rcdId || "", onChange: (e) => updateOutlet(b.id, o.id, { rcdId: e.target.value || null }) }, /* @__PURE__ */ import_react5.default.createElement("option", { value: "" }, "\u2014 kein \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react5.default.createElement("option", { key: r.id, value: r.id }, r.label))) : /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: () => removeOutlet(b.id, o.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react5.default.createElement(X, { size: 14, "aria-hidden": "true" })))))))), /* @__PURE__ */ import_react5.default.createElement("p", { style: { ...S.hint, marginTop: 6 } }, "* Steckpl\xE4tze gilt nur f\xFCr Multicore-Anschl\xFCsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, \u2026"), /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginRight: 2 } }, "Bulk:"), /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 46 }, value: bulk.count, onChange: (e) => updBulk({ count: e.target.value }), onBlur: () => updBulk({ count: String(Math.max(1, Math.min(48, parseInt(bulk.count) || 1))) }), title: "Anzahl" }), /* @__PURE__ */ import_react5.default.createElement("select", { style: S.selectSm, value: bulk.connector, onChange: (e) => updBulk({ connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react5.default.createElement("option", { key: k, value: k }, v.label))), /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 52 }, value: bulk.amp, onChange: (e) => updBulk({ amp: +e.target.value }), title: "Ampere" }), /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: 11, color: "#7c8794" } }, "A"), !is3ph(bulk.connector) && !isMulticore(bulk.connector) && /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: bulk.phase, onChange: (e) => updBulk({ phase: e.target.value }), disabled: bulk.rotatePhase }, PHASES.map((ph) => /* @__PURE__ */ import_react5.default.createElement("option", { key: ph, value: ph }, ph))), /* @__PURE__ */ import_react5.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: bulk.rotatePhase ? "#f5a623" : "#9aa4af", cursor: "pointer", userSelect: "none" }, title: "Phasen gleichm\xE4\xDFig rotieren (L1\u2192L2\u2192L3\u2192\u2026)" }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "checkbox", checked: bulk.rotatePhase, onChange: (e) => updBulk({ rotatePhase: e.target.checked }), style: { cursor: "pointer" } }), "Rotation")), /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 52 }, value: bulk.breaker, onChange: (e) => updBulk({ breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react5.default.createElement("option", { key: t, value: t }, t))), /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 72 }, value: bulk.protection, onChange: (e) => updBulk({ protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react5.default.createElement("option", { key: t, value: t }, t))), (b.rcds || []).length > 0 && /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: bulk.rcdId || "", onChange: (e) => updBulk({ rcdId: e.target.value || null }), title: "RCCB-Gruppe" }, /* @__PURE__ */ import_react5.default.createElement("option", { value: "" }, "\u2014 kein RCD \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react5.default.createElement("option", { key: r.id, value: r.id }, r.label))), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.secondaryBtn, onClick: () => {
+    return /* @__PURE__ */ import_react5.default.createElement(Section, { title: "Verteiler-Typen", subtitle: "Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3)." }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.primaryBtn, onClick: addType }, "+ Neuen Verteiler-Typ"), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.ghostBtn, onClick: exportBoxTypes }, /* @__PURE__ */ import_react5.default.createElement(Download, { size: 14, "aria-hidden": "true" }), "Exportieren"), /* @__PURE__ */ import_react5.default.createElement("label", { style: S.ghostBtn }, /* @__PURE__ */ import_react5.default.createElement(Upload, { size: 14, "aria-hidden": "true" }), "Importieren", /* @__PURE__ */ import_react5.default.createElement("input", { type: "file", accept: ".json", onChange: importBoxTypes, style: { display: "none" } })), boxTypes.length > 0 && /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: removeAllTypes }, "Alle l\xF6schen")), /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginTop: 16 } }, boxTypes.map((b) => /* @__PURE__ */ import_react5.default.createElement("div", { key: b.id, style: S.card }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.cardHead, onClick: () => setOpenId(openId === b.id ? null : b.id) }, /* @__PURE__ */ import_react5.default.createElement("span", { style: S.cardTitle }, openId === b.id ? "\u25BE" : "\u25B8", " ", b.name), /* @__PURE__ */ import_react5.default.createElement("span", { style: S.cardSub }, CONN2[b.feedConnector]?.label || b.feedConnector, " \xB7 ", b.outlets.length, " Anschl\xFCsse")), openId === b.id && /* @__PURE__ */ import_react5.default.createElement("div", { style: S.cardBody }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Name" }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.input, value: b.name, onChange: (e) => update(b.id, { name: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Einspeisung" }, /* @__PURE__ */ import_react5.default.createElement("select", { style: S.input, value: b.feedConnector, onChange: (e) => update(b.id, { feedConnector: e.target.value, feedAmp: CONN2[e.target.value]?.amp || b.feedAmp }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react5.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Max (A)" }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", style: S.input, value: b.feedAmp, onChange: (e) => update(b.id, { feedAmp: +e.target.value }) }))), /* @__PURE__ */ import_react5.default.createElement("div", { style: { textAlign: "right", marginTop: 4 } }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtnWide, onClick: () => removeType(b.id) }, "L\xF6schen")), /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginTop: 12, marginBottom: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 8 } }, /* @__PURE__ */ import_react5.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "RCCB-Gruppen"), /* @__PURE__ */ import_react5.default.createElement("button", { style: { background: "transparent", border: "1px solid #3a424c", borderRadius: 10, width: 18, height: 18, padding: 0, color: "#9aa4af", cursor: "pointer", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }, onClick: () => openHelp("rccb"), title: "Hilfe" }, "?")), (b.rcds || []).length === 0 ? /* @__PURE__ */ import_react5.default.createElement("p", { style: { ...S.hint, margin: "0 0 6px" } }, "Keine RCCB-Gruppen \u2014 Anschl\xFCsse werden nur per LS / RCBO gesch\xFCtzt.") : /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 } }, (b.rcds || []).map((rcd) => /* @__PURE__ */ import_react5.default.createElement("div", { key: rcd.id, style: { display: "flex", gap: 4, alignItems: "center", background: "#252b33", border: "1px solid #3a424c", borderRadius: 5, padding: "4px 6px" } }, /* @__PURE__ */ import_react5.default.createElement("input", { style: { ...S.inputSm, width: 120 }, value: rcd.label, placeholder: "Bezeichnung", onChange: (e) => updateRcd(b.id, rcd.id, { label: e.target.value }) }), /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", min: 10, max: 500, style: { ...S.inputSm, width: 58 }, value: rcd.mA, onChange: (e) => updateRcd(b.id, rcd.id, { mA: +e.target.value }) }), /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: 10, color: "#7c8794", whiteSpace: "nowrap" } }, "mA"), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: () => removeRcd(b.id, rcd.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react5.default.createElement(X, { size: 14, "aria-hidden": "true" }))))), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.secondaryBtn, onClick: () => addRcd(b.id) }, "+ RCD hinzuf\xFCgen")), /* @__PURE__ */ import_react5.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react5.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react5.default.createElement("thead", null, /* @__PURE__ */ import_react5.default.createElement("tr", null, /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Name / Steckplatz"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Steckpl.*"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Sich."), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "FI\xA0mA"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "RCCB-Gruppe"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react5.default.createElement("tbody", null, b.outlets.map((o) => /* @__PURE__ */ import_react5.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.inputSm, value: o.label, onChange: (e) => updateOutlet(b.id, o.id, { label: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("select", { style: S.selectSm, value: o.connector, onChange: (e) => updateOutlet(b.id, o.id, { connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react5.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 55 }, value: o.amp, onChange: (e) => updateOutlet(b.id, o.id, { amp: +e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, is3ph2(o.connector) ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "L1+L2+L3") : isMulticore2(o.connector) ? /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "rotiert") : /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 60 }, value: o.phase || "L1", onChange: (e) => updateOutlet(b.id, o.id, { phase: e.target.value }) }, PHASES2.map((ph) => /* @__PURE__ */ import_react5.default.createElement("option", { key: ph, value: ph }, ph)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, isMulticore2(o.connector) ? /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 55 }, value: o.mcSlots || 6, onChange: (e) => updateOutlet(b.id, o.id, { mcSlots: +e.target.value }) }) : /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: o.breaker || "C", onChange: (e) => updateOutlet(b.id, o.id, { breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react5.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 70 }, value: o.protection || "LS", onChange: (e) => updateOutlet(b.id, o.id, { protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react5.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, o.protection === "RCBO" ? /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", min: 1, max: 500, style: { ...S.inputSm, width: 58 }, value: o.rcdMa ?? 30, onChange: (e) => updateOutlet(b.id, o.id, { rcdMa: +e.target.value }) }) : /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, (b.rcds || []).length > 0 ? /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: o.rcdId || "", onChange: (e) => updateOutlet(b.id, o.id, { rcdId: e.target.value || null }) }, /* @__PURE__ */ import_react5.default.createElement("option", { value: "" }, "\u2014 kein \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react5.default.createElement("option", { key: r.id, value: r.id }, r.label))) : /* @__PURE__ */ import_react5.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: () => removeOutlet(b.id, o.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react5.default.createElement(X, { size: 14, "aria-hidden": "true" })))))))), /* @__PURE__ */ import_react5.default.createElement("p", { style: { ...S.hint, marginTop: 6 } }, "* Steckpl\xE4tze gilt nur f\xFCr Multicore-Anschl\xFCsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, \u2026"), /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginRight: 2 } }, "Bulk:"), /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 46 }, value: bulk.count, onChange: (e) => updBulk({ count: e.target.value }), onBlur: () => updBulk({ count: String(Math.max(1, Math.min(48, parseInt(bulk.count) || 1))) }), title: "Anzahl" }), /* @__PURE__ */ import_react5.default.createElement("select", { style: S.selectSm, value: bulk.connector, onChange: (e) => updBulk({ connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react5.default.createElement("option", { key: k, value: k }, v.label))), /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 52 }, value: bulk.amp, onChange: (e) => updBulk({ amp: +e.target.value }), title: "Ampere" }), /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: 11, color: "#7c8794" } }, "A"), !is3ph2(bulk.connector) && !isMulticore2(bulk.connector) && /* @__PURE__ */ import_react5.default.createElement(import_react5.default.Fragment, null, /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: bulk.phase, onChange: (e) => updBulk({ phase: e.target.value }), disabled: bulk.rotatePhase }, PHASES2.map((ph) => /* @__PURE__ */ import_react5.default.createElement("option", { key: ph, value: ph }, ph))), /* @__PURE__ */ import_react5.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: bulk.rotatePhase ? "#f5a623" : "#9aa4af", cursor: "pointer", userSelect: "none" }, title: "Phasen gleichm\xE4\xDFig rotieren (L1\u2192L2\u2192L3\u2192\u2026)" }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "checkbox", checked: bulk.rotatePhase, onChange: (e) => updBulk({ rotatePhase: e.target.checked }), style: { cursor: "pointer" } }), "Rotation")), /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 52 }, value: bulk.breaker, onChange: (e) => updBulk({ breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react5.default.createElement("option", { key: t, value: t }, t))), /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 72 }, value: bulk.protection, onChange: (e) => updBulk({ protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react5.default.createElement("option", { key: t, value: t }, t))), (b.rcds || []).length > 0 && /* @__PURE__ */ import_react5.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: bulk.rcdId || "", onChange: (e) => updBulk({ rcdId: e.target.value || null }), title: "RCCB-Gruppe" }, /* @__PURE__ */ import_react5.default.createElement("option", { value: "" }, "\u2014 kein RCD \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react5.default.createElement("option", { key: r.id, value: r.id }, r.label))), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.secondaryBtn, onClick: () => {
       const base = b.outlets.length;
       const phaseFor = (i) => {
-        if (is3ph(bulk.connector)) return "L1L2L3";
-        if (isMulticore(bulk.connector)) return "L1";
-        if (bulk.rotatePhase) return PHASES[(base + i) % PHASES.length];
+        if (is3ph2(bulk.connector)) return "L1L2L3";
+        if (isMulticore2(bulk.connector)) return "L1";
+        if (bulk.rotatePhase) return PHASES2[(base + i) % PHASES2.length];
         return bulk.phase;
       };
       const neu = Array.from({ length: Math.max(1, Math.min(48, parseInt(bulk.count) || 1)) }, (_, i) => ({
@@ -30886,7 +31375,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
         breaker: bulk.breaker,
         protection: bulk.protection,
         rcdId: bulk.rcdId,
-        ...isMulticore(bulk.connector) ? { mcSlots: 6 } : {}
+        ...isMulticore2(bulk.connector) ? { mcSlots: 6 } : {}
       }));
       setBoxTypes((s) => s.map((bx) => bx.id !== b.id ? bx : { ...bx, outlets: [...bx.outlets, ...neu] }));
     } }, "+ ", parseInt(bulk.count) || 1, "\xD7")), /* @__PURE__ */ import_react5.default.createElement("button", { style: { ...S.secondaryBtn, marginTop: 6 }, onClick: () => addOutlet(b.id) }, "+ Einzeln hinzuf\xFCgen"))))));
@@ -30922,7 +31411,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       r.readAsText(file);
       e.target.value = "";
     };
-    return /* @__PURE__ */ import_react5.default.createElement(Section, { title: "Verbraucher-Stammdaten", subtitle: "3-phasige Verbraucher werden gleichm\xE4\xDFig auf L1/L2/L3 verteilt und k\xF6nnen nur auf CEE-Rot / Powerlock Anschl\xFCsse gesteckt werden." }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.primaryBtn, onClick: add }, "+ Verbraucher"), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.ghostBtn, onClick: exportLoads }, /* @__PURE__ */ import_react5.default.createElement(Download, { size: 14, "aria-hidden": "true" }), "Exportieren"), /* @__PURE__ */ import_react5.default.createElement("label", { style: S.ghostBtn }, /* @__PURE__ */ import_react5.default.createElement(Upload, { size: 14, "aria-hidden": "true" }), "Importieren", /* @__PURE__ */ import_react5.default.createElement("input", { type: "file", accept: ".json", onChange: importLoads, style: { display: "none" } }))), /* @__PURE__ */ import_react5.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react5.default.createElement("thead", null, /* @__PURE__ */ import_react5.default.createElement("tr", null, /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "3-phasig"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react5.default.createElement("tbody", null, loads.map((l) => /* @__PURE__ */ import_react5.default.createElement("tr", { key: l.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.inputSm, value: l.name, onChange: (e) => update(l.id, { name: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, value: l.watt, onChange: (e) => update(l.id, { watt: e.target.value === "" ? "" : +e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, l.watt ? l.threePhase ? `${round2(l.watt / VOLT)}/Ph` : round2(l.watt / VOLT) : ""), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "checkbox", checked: l.threePhase || false, onChange: (e) => update(l.id, { threePhase: e.target.checked }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: () => remove(l.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react5.default.createElement(X, { size: 14, "aria-hidden": "true" }))))))));
+    return /* @__PURE__ */ import_react5.default.createElement(Section, { title: "Verbraucher-Stammdaten", subtitle: "3-phasige Verbraucher werden gleichm\xE4\xDFig auf L1/L2/L3 verteilt und k\xF6nnen nur auf CEE-Rot / Powerlock Anschl\xFCsse gesteckt werden." }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.primaryBtn, onClick: add }, "+ Verbraucher"), /* @__PURE__ */ import_react5.default.createElement("button", { style: S.ghostBtn, onClick: exportLoads }, /* @__PURE__ */ import_react5.default.createElement(Download, { size: 14, "aria-hidden": "true" }), "Exportieren"), /* @__PURE__ */ import_react5.default.createElement("label", { style: S.ghostBtn }, /* @__PURE__ */ import_react5.default.createElement(Upload, { size: 14, "aria-hidden": "true" }), "Importieren", /* @__PURE__ */ import_react5.default.createElement("input", { type: "file", accept: ".json", onChange: importLoads, style: { display: "none" } }))), /* @__PURE__ */ import_react5.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react5.default.createElement("thead", null, /* @__PURE__ */ import_react5.default.createElement("tr", null, /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "3-phasig"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react5.default.createElement("tbody", null, loads.map((l) => /* @__PURE__ */ import_react5.default.createElement("tr", { key: l.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.inputSm, value: l.name, onChange: (e) => update(l.id, { name: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, value: l.watt, onChange: (e) => update(l.id, { watt: e.target.value === "" ? "" : +e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, l.watt ? l.threePhase ? `${round22(l.watt / VOLT)}/Ph` : round22(l.watt / VOLT) : ""), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("input", { type: "checkbox", checked: l.threePhase || false, onChange: (e) => update(l.id, { threePhase: e.target.checked }) })), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react5.default.createElement("button", { style: S.dangerBtn, onClick: () => remove(l.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react5.default.createElement(X, { size: 14, "aria-hidden": "true" }))))))));
   }
   function OverviewTab({ instances, instById, boxTypeById, totalLoad, rootInstances, mainConns, mainConnById, meta, isOverloaded, isUnderdimensioned, isAdapted, placements, loads, loadById }) {
     if (instances.length === 0) return /* @__PURE__ */ import_react5.default.createElement(Section, { title: "\xDCbersicht" }, /* @__PURE__ */ import_react5.default.createElement("p", { style: S.empty }, "Noch keine Verteiler aktiviert."));
@@ -30935,21 +31424,21 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
         tot.L2 += t.L2;
         tot.L3 += t.L3;
       });
-      return /* @__PURE__ */ import_react5.default.createElement("div", { key: mc.id, style: S.rootCard }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.rootTitle }, mc.name, mc.amp && /* @__PURE__ */ import_react5.default.createElement("span", { style: S.rootSub }, " (max ", mc.amp, "A)")), /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontSize: 12, color: "#9aa4af", marginBottom: 8 } }, "Verteiler: ", connInsts.map((i) => i.name).join(", ") || "\u2014"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
+      return /* @__PURE__ */ import_react5.default.createElement("div", { key: mc.id, style: S.rootCard }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.rootTitle }, mc.name, mc.amp && /* @__PURE__ */ import_react5.default.createElement("span", { style: S.rootSub }, " (max ", mc.amp, "A)")), /* @__PURE__ */ import_react5.default.createElement("div", { style: { fontSize: 12, color: "#9aa4af", marginBottom: 8 } }, "Verteiler: ", connInsts.map((i) => i.name).join(", ") || "\u2014"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
         const a = tot[ph];
         const pct = mc.amp ? a / mc.amp * 100 : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-        return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round2(a), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phasePct }, mc.amp ? `${Math.round(pct)}%` : ""));
+        return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round22(a), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phasePct }, mc.amp ? `${Math.round(pct)}%` : ""));
       })));
     }), rootInstances.filter((i) => !i.mainConnectionId).map((ri) => {
       const t = totalLoad(ri.id);
       const type = boxTypeById[ri.typeId];
       const maxA = type?.feedAmp || 0;
-      return /* @__PURE__ */ import_react5.default.createElement("div", { key: ri.id, style: { ...S.rootCard, borderColor: LINE } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.rootTitle, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react5.default.createElement("span", { style: S.rootSub }, "(kein Einspeisepunkt)")), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES.map((ph) => {
+      return /* @__PURE__ */ import_react5.default.createElement("div", { key: ri.id, style: { ...S.rootCard, borderColor: LINE } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.rootTitle, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react5.default.createElement("span", { style: S.rootSub }, "(kein Einspeisepunkt)")), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
         const a = t[ph];
         const pct = maxA ? a / maxA * 100 : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-        return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round2(a), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })));
+        return /* @__PURE__ */ import_react5.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round22(a), " A"), /* @__PURE__ */ import_react5.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })));
       })));
     })), /* @__PURE__ */ import_react5.default.createElement(Section, { title: "Alle Verteiler" }, /* @__PURE__ */ import_react5.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react5.default.createElement("thead", null, /* @__PURE__ */ import_react5.default.createElement("tr", null, /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Verteiler"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Eingang"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "h\xE4ngt an"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "L1(A)"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "L2(A)"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "L3(A)"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Max(A)"), /* @__PURE__ */ import_react5.default.createElement("th", { style: S.th }, "Status"))), /* @__PURE__ */ import_react5.default.createElement("tbody", null, instances.map((inst) => {
       const t = totalLoad(inst.id);
@@ -30958,11 +31447,11 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       const maxA = parentOutlet ? Math.min(type?.feedAmp || 0, parentOutlet.amp) : type?.feedAmp || 0;
       const peak = Math.max(t.L1, t.L2, t.L3);
       const pct = maxA ? peak / maxA * 100 : 0;
-      const conn = type ? CONN[type.feedConnector]?.label || "" : "";
+      const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
       const stat = pct > 100 ? "\xDCBERLAST" : pct > 80 ? ">80%" : peak > 0 ? "OK" : "\u2013";
       const statIcon = pct > 100 ? /* @__PURE__ */ import_react5.default.createElement(TriangleAlert, { size: 13, "aria-hidden": "true" }) : peak > 0 && pct <= 80 ? /* @__PURE__ */ import_react5.default.createElement(Check, { size: 13, "aria-hidden": "true" }) : null;
       const scol = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : peak > 0 ? "#27ae60" : "#999";
-      return /* @__PURE__ */ import_react5.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, pct > 100 && /* @__PURE__ */ import_react5.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(TriangleAlert, { size: 15, "aria-label": "\xDCberlastet" })), pct <= 100 && isUnderdimensioned(inst.id) && /* @__PURE__ */ import_react5.default.createElement("span", { title: "Unterdimensioniert!", style: { color: "#f5a623", display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(Zap, { size: 15, "aria-label": "Unterdimensioniert" })), pct <= 100 && !isUnderdimensioned(inst.id) && isAdapted(inst.id) && /* @__PURE__ */ import_react5.default.createElement("span", { title: "Adapter!", style: { color: "#a78bfa", display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(Plug, { size: 15, "aria-label": "Adapter" }))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, inst.name), /* @__PURE__ */ import_react5.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, conn), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, inst.parentId ? instById[inst.parentId]?.name : inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name : "\u2014 Einspeisung \u2014"), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, round2(t.L1)), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, round2(t.L2)), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, round2(t.L3)), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, maxA), /* @__PURE__ */ import_react5.default.createElement("td", { style: { ...S.td, color: scol, fontWeight: 600 } }, /* @__PURE__ */ import_react5.default.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 } }, statIcon, stat)));
+      return /* @__PURE__ */ import_react5.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, pct > 100 && /* @__PURE__ */ import_react5.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(TriangleAlert, { size: 15, "aria-label": "\xDCberlastet" })), pct <= 100 && isUnderdimensioned(inst.id) && /* @__PURE__ */ import_react5.default.createElement("span", { title: "Unterdimensioniert!", style: { color: "#f5a623", display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(Zap, { size: 15, "aria-label": "Unterdimensioniert" })), pct <= 100 && !isUnderdimensioned(inst.id) && isAdapted(inst.id) && /* @__PURE__ */ import_react5.default.createElement("span", { title: "Adapter!", style: { color: "#a78bfa", display: "inline-flex" } }, /* @__PURE__ */ import_react5.default.createElement(Plug, { size: 15, "aria-label": "Adapter" }))), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, inst.name), /* @__PURE__ */ import_react5.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, conn), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, inst.parentId ? instById[inst.parentId]?.name : inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name : "\u2014 Einspeisung \u2014"), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, round22(t.L1)), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, round22(t.L2)), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, round22(t.L3)), /* @__PURE__ */ import_react5.default.createElement("td", { style: S.td }, maxA), /* @__PURE__ */ import_react5.default.createElement("td", { style: { ...S.td, color: scol, fontWeight: 600 } }, /* @__PURE__ */ import_react5.default.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 } }, statIcon, stat)));
     })))), (() => {
       const counts = {};
       placements.forEach((p) => {
@@ -31064,7 +31553,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       const mcbMap = {};
       outlets.forEach((out) => {
         if (!out.breaker) return;
-        const ph = is3ph(out.connector) ? "3P" : isMulticore(out.connector) ? "MC" : "1P";
+        const ph = is3ph2(out.connector) ? "3P" : isMulticore2(out.connector) ? "MC" : "1P";
         const prot = out.protection === "RCBO" ? "RCBO" : out.protection === "RCD" ? "RCD" : "MCB";
         const key = `${prot}_${out.breaker}_${ph}`;
         if (!mcbMap[key]) mcbMap[key] = { prot, breaker: out.breaker, ph, cnt: 0 };
@@ -31775,7 +32264,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
           const isDraggingCons = dragState?.kind === "consumer" && dragState?.key === cKey;
           const effectiveStackX = isDraggingCons && livePos ? livePos.x : baseStackX;
           const effectiveStackTop = isDraggingCons && livePos ? livePos.y : baseStackTop;
-          const isMC = isMulticore(out.connector);
+          const isMC = isMulticore2(out.connector);
           const activeIdx = activeOutlets.findIndex((o) => o.id === out.id);
           const laneX = pos.x + NODE_W + 4 + activeIdx * laneGap;
           const midYs = placs.map((_, pi) => effectiveStackTop + pi * (LEAF_H + LEAF_GAP) + LEAF_H / 2);
@@ -31831,7 +32320,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
                 if (!load) return null;
                 const leafY = pi * (LEAF_H + LEAF_GAP);
                 const wattStr = load.watt ? `${load.watt} W` : "";
-                const ampStr = load.watt ? ` \xB7 ${round2(load.watt / 230)} A` : "";
+                const ampStr = load.watt ? ` \xB7 ${round22(load.watt / 230)} A` : "";
                 const maxName = isMC ? 13 : 18;
                 const nameDisp = load.name && load.name.length > maxName ? load.name.slice(0, maxName - 1) + "\u2026" : load.name || "?";
                 const spOk = plac.mcSlot != null;
@@ -31847,7 +32336,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
                     stroke: "#3a5060",
                     strokeWidth: 1
                   }
-                ), /* @__PURE__ */ import_react5.default.createElement("text", { x: 8, y: 14, fill: "#6aaabf", fontSize: 9, fontWeight: "600" }, nameDisp), /* @__PURE__ */ import_react5.default.createElement("text", { x: 8, y: 27, fill: "#3a6070", fontSize: 8 }, wattStr, ampStr), isMC && /* @__PURE__ */ import_react5.default.createElement("g", null, /* @__PURE__ */ import_react5.default.createElement("title", null, spOk ? `Steckplatz ${plac.mcSlot} (${PHASES[(plac.mcSlot - 1) % 3]}) auf ${out.label}` : `Kein Steckplatz zugeordnet \u2013 im Steckplan ausw\xE4hlen`), /* @__PURE__ */ import_react5.default.createElement(
+                ), /* @__PURE__ */ import_react5.default.createElement("text", { x: 8, y: 14, fill: "#6aaabf", fontSize: 9, fontWeight: "600" }, nameDisp), /* @__PURE__ */ import_react5.default.createElement("text", { x: 8, y: 27, fill: "#3a6070", fontSize: 8 }, wattStr, ampStr), isMC && /* @__PURE__ */ import_react5.default.createElement("g", null, /* @__PURE__ */ import_react5.default.createElement("title", null, spOk ? `Steckplatz ${plac.mcSlot} (${PHASES2[(plac.mcSlot - 1) % 3]}) auf ${out.label}` : `Kein Steckplatz zugeordnet \u2013 im Steckplan ausw\xE4hlen`), /* @__PURE__ */ import_react5.default.createElement(
                   "rect",
                   {
                     x: LEAF_W - spW - 4,
@@ -32095,7 +32584,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
   function Field({ label, children }) {
     return /* @__PURE__ */ import_react5.default.createElement("label", { style: S.field }, /* @__PURE__ */ import_react5.default.createElement("span", { style: S.fieldLabel }, label), children);
   }
-  var SICHT_ITEMS = [
+  var SICHT_ITEMS2 = [
     "Schaltger\xE4te",
     "Steckverbinder",
     "Leitungen",
@@ -32225,7 +32714,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       voltCalcs.length === 0 && /* @__PURE__ */ import_react5.default.createElement("p", { style: { color: "#666", fontSize: 13 } }, "Noch keine Rechnungen vorhanden. \xDCber \u201E+ Neue Rechnung\u201C eine neue anlegen."),
       voltCalcs.map((calc) => {
         const ready = calc.I !== "" && calc.l !== "" && calc.cosPhi !== "" && calc.cableA !== "" && calc.threePhase !== "";
-        const du = ready ? calcVoltDrop(+calc.I, +calc.l, +calc.cableA, +calc.cosPhi, calc.threePhase === "3ph") : null;
+        const du = ready ? calcVoltDrop2(+calc.I, +calc.l, +calc.cableA, +calc.cosPhi, calc.threePhase === "3ph") : null;
         const minA = ready ? minCsVoltDrop(+calc.I, +calc.l, +calc.cosPhi, calc.threePhase === "3ph") : null;
         const duPct = du?.pct ?? null;
         const col = duPct === null ? null : duPct <= 3 ? "#2ecc71" : duPct <= 5 ? "#f5a623" : "#e74c3c";
@@ -32325,7 +32814,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       childInstIds.forEach((cid) => {
         const cType = boxTypeById[instById[cid]?.typeId];
         (cType?.outlets || []).forEach((co) => {
-          if (isMulticore(co.connector)) {
+          if (isMulticore2(co.connector)) {
             for (let s = 1; s <= (co.mcSlots || 6); s++) {
               const slotId = `${co.id}_s${s}`;
               const gcInsts = instances.filter((ci) => ci.parentId === cid && ci.parentOutletId === slotId);
@@ -32350,7 +32839,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
             } else {
               const collect = (cor) => {
                 if (cor.notInUse) return;
-                if (is3ph(co.connector)) {
+                if (is3ph2(co.connector)) {
                   ["zsL1", "zsL2", "zsL3"].forEach((k) => {
                     if (cor[k]) zsVals.push(Number(cor[k]));
                   });
@@ -32392,334 +32881,10 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
     const cellBg = (ok) => ({ ...S.td, background: ok === true ? "rgba(46,204,113,0.12)" : ok === false ? "rgba(231,76,60,0.12)" : "transparent" });
     const exportInspectionPDF = () => {
       try {
-        const _cl = localStorage.getItem("sp_corp_logo") || "";
-        const _sig = localStorage.getItem("sp_insp_sign") || "";
-        const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        const pdfChk = (val, lo, hi) => {
-          if (val === "" || val === void 0 || val === null) return "";
-          const n = parseFloat(val);
-          if (isNaN(n)) return "";
-          if (lo !== void 0 && n < lo) return "bad";
-          if (hi !== void 0 && n > hi) return "bad";
-          return "ok";
-        };
-        const pdfChkAll = (vals, lo, hi) => {
-          const vs = vals.filter((v) => v !== "");
-          if (!vs.length) return "";
-          return vs.some((v) => pdfChk(v, lo, hi) === "bad") ? "bad" : "ok";
-        };
-        const badge = (r) => r === "ok" ? `<span class="ok">\u2713 ok</span>` : r === "bad" ? `<span class="bad">\u2715 Mangel</span>` : `<span class="muted">\u2013</span>`;
-        const sichtBadge = (v) => v === true ? `<span class="ok">\u2713 ok</span>` : `<span class="muted">\u2013</span>`;
-        const fv = (...vals) => vals.filter((v) => v !== "").map((v) => esc(v) + "&thinsp;V").join(" / ") || "\u2013";
-        const css = `:root{--ep-accent:#f5a623;--ep-dark:#1c2127;--ep-ink:#1c2127;--ep-ink2:#4a5159;--ep-ink3:#7a8290;--ep-rule:#c8ccd1;--ep-rule2:#e6e9ec;--ep-band:#f3f4f6;--ep-paper:#ffffff;--ep-ok:#1c7a3e;--ep-bad:#b91c1c;--ep-warn:#8a5500;--ep-badrow:#fcf2f2;--ep-warnrow:#fdf7e6;--ep-font:'Segoe UI',system-ui,-apple-system,sans-serif;--ep-pad-x:44px;--ep-row-pad:4px 10px;--ep-gap-y:10px}
-html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box-sizing:border-box}
-.ep-stage{min-height:100vh;padding:28px 0 80px;display:flex;flex-direction:column;align-items:center;gap:18px}
-.page{width:794px;min-height:1123px;background:var(--ep-paper);color:var(--ep-ink);font-size:9.5px;line-height:1.45;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;box-shadow:0 1px 0 rgba(0,0,0,.05),0 18px 40px -22px rgba(0,0,0,.4)}
-.page-body{flex:1;padding:10px var(--ep-pad-x) 0;display:flex;flex-direction:column;min-height:0}.spacer-auto{flex:1;min-height:8px}
-.page-h,.page-f{display:flex;justify-content:space-between;align-items:center;padding:8px var(--ep-pad-x);font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase}
-.page-h{border-bottom:1px solid var(--ep-rule)}.page-f{border-top:1px solid var(--ep-rule);padding-bottom:10px;padding-top:6px;letter-spacing:.08em}.page-h strong{color:var(--ep-ink)}
-.page-title{margin:4px 0 6px}.page-title .kicker{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ep-ink3)}.page-title h1{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em;line-height:1.2}.page-title .muted{color:var(--ep-ink3);font-weight:400}.page-title .muted-h1{font-size:13px}.page-title .id-h1{color:var(--ep-warn)}.page-title-row{display:flex;justify-content:space-between;align-items:baseline}
-.befund-label{font-size:11px;font-weight:600}.befund-label.ok{color:var(--ep-ok)}.befund-label.bad{color:var(--ep-bad)}.befund-label.warn{color:var(--ep-warn)}
-.block{margin-top:var(--ep-gap-y)}.bar{display:flex;justify-content:space-between;align-items:center;background:var(--ep-dark);color:#fff;padding:5px 10px;font-size:11px;border-left:3px solid var(--ep-accent)}.bar strong{font-weight:600}.bar-sub{margin-left:8px;color:#a8b0bb;font-weight:400;font-size:9.5px}.bar-right{font-size:9.5px;color:#cdd3da}.block-body{border:1px solid var(--ep-rule);border-top:none}
-.ok{color:var(--ep-ok);font-weight:600;white-space:nowrap}.bad{color:var(--ep-bad);font-weight:600;white-space:nowrap}.warn{color:var(--ep-warn);font-weight:600;white-space:nowrap}
-.kv{display:grid}.kv-2{grid-template-columns:repeat(2,1fr)}.kv-3{grid-template-columns:repeat(3,1fr)}.kv-row{display:grid;grid-template-columns:110px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);border-right:1px solid var(--ep-rule2)}.kv-row.kv-right{border-right:none}.kv-row.kv-last{border-bottom:none}.kv-row .k{color:var(--ep-ink3)}.kv-row .v{color:var(--ep-ink)}
-.thead{display:grid;padding:4px 10px;background:var(--ep-band);border-bottom:1px solid var(--ep-rule2);font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.thead .r{text-align:right}
-.trow{display:grid;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2);align-items:center}.trow.row-last{border-bottom:none}.trow.row-bad{background:var(--ep-badrow)}.trow .r{text-align:right}.trow .muted{color:var(--ep-ink3)}.trow .no{margin-right:8px}
-.id{color:var(--ep-warn);font-weight:600}.muted{color:var(--ep-ink3)}.ell{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dual{display:grid;grid-template-columns:1fr 1fr}.sicht-cell{display:grid;grid-template-columns:36px 1fr 60px;padding:var(--ep-row-pad);align-items:center}.sicht-cell .r{text-align:right}.sicht-cell.row-bad{background:var(--ep-badrow)}.sicht-cell.row-warn{background:var(--ep-warnrow)}.sicht-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.sicht-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}.abg-cell{display:grid;grid-template-columns:70px 1fr;padding:var(--ep-row-pad);align-items:center}.abg-cell.cell-bright{border-right:1px solid var(--ep-rule2)}.abg-cell:not(.cell-blast){border-bottom:1px solid var(--ep-rule2)}
-.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr)}.kpi{padding:8px 12px}.kpi.kpi-sep{border-right:1px solid var(--ep-rule2)}.kpi-k{font-size:8px;color:var(--ep-ink3);letter-spacing:.08em;text-transform:uppercase}.kpi-v{font-size:16px;font-weight:700;margin-top:2px}.kpi-s{font-size:9px}
-.num-row{display:grid;grid-template-columns:30px 1fr;padding:var(--ep-row-pad);border-bottom:1px solid var(--ep-rule2)}.num-row.row-last{border-bottom:none}
-.confirm{padding:8px 12px;color:var(--ep-ink2);line-height:1.55}.confirm strong{color:var(--ep-ink)}.bemerkung{padding:var(--ep-row-pad);background:var(--ep-warnrow)}.bemerkung.small{background:transparent;font-size:9px;color:var(--ep-ink2);line-height:1.5;padding:6px 10px}
-.sign-row{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--ep-rule2)}.sign{padding:8px 12px}.sign.sign-r{border-left:1px solid var(--ep-rule2)}.sign-role{font-size:8px;color:var(--ep-ink3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:28px}.sign-line{border-bottom:1px solid var(--ep-ink);height:24px}.sign-name{margin-top:4px;font-weight:600}.sign .muted{font-size:9px}
-@media print{html,body,.ep-stage{background:#fff;padding:0;gap:0}.page{box-shadow:none;break-after:page;page-break-after:always}.page:last-child{break-after:auto;page-break-after:auto}}@page{size:A4 portrait;margin:0}`;
-        const sorted2 = (() => {
-          const result = [];
-          const visited = /* @__PURE__ */ new Set();
-          const visit = (parentId) => {
-            alphaSort(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
-              if (!visited.has(inst.id)) {
-                visited.add(inst.id);
-                result.push(inst);
-                visit(inst.id);
-              }
-            });
-          };
-          alphaSort(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
-            if (!visited.has(inst.id)) {
-              visited.add(inst.id);
-              result.push(inst);
-              visit(inst.id);
-            }
-          });
-          return result;
-        })();
-        const total = sorted2.length;
-        const hdr = `<strong>Stromplaner</strong> \xB7 Errichtungspr\xFCfung \xB7 DIN VDE 0100-600`;
-        const subR = `${esc(meta?.production || "Planung")} \xB7 ${esc(inspMeta.date || "")}`;
-        const ftrL = esc(inspMeta.inspector || "\u2013");
-        const ftrC = `EP-${(meta?.production || "Plan").replace(/[^A-Za-z0-9]/g, "-").slice(0, 30)}`;
-        const _logoHtml = _cl ? `<img src="${_cl}" style="height:20px;max-width:90px;object-fit:contain;vertical-align:middle">` : "";
-        const pageH = _logoHtml ? `<header class="page-h"><span>${hdr}</span><span style="display:flex;align-items:center;gap:8px"><span>${subR}</span>${_logoHtml}</span></header>` : `<header class="page-h"><span>${hdr}</span><span>${subR}</span></header>`;
-        const maengel = [];
-        sorted2.forEach((inst) => {
-          const ir = getIR(inst.id);
-          if (ir.bemerkung) maengel.push({ inst, item: ir.bemerkung, type: ir.bemerkungSchwere || "bad" });
-        });
-        let totalPunkte = 0, totalMangel = 0, totalRCD = 0;
-        sorted2.forEach((inst) => {
-          const ir = getIR(inst.id);
-          const type = boxTypeById[inst.typeId];
-          const outlets = type ? sortOutlets(type.outlets) : [];
-          totalPunkte += (ir.sicht || []).filter((v) => v !== null).length;
-          if (ir.bemerkung) totalMangel++;
-          (type?.rcds || []).forEach((rcd) => {
-            if (getOR(inst.id, `rcd_${rcd.id}`).rcdT1 !== "") totalRCD++;
-          });
-          outlets.filter((o) => o.protection === "RCBO").forEach((o) => {
-            if (isMulticore(o.connector)) {
-              const sl = o.mcSlots || 6;
-              for (let s = 1; s <= sl; s++) {
-                if (getOR(inst.id, `${o.id}_s${s}`).rcdT1 !== "") totalRCD++;
-              }
-            } else {
-              if (getOR(inst.id, o.id).rcdT1 !== "") totalRCD++;
-            }
-          });
-        });
-        let pages = `<article class="page">
-  ${pageH}
-  <main class="page-body">
-    <div class="page-title"><div class="kicker">Errichtungspr\xFCfung \xB7 DIN VDE 0100-600 \xB7 mobile Stromverteilung</div>
-      <h1>${esc(meta?.production || "Planung")}<span class="muted"> \xB7 ${esc(inspMeta.address || inspMeta.location || "")}</span></h1></div>
-    <section class="block"><header class="bar"><span><strong>Produktion</strong></span><span class="bar-right">${esc(inspMeta.date || "")}</span></header>
-      <div class="block-body"><div class="kv kv-2">
-        <div class="kv-row"><span class="k">Produktion</span><span class="v">${esc(meta?.production || "\u2013")}</span></div>
-        <div class="kv-row kv-right"><span class="k">Ersteller</span><span class="v">${esc(meta?.creator || "\u2013")}</span></div>
-        <div class="kv-row kv-last"><span class="k">Adresse</span><span class="v">${esc(inspMeta.address || "\u2013")}</span></div>
-        <div class="kv-row kv-last kv-right"><span class="k">Ort des Anschlusses</span><span class="v">${esc(inspMeta.location || "\u2013")}</span></div>
-      </div></div></section>
-    <section class="block"><header class="bar"><span><strong>Pr\xFCfung</strong><span class="bar-sub">DIN VDE 0100-600</span></span></header>
-      <div class="block-body"><div class="kv kv-2">
-        <div class="kv-row"><span class="k">Pr\xFCfer</span><span class="v">${esc(inspMeta.inspector || "\u2013")}</span></div>
-        <div class="kv-row kv-right"><span class="k">Netzform</span><span class="v">${esc(inspMeta.netType || "\u2013")}</span></div>
-        <div class="kv-row kv-last"><span class="k">Datum / Uhrzeit</span><span class="v">${esc(inspMeta.date || "\u2013")}${inspMeta.time ? " \xB7 " + esc(inspMeta.time) : ""}</span></div>
-        <div class="kv-row kv-last kv-right"><span class="k">Norm</span><span class="v">DIN VDE 0100-600</span></div>
-      </div></div></section>
-    ${inspMeta.equipment ? `<section class="block"><header class="bar"><span><strong>Pr\xFCfmittel</strong></span></header>
-      <div class="block-body"><div class="num-row row-last"><span class="muted">01</span><span>${esc(inspMeta.equipment)}</span></div></div></section>` : ""}
-    <section class="block"><header class="bar"><span><strong>Umfang</strong><span class="bar-sub">${total} Verteiler</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span>Bezeichnung</span><span>Typ</span><span>Eingang</span><span>H\xE4ngt an</span></div>
-        ${sorted2.map((inst, i) => {
-          const type = boxTypeById[inst.typeId];
-          const parent = inst.parentId ? instById[inst.parentId] : null;
-          const feedLbl = parent ? esc(parent.name) : inst.mainConnectionId ? esc(mainConnById[inst.mainConnectionId]?.name || "\u2013") : "\u2014 Einspeisung \u2014";
-          return `<div class="trow${i === sorted2.length - 1 ? " row-last" : ""}" style="grid-template-columns:1.6fr 1fr 1.1fr 1.1fr"><span><strong>${esc(inst.name)}</strong></span><span class="muted">${esc(type?.name || "\u2013")}</span><span class="muted">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span><span class="muted">${feedLbl}</span></div>`;
-        }).join("")}
-      </div></section>
-    <div class="spacer-auto"></div>
-  </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite 01 / PTOT</span></footer>
-</article>`;
-        let pdfPC = 1;
-        sorted2.forEach((inst, instIdx) => {
-          const type = boxTypeById[inst.typeId];
-          const outlets = type ? sortOutlets(type.outlets) : [];
-          const ir = getIR(inst.id);
-          const sicht = ir.sicht || Array(6).fill(null);
-          const pdfRcdRows = [];
-          (type?.rcds || []).forEach((rcd) => pdfRcdRows.push({ rowType: "rcd", rcd, outlet: null, oid: `rcd_${rcd.id}`, rowLabel: rcd.label, iAnLimit: rcd.mA, protLabel: `RCD ${rcd.mA} mA` }));
-          outlets.filter((o) => o.protection === "RCBO").forEach((o) => {
-            const rMa = o.rcdMa ?? 30;
-            if (isMulticore(o.connector)) {
-              const slots = o.mcSlots || 6;
-              for (let s = 1; s <= slots; s++) pdfRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: `${o.id}_s${s}`, rowLabel: `${o.label} \u2013 SP ${s} (${PHASES[(s - 1) % 3]})`, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
-            } else pdfRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: o.id, rowLabel: o.label, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
-          });
-          const parent = inst.parentId ? instById[inst.parentId] : null;
-          const n = instIdx + 1;
-          const hasMangel = !!(ir.bemerkung && (ir.bemerkungSchwere || "bad") === "bad");
-          const hasHinweis = !!(ir.bemerkung && ir.bemerkungSchwere === "warn");
-          const phaseR = ir.phaseRot === "rechts" ? "ok" : ir.phaseRot === "links" ? "bad" : "";
-          const ckVLN = pdfChkAll([ir.voltL1N, ir.voltL2N, ir.voltL3N], 207, 244);
-          const ckVLL = pdfChkAll([ir.voltL1L2, ir.voltL2L3, ir.voltL1L3], 360, 424);
-          const ckVNPE = pdfChk(ir.voltNPE, void 0, 1);
-          const ckVLPE = pdfChkAll([ir.voltL1PE, ir.voltL2PE, ir.voltL3PE], 207, 244);
-          const hasInletMeas = !!(ir.zs || ir.ik);
-          let secIdx = 4;
-          const rcdSec = pdfRcdRows.length ? secIdx++ : 0;
-          const abgSec = secIdx++;
-          const cableRows = outlets.filter((o) => getOR(inst.id, o.id).cableLen !== "");
-          const cableSec = cableRows.length ? secIdx++ : 0;
-          const bemSec = ir.bemerkung ? secIdx : 0;
-          const abgRows = [];
-          outlets.forEach((o) => {
-            if (isMulticore(o.connector)) {
-              const slots = o.mcSlots || 6;
-              for (let s = 1; s <= slots; s++) {
-                const oid = `${o.id}_s${s}`;
-                const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id && p.mcSlot === s);
-                const lbl = pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
-                abgRows.push({ oid, label: `${o.label} SP${s}`, lbl, amp: o.amp || 16, is3p: false, hasChild: false, hasRcd: o.protection === "RCBO" || !!o.rcdId, breaker: o.breaker || "C" });
-              }
-            } else {
-              const childInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === o.id);
-              const pl = (placements || []).filter((p) => p.instanceId === inst.id && p.outletId === o.id);
-              const lbl = childInsts.length ? childInsts[0].name : pl.length ? (loadById || {})[pl[0].loadId]?.name || "\u2013" : "\u2013";
-              abgRows.push({ oid: o.id, label: o.label, lbl, amp: o.amp || type?.feedAmp || 16, is3p: is3ph(o.connector), hasChild: childInsts.length > 0, childInstIds: childInsts.map((ci) => ci.id), hasRcd: o.protection === "RCBO" || !!o.rcdId, breaker: o.breaker || "C" });
-            }
-          });
-          const _rcdH = pdfRcdRows.length ? 72 + pdfRcdRows.length * 30 : 0;
-          const _rowsFst = Math.max(4, Math.floor((1018 - 420 - _rcdH - 72) / 30));
-          const _rowsCnt = Math.max(4, Math.floor((1018 - 50 - 72) / 30));
-          const _chunks = [];
-          const _todo = [...abgRows];
-          _chunks.push(_todo.splice(0, _rowsFst));
-          while (_todo.length) _chunks.push(_todo.splice(0, _rowsCnt));
-          const pdfWorstZs = (...vs) => {
-            const v = vs.filter((x) => x !== "").map(Number);
-            return v.length ? Math.max(...v).toFixed(2) : "";
-          };
-          const pdfWorstIk = (...vs) => {
-            const v = vs.filter((x) => x !== "").map(Number);
-            return v.length ? Math.min(...v).toFixed(0) : "";
-          };
-          const renderChunk = (chunk, isLastChunk) => `<section class="block"><header class="bar"><span><strong>${n}.${abgSec} \xB7 Abg\xE4nge &amp; Schleifenimpedanz</strong><span class="bar-sub">${abgRows.length} Stk.</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:80px 1fr 90px 100px 55px"><span>Anschl.</span><span>Verbraucher / Verteiler</span><span class="r">Z_s (\u03A9)</span><span class="r">I_k (A)<br><span style="font-weight:400;font-size:8px">\u2265 In\xD710 A</span></span><span class="r">Befund</span></div>
-        ${chunk.map(({ oid, label, lbl, amp, is3p, hasChild, childInstIds, hasRcd, breaker }, i) => {
-            const or = getOR(inst.id, oid);
-            const ikFactorO = breaker === "B" ? 5 : breaker === "D" ? 20 : breaker === "K" ? 14 : 10;
-            const ikLimO = amp * ikFactorO;
-            const zsLimO = hasRcd ? 2 : parseFloat((230 / (amp * ikFactorO)).toFixed(2));
-            const last = i === chunk.length - 1 && isLastChunk ? " row-last" : "";
-            if (or.notInUse) return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px;opacity:0.55"><span class="id">${esc(label)}</span><span class="ell muted" style="font-style:italic">Nicht in Betrieb</span><span class="r muted">\u2013</span><span class="r muted">\u2013</span><span class="r muted">\u2014</span></div>`;
-            if (hasChild) {
-              const d = childDerived(childInstIds || []);
-              const hasOv = or.overrideActive || !!(or.zsOverride || or.ikOverride || or.zsOverrideL1 || or.zsOverrideL2 || or.zsOverrideL3 || or.ikOverrideL1 || or.ikOverrideL2 || or.ikOverrideL3);
-              const zsVal2 = (hasOv ? (is3p ? worstZs(or.zsOverrideL1, or.zsOverrideL2, or.zsOverrideL3) || or.zsOverride : or.zsOverride) || d.zs : d.zs) || "";
-              const ikVal2 = (hasOv ? (is3p ? worstIk(or.ikOverrideL1, or.ikOverrideL2, or.ikOverrideL3) || or.ikOverride : or.ikOverride) || d.ik : d.ik) || "";
-              const ckZs = zsVal2 ? pdfChk(zsVal2, void 0, zsLimO) : "";
-              const ckIk = ikVal2 ? pdfChk(ikVal2, ikLimO, void 0) : "";
-              const ck = ckIk === "bad" || ckZs === "bad" ? "bad" : ckIk === "ok" || ckZs === "ok" ? "ok" : "";
-              const uvNote = `<span style="font-size:8px;color:#888"> (UV)</span>`;
-              const ovMark = hasOv ? `<span style="font-size:8px;color:#e67e22"> \u270E</span>` : "";
-              const lblTxt = hasOv ? `Separat gemessen am Eingang \u2013 abgel. Wert (${d.zs || "\u2013"} \u03A9 / ${d.ik || "\u2013"} A) \xFCberschritt Grenzwert (DIN VDE 0100-600 \xA7643)` : `Messung aus angeschlossener Unterverteilung (ung\xFCnstigster Punkt, DIN VDE 0100-600 \xA7643)`;
-              return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span class="muted" style="font-style:italic;min-width:0">${lblTxt}</span><span class="r">${zsVal2 ? esc(zsVal2) + " &Omega;" + (hasOv ? ovMark : uvNote) : "\u2013"}</span><span class="r"><strong>${ikVal2 ? esc(ikVal2) + " A" + (hasOv ? "" : uvNote) : "\u2013"}</strong>${ikVal2 ? `<br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span>` : ""}</span><span class="r">${ck ? badge(ck) : "\u2014"}</span></div>`;
-            }
-            const zsVal = is3p ? pdfWorstZs(or.zsL1, or.zsL2, or.zsL3) : or.zs || "";
-            const ikVal = is3p ? pdfWorstIk(or.ikL1, or.ikL2, or.ikL3) : or.ik || "";
-            const zsNote = is3p && zsVal ? `<br><span style="font-size:8px;color:#888">${[or.zsL1, or.zsL2, or.zsL3].filter((x) => x).join(" / ")} \u03A9</span>` : "";
-            const ikNote = is3p && ikVal ? `<br><span style="font-size:8px;color:#888">${[or.ikL1, or.ikL2, or.ikL3].filter((x) => x).join(" / ")} A</span>` : ``;
-            const ckZsO = pdfChk(zsVal, void 0, zsLimO);
-            const ckIkO = pdfChk(ikVal, ikLimO, void 0);
-            const ckO = ckIkO === "bad" || ckZsO === "bad" ? "bad" : ckIkO === "ok" || ckZsO === "ok" ? "ok" : "";
-            return `<div class="trow${last}" style="grid-template-columns:80px 1fr 90px 100px 55px"><span class="id">${esc(label)}</span><span style="min-width:0">${esc(lbl)}</span><span class="r">${zsVal ? esc(zsVal) + " \u03A9" + zsNote : "\u2013"}</span><span class="r"><strong>${ikVal ? esc(ikVal) + " A" + ikNote : "\u2013"}</strong>${ikVal ? `<br><span class="muted" style="font-size:8px">\u2265 ${ikLimO} A</span>` : ""}</span><span class="r">${badge(ckO)}</span></div>`;
-          }).join("")}
-      </div></section>`;
-          const cableHTML = cableRows.length ? `<section class="block"><header class="bar"><span><strong>${n}.${cableSec} \xB7 Leitungen &amp; Spannungsfall</strong><span class="bar-sub">${cableRows.length} Stk.</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span>Abgang</span><span class="r">I_N</span><span class="r">&ell; (m)</span><span class="r">A (mm&sup2;)</span><span class="r">&Delta;U (V)</span><span class="r">&Delta;U (%)</span><span class="r">Befund</span></div>
-        ${cableRows.map((o, i) => {
-            const or = getOR(inst.id, o.id);
-            const du = calcVoltDrop(o.amp, or.cableLen, or.cableA, or.cosPhi, is3ph(o.connector));
-            const befund = du ? du.pct <= 3 ? "ok" : du.pct <= 5 ? "warn" : "bad" : "";
-            return `<div class="trow${i === cableRows.length - 1 ? " row-last" : ""}" style="grid-template-columns:1fr 55px 65px 65px 65px 65px 55px"><span class="id">${esc(o.label)}</span><span class="r muted">${o.amp}A</span><span class="r">${esc(or.cableLen) || "\u2013"}&thinsp;m</span><span class="r">${esc(or.cableA) || "\u2013"}&thinsp;mm&sup2;</span><span class="r">${du ? du.V.toFixed(2) + "&thinsp;V" : "\u2013"}</span><span class="r${du && du.pct > 5 ? " bad" : du && du.pct > 3 ? " warn" : ""}"><strong>${du ? du.pct.toFixed(2) + "&thinsp;%" : "\u2013"}</strong></span><span class="r">${badge(befund)}</span></div>`;
-          }).join("")}
-      </div></section>` : "";
-          const bemHTML = ir.bemerkung ? `<section class="block"><header class="bar"><span><strong>${n}.${bemSec} \xB7 Bemerkung</strong></span><span class="bar-right">${(ir.bemerkungSchwere || "bad") === "warn" ? `<span class="warn">! Hinweis</span>` : `<span class="bad">\u2715 Mangel</span>`}</span></header>
-      <div class="block-body"><div class="bemerkung${(ir.bemerkungSchwere || "bad") === "warn" ? "" : " row-bad"}">${esc(ir.bemerkung)}</div></div></section>` : "";
-          _chunks.forEach((chunk, ci) => {
-            pdfPC++;
-            const pNum = String(pdfPC).padStart(2, "0");
-            const isFirst = ci === 0;
-            const isLast = ci === _chunks.length - 1;
-            if (isFirst) {
-              pages += `<article class="page">
-  ${pageH}
-  <main class="page-body">
-    <div class="page-title"><div class="page-title-row">
-      <div><div class="kicker">Verteiler ${n} von ${total} \xB7 ${esc(type?.name || "")}</div>
-        <h1><span class="id-h1">${esc(inst.name)}</span><span class="muted muted-h1"> \xB7 ${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A \xB7 ${esc(type?.name || "")}</span></h1></div>
-      ${hasMangel ? `<span class="befund-label bad">\u2715 Mangel</span>` : hasHinweis ? `<span class="befund-label warn">! Hinweis</span>` : ""}
-    </div></div>
-    <section class="block"><header class="bar"><span><strong>${n}.1 \xB7 Stammdaten</strong></span></header>
-      <div class="block-body"><div class="kv kv-3">
-        <div class="kv-row"><span class="k">Typ</span><span class="v">${esc(type?.name || "\u2013")}</span></div>
-        <div class="kv-row"><span class="k">Eingang</span><span class="v">${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A</span></div>
-        <div class="kv-row kv-right"><span class="k">Netzform</span><span class="v">${esc(inspMeta.netType || "\u2013")}</span></div>
-        <div class="kv-row kv-last"><span class="k">H\xE4ngt an</span><span class="v">${parent ? esc(parent.name) : inst.mainConnectionId ? esc(mainConnById[inst.mainConnectionId]?.name || "\u2013") : "\u2014 Einspeisung \u2014"}</span></div>
-        <div class="kv-row kv-last" style="grid-column:span 2"><span class="k">Anschl\xFCsse</span><span class="v">${outlets.length} Stk.</span></div>
-      </div></div></section>
-    <section class="block"><header class="bar"><span><strong>${n}.2 \xB7 Sichtpr\xFCfung</strong><span class="bar-sub">6 Punkte</span></span></header>
-      <div class="block-body"><div class="dual">
-        ${SICHT_ITEMS.map((item, idx) => `<div class="sicht-cell${sicht[idx] === false ? " row-bad" : ""}${idx % 2 === 0 ? " cell-bright" : ""}${idx >= 4 ? " cell-blast" : ""}"><span class="muted">${n}.2.${idx + 1}</span><span class="ell">${esc(item)}</span><span class="r">${sichtBadge(sicht[idx])}</span></div>`).join("")}
-      </div></div></section>
-    <section class="block"><header class="bar"><span><strong>${n}.3 \xB7 Messungen</strong><span class="bar-sub">Drehfeld \xB7 U</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:1fr 210px 130px 80px"><span>Pr\xFCfung</span><span class="r">Wert</span><span class="r">Grenzwert</span><span class="r">Befund</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.1</span>Drehfeldrichtung</span><span class="r"><strong>${ir.phaseRot === "rechts" ? "rechts" : ir.phaseRot === "links" ? "links" : "\u2013"}</strong></span><span class="r muted">rechts</span><span class="r">${badge(phaseR)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.2</span>U L\u2013N (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1N, ir.voltL2N, ir.voltL3N)}</strong></span><span class="r muted">207\u2013244 V</span><span class="r">${badge(ckVLN)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.3</span>U L\u2013L (L1-L2 / L2-L3 / L1-L3)</span><span class="r"><strong>${fv(ir.voltL1L2, ir.voltL2L3, ir.voltL1L3)}</strong></span><span class="r muted">360\u2013424 V</span><span class="r">${badge(ckVLL)}</span></div>
-        <div class="trow" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.4</span>U N\u2013PE</span><span class="r"><strong>${ir.voltNPE ? esc(ir.voltNPE) + "&thinsp;V" : "\u2013"}</strong></span><span class="r muted">Spannungsfrei</span><span class="r">${badge(ckVNPE)}</span></div>
-        <div class="trow${!hasInletMeas ? " row-last" : ""}" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.5</span>U L\u2013PE (L1 / L2 / L3)</span><span class="r"><strong>${fv(ir.voltL1PE, ir.voltL2PE, ir.voltL3PE)}</strong></span><span class="r muted">207\u2013244 V</span><span class="r">${badge(ckVLPE)}</span></div>
-        ${hasInletMeas ? `<div class="trow${!ir.ik ? " row-last" : ""}" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.6</span>Z_s Eingang</span><span class="r"><strong>${ir.zs ? esc(ir.zs) + "&thinsp;\u03A9" : "\u2013"}</strong></span><span class="r muted">\u2013</span><span class="r"><span class="muted">\u2013</span></span></div>${ir.ik ? `<div class="trow row-last" style="grid-template-columns:1fr 210px 130px 80px"><span><span class="muted no">${n}.3.7</span>I_k Eingang</span><span class="r"><strong>${esc(ir.ik)}&thinsp;A</strong></span><span class="r muted">\u2013</span><span class="r"><span class="muted">\u2013</span></span></div>` : ""}` : ""}
-
-      </div></section>
-    ${pdfRcdRows.length ? `<section class="block"><header class="bar"><span><strong>${n}.${rcdSec} \xB7 RCD-Pr\xFCfung</strong><span class="bar-sub">${pdfRcdRows.length} Stk.</span></span></header>
-      <div class="block-body">
-        <div class="thead" style="grid-template-columns:1fr 80px 100px 90px"><span>Anschluss / RCD</span><span>Typ</span><span class="r">I_An (mA)<br><span style="font-weight:400;font-size:8px">\xBDN \u2013 N</span></span><span class="r">t_A (ms)<br><span style="font-weight:400;font-size:8px">&le; 300 ms</span></span></div>
-        ${pdfRcdRows.map(({ rowType, rcd, outlet, oid, rowLabel, iAnLimit, protLabel }, i) => {
-                const or = getOR(inst.id, oid);
-                const okT = pdfChk(or.rcdT1, void 0, 300);
-                const okIan = iAnLimit ? pdfChk(or.rcdIan, iAnLimit / 2, iAnLimit) : "";
-                const bgStyle = rowType === "rcd" ? "background:rgba(245,166,35,0.04);" : "";
-                return `<div class="trow${i === pdfRcdRows.length - 1 ? " row-last" : ""}" style="${bgStyle}grid-template-columns:1fr 80px 100px 90px"><span><span class="id">${esc(rowLabel)}</span></span><span class="muted">${esc(protLabel)}</span><span class="r${okIan === "bad" ? " bad" : ""}"><strong>${esc(or.rcdIan) || "\u2013"}</strong>${iAnLimit ? `<br><span class="muted" style="font-size:8px">${iAnLimit / 2}\u2013${iAnLimit}&thinsp;mA</span>` : ""}</span><span class="r${okT === "bad" ? " bad" : ""}"><strong>${esc(or.rcdT1) || "\u2013"}</strong></span></div>`;
-              }).join("")}
-      </div></section>` : ""}
-    ${renderChunk(chunk, isLast)}
-    ${isLast ? cableHTML : ""}
-    ${isLast ? bemHTML : ""}
-  </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pNum} / PTOT</span></footer>
-</article>`;
-            } else {
-              pages += `<article class="page">
-  ${pageH}
-  <main class="page-body">
-    <div style="margin:4px 0 8px"><div class="kicker">${esc(inst.name)} \xB7 Verteiler ${n} von ${total} \u2013 Fortsetzung</div></div>
-    ${renderChunk(chunk, isLast)}
-    ${isLast ? cableHTML : ""}
-    ${isLast ? bemHTML : ""}
-  </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${pNum} / PTOT</span></footer>
-</article>`;
-            }
-          });
-        });
-        pdfPC++;
-        const lastNum = String(pdfPC).padStart(2, "0");
-        pages += `<article class="page">
-  ${pageH}
-  <main class="page-body">
-    <div class="page-title"><div class="kicker">Abschluss \xB7 M\xE4ngelliste \xB7 Best\xE4tigung</div><h1>Befund &amp; Unterschrift</h1></div>
-    <section class="block"><header class="bar"><span><strong>E \xB7 M\xE4ngel und Auflagen</strong><span class="bar-sub">${maengel.length} Eintr${maengel.length === 1 ? "ag" : "\xE4ge"}</span></span></header>
-      <div class="block-body">${maengel.length === 0 ? `<div style="padding:6px 10px;color:#7a8290;font-size:9.5px">Keine M\xE4ngel protokolliert.</div>` : `
-        <div class="thead" style="grid-template-columns:40px 200px 1fr 80px"><span>Nr.</span><span>Verteiler</span><span>Beschreibung</span><span class="r">Schwere</span></div>
-        ${maengel.map((m, i) => `<div class="trow${i === maengel.length - 1 ? " row-last" : ""}" style="grid-template-columns:40px 200px 1fr 80px"><span class="muted">M${String(i + 1).padStart(2, "0")}</span><span>${esc(m.inst.name)}</span><span>${esc(m.item)}</span><span class="r">${m.type === "bad" ? `<span class="bad">\u2715 Mangel</span>` : `<span class="warn">! Hinweis</span>`}</span></div>`).join("")}`}
-      </div></section>
-    <section class="block"><header class="bar"><span><strong>F \xB7 Unterschrift</strong><span class="bar-sub">Pr\xFCfende Elektrofachkraft</span></span></header>
-      <div class="block-body">
-        <div class="sign" style="padding:12px 12px 8px"><div class="sign-role">Pr\xFCfende Elektrofachkraft \xB7 DIN VDE 0100-600</div>${_sig ? `<img src="${_sig.replace(/"/g, "&quot;")}" style="height:48px;max-width:200px;object-fit:contain;display:block;margin-bottom:4px">` : `<div class="sign-line"></div>`}<div class="sign-name">${esc(inspMeta.inspector || "\u2013")}</div><div class="muted">${esc(inspMeta.location || "")}${inspMeta.date ? " \xB7 " + esc(inspMeta.date) : ""}</div></div>
-      </div></section>
-    <div class="spacer-auto"></div>
-    <section class="block"><header class="bar"><span><strong>Hinweis</strong></span></header>
-      <div class="block-body"><div class="bemerkung small">Dieses Protokoll ist im Zuge der Veranstaltung mitzuf\xFChren und bei der pr\xFCfenden Elektrofachkraft zu archivieren. Bei Erweiterung oder Umbau der Anlage ist eine erneute Pr\xFCfung der betroffenen Anlagenteile gem\xE4\xDF DIN VDE 0100-600 erforderlich.</div></div></section>
-  </main>
-  <footer class="page-f"><span>${ftrL}</span><span>${ftrC}</span><span>Seite ${lastNum} / PTOT</span></footer>
-</article>`;
-        pages = pages.replace(/PTOT/g, String(pdfPC));
-        const fullHtml = `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Errichtungspruefung</title><style>${css}</style></head><body><div class="ep-stage">${pages}</div></body></html>`;
+        const fullHtml = pruefprotokollHtml(
+          { instances, boxTypes: Object.values(boxTypeById), loads: Object.values(loadById), mainConns, meta, placements, inspMeta, inspResults },
+          { logo: localStorage.getItem("sp_corp_logo") || "", signatur: localStorage.getItem("sp_insp_sign") || "" }
+        );
         if (window.electronAPI?.exportInspectionPdf) {
           window.electronAPI.exportInspectionPdf(fullHtml).catch((err) => uiAlert("PDF-Export Fehler: " + (err?.message || err)));
         } else {
@@ -32737,7 +32902,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const result = [];
       const visited = /* @__PURE__ */ new Set();
       const visit = (parentId) => {
-        alphaSort(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
+        alphaSort2(instances.filter((i) => i.parentId === parentId), "name").forEach((inst) => {
           if (!visited.has(inst.id)) {
             visited.add(inst.id);
             result.push(inst);
@@ -32745,7 +32910,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           }
         });
       };
-      alphaSort(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
+      alphaSort2(instances.filter((i) => !i.parentId), "name").forEach((inst) => {
         if (!visited.has(inst.id)) {
           visited.add(inst.id);
           result.push(inst);
@@ -32769,7 +32934,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     };
     return /* @__PURE__ */ import_react5.default.createElement("div", { ref: inspRef, onKeyDown: handleEnterNav }, /* @__PURE__ */ import_react5.default.createElement(Section, { title: "Pr\xFCfungsdetails" }, /* @__PURE__ */ import_react5.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Pr\xFCfer" }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.input, value: inspMeta.inspector, onChange: (e) => updMeta({ inspector: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Datum" }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.input, type: "date", value: inspMeta.date, onChange: (e) => updMeta({ date: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Uhrzeit" }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.input, type: "time", value: inspMeta.time || "", onChange: (e) => updMeta({ time: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Pr\xFCfmittel / Messger\xE4t" }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.input, value: inspMeta.equipment, onChange: (e) => updMeta({ equipment: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Adresse" }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.input, value: inspMeta.address || "", onChange: (e) => updMeta({ address: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Ort des Anschlusses" }, /* @__PURE__ */ import_react5.default.createElement("input", { style: S.input, value: inspMeta.location || "", onChange: (e) => updMeta({ location: e.target.value }) })), /* @__PURE__ */ import_react5.default.createElement(Field, { label: "Netzform" }, /* @__PURE__ */ import_react5.default.createElement("select", { style: S.input, value: inspMeta.netType || "", onChange: (e) => updMeta({ netType: e.target.value }) }, /* @__PURE__ */ import_react5.default.createElement("option", { value: "" }, "\u2014 nicht angegeben \u2014"), /* @__PURE__ */ import_react5.default.createElement("option", { value: "TN-S" }, "TN-S"), /* @__PURE__ */ import_react5.default.createElement("option", { value: "TN-C-S" }, "TN-C-S"), /* @__PURE__ */ import_react5.default.createElement("option", { value: "TT" }, "TT"), /* @__PURE__ */ import_react5.default.createElement("option", { value: "IT" }, "IT")))), /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginTop: 10, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" } }, inspSign && /* @__PURE__ */ import_react5.default.createElement("img", { src: inspSign, alt: "Unterschrift", style: { height: 36, maxWidth: 160, objectFit: "contain", border: "1px solid #3a424c", borderRadius: 4, padding: "2px 6px", background: "#fff" } }), /* @__PURE__ */ import_react5.default.createElement("label", { style: { ...S.ghostBtn, padding: "3px 9px", fontSize: 11, cursor: "pointer" }, title: inspSign ? "Unterschrift ersetzen" : "Unterschrift hochladen" }, inspSign ? /* @__PURE__ */ import_react5.default.createElement(PenLine, { size: 12, "aria-hidden": "true" }) : /* @__PURE__ */ import_react5.default.createElement(ImagePlus, { size: 12, "aria-hidden": "true" }), "Unterschrift", /* @__PURE__ */ import_react5.default.createElement("input", { type: "file", accept: "image/png,image/jpeg,image/svg+xml", style: { display: "none" }, onChange: uploadInspSign })), inspSign && /* @__PURE__ */ import_react5.default.createElement("button", { style: { ...S.ghostBtn, padding: "3px 7px", fontSize: 11 }, onClick: removeInspSign, title: "Unterschrift entfernen", "aria-label": "Unterschrift entfernen" }, /* @__PURE__ */ import_react5.default.createElement(X, { size: 14, "aria-hidden": "true" })), /* @__PURE__ */ import_react5.default.createElement("div", { style: { flex: 1 } }), /* @__PURE__ */ import_react5.default.createElement("button", { style: { ...S.exportBtn, display: "inline-flex", alignItems: "center", gap: 6 }, onClick: exportInspectionPDF }, /* @__PURE__ */ import_react5.default.createElement(Printer, { size: 15, "aria-hidden": "true" }), "Pr\xFCfprotokoll PDF"), /* @__PURE__ */ import_react5.default.createElement("button", { style: { background: "transparent", border: "1px solid #3a424c", borderRadius: 10, width: 22, height: 22, padding: 0, color: "#9aa4af", cursor: "pointer", fontSize: 12, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }, onClick: () => openHelp2("errichtungspruefung"), title: "Hilfe zur Errichtungspr\xFCfung" }, "?"))), sorted.length === 0 ? /* @__PURE__ */ import_react5.default.createElement("p", { style: S.empty }, 'Keine Verteiler aktiviert. Bitte zuerst im Tab \u201EKonfiguration" Verteiler hinzuf\xFCgen.') : sorted.map((inst) => {
       const type = boxTypeById[inst.typeId];
-      const outlets = type ? sortOutlets(type.outlets) : [];
+      const outlets = type ? sortOutlets2(type.outlets) : [];
       const ir = getIR(inst.id);
       const sicht = ir.sicht || Array(6).fill(null);
       const rcdGroups = type?.rcds || [];
@@ -32780,9 +32945,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       });
       rcboOutlets.forEach((o) => {
         const rMa = o.rcdMa ?? 30;
-        if (isMulticore(o.connector)) {
+        if (isMulticore2(o.connector)) {
           const slots = o.mcSlots || 6;
-          for (let s = 1; s <= slots; s++) expandedRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: `${o.id}_s${s}`, rowLabel: `${o.label} \u2013 SP ${s} (${PHASES[(s - 1) % 3]})`, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
+          for (let s = 1; s <= slots; s++) expandedRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: `${o.id}_s${s}`, rowLabel: `${o.label} \u2013 SP ${s} (${PHASES2[(s - 1) % 3]})`, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
         } else {
           expandedRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: o.id, rowLabel: o.label, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
         }
@@ -32795,9 +32960,9 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         {
           key: inst.id,
           title: /* @__PURE__ */ import_react5.default.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ import_react5.default.createElement(Plug, { size: 17, color: ACCENT, "aria-hidden": "true" }), inst.name),
-          subtitle: `${type?.name || "?"} \xB7 Einspeisung: ${CONN[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A`
+          subtitle: `${type?.name || "?"} \xB7 Einspeisung: ${CONN2[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A`
         },
-        /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ import_react5.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Sichtpr\xFCfung"), /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 } }, SICHT_ITEMS.map((item, idx) => {
+        /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ import_react5.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Sichtpr\xFCfung"), /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 } }, SICHT_ITEMS2.map((item, idx) => {
           const v = sicht[idx];
           return /* @__PURE__ */ import_react5.default.createElement("div", { key: idx, onClick: () => cycleSicht(inst.id, idx), title: v === true ? "OK \u2013 klicken zum Zur\xFCcksetzen" : "Nicht eingetragen \u2013 klicken f\xFCr OK", style: { display: "flex", alignItems: "center", gap: 7, background: v === true ? "rgba(26,92,46,0.35)" : "#1b2026", borderRadius: 5, padding: "5px 8px", border: `1px solid ${v === true ? "#2ecc71" : LINE}`, cursor: "pointer", userSelect: "none", transition: "background .1s" } }, /* @__PURE__ */ import_react5.default.createElement("div", { style: { width: 22, height: 22, borderRadius: 4, border: `2px solid ${v === true ? "#2ecc71" : "#3a424c"}`, fontWeight: 700, fontSize: 12, flexShrink: 0, background: v === true ? "#1a5c2e" : "transparent", color: v === true ? "#2ecc71" : "#555", display: "flex", alignItems: "center", justifyContent: "center" } }, v === true ? /* @__PURE__ */ import_react5.default.createElement(Check, { size: 14, strokeWidth: 3, "aria-hidden": "true" }) : null), /* @__PURE__ */ import_react5.default.createElement("span", { style: { fontSize: 11, color: v === true ? "#2ecc71" : "#e8eaed" } }, item));
         }))),
@@ -32813,16 +32978,16 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
           const schleifenRows = [];
           outlets.forEach((outlet) => {
             const outHasRcd = (o) => o.protection === "RCBO" || !!o.rcdId;
-            if (isMulticore(outlet.connector)) {
+            if (isMulticore2(outlet.connector)) {
               const slots = outlet.mcSlots || 6;
               for (let s = 1; s <= slots; s++) {
                 const slotId = `${outlet.id}_s${s}`;
                 const slotChildInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === slotId);
-                schleifenRows.push({ oid: slotId, label: `${outlet.label} \u2013 SP ${s}`, subLabel: `${PHASES[(s - 1) % 3]} \xB7 ${outlet.amp}A`, amp: outlet.amp || 16, is3p: false, hasChild: slotChildInsts.length > 0, childName: slotChildInsts[0]?.name || "", childInstIds: slotChildInsts.map((ci) => ci.id), hasRcd: outHasRcd(outlet), breaker: outlet.breaker || "C" });
+                schleifenRows.push({ oid: slotId, label: `${outlet.label} \u2013 SP ${s}`, subLabel: `${PHASES2[(s - 1) % 3]} \xB7 ${outlet.amp}A`, amp: outlet.amp || 16, is3p: false, hasChild: slotChildInsts.length > 0, childName: slotChildInsts[0]?.name || "", childInstIds: slotChildInsts.map((ci) => ci.id), hasRcd: outHasRcd(outlet), breaker: outlet.breaker || "C" });
               }
             } else {
               const childInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === outlet.id);
-              schleifenRows.push({ oid: outlet.id, label: outlet.label, subLabel: `${CONN[outlet.connector]?.label || ""} ${outlet.amp}A`, amp: outlet.amp || type?.feedAmp || 16, is3p: is3ph(outlet.connector), hasChild: childInsts.length > 0, childName: childInsts[0]?.name || "", childInstIds: childInsts.map((ci) => ci.id), hasRcd: outHasRcd(outlet), breaker: outlet.breaker || "C" });
+              schleifenRows.push({ oid: outlet.id, label: outlet.label, subLabel: `${CONN2[outlet.connector]?.label || ""} ${outlet.amp}A`, amp: outlet.amp || type?.feedAmp || 16, is3p: is3ph2(outlet.connector), hasChild: childInsts.length > 0, childName: childInsts[0]?.name || "", childInstIds: childInsts.map((ci) => ci.id), hasRcd: outHasRcd(outlet), breaker: outlet.breaker || "C" });
             }
           });
           return /* @__PURE__ */ import_react5.default.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ import_react5.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Schleifenimpedanz & Kurzschluss"), /* @__PURE__ */ import_react5.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 4 } }, schleifenRows.map(({ oid, label, subLabel, amp, is3p, hasChild, childName, childInstIds, hasRcd, breaker }) => {

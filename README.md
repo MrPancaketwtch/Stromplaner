@@ -35,7 +35,7 @@ Auf **macOS** ist die App nicht mit einem Apple-Entwicklerzertifikat signiert, d
 
 ## 📱 Handy-App (Android)
 
-Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am PC, geprüft wird mit dem Handy am Verteiler, das Prüfprotokoll entsteht wieder am PC.
+Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am PC, geprüft wird mit dem Handy am Verteiler. Das Prüfprotokoll entsteht am PC – oder direkt am Handy als PDF. Für eine spontane Prüfung ohne PC lässt sich auch am Handy ein Plan anlegen.
 
 ### Installation
 - Die Datei `Stromplaner-x.x.x.apk` von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** aufs Handy laden und öffnen.
@@ -47,11 +47,18 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 ### Tabs in der Handy-App
 | Tab | Inhalt |
 |-----|--------|
-| **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. |
+| **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **Verteiler hinzufügen** legt direkt hier einen Verteiler an, **Prüfprotokoll als PDF** erzeugt das Protokoll im selben Layout wie am PC und öffnet das Teilen-Menü (Mail, Messenger, Drive …). |
 | **Steckplan** | Verteiler und Steckungen ansehen und anpassen |
-| **Projekt** | Projektdaten |
+| **Projekt** | **Neuer Plan**, Projektdaten und **Verteiler-Typen** (anlegen und bearbeiten) |
 | **Teilen** | Plan per QR-Code vom PC holen, An PC zurücksenden – ohne Server |
-| **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten: Prüfwerte erscheinen sofort am PC (siehe „Sitzung“ weiter unten) |
+| **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten oder selbst eine starten: Prüfwerte erscheinen sofort bei allen (siehe „Sitzung“ weiter unten) |
+
+### Spontane Prüfung nur mit dem Handy
+1. **Projekt** → **Neuer Plan**, Veranstaltung eintragen.
+2. **Prüfung** → **Verteiler hinzufügen** → Typ wählen. Fehlt der Typ, über **Neuen Typ anlegen** Name, Einspeisung und Abgänge antippen (Schuko, CEE, Multicore …; Schutz LS/RCBO und Auslösecharakteristik je Abgang).
+3. Prüfen wie gewohnt, danach **Prüfprotokoll als PDF**.
+
+Das Handy merkt sich die Verteiler-Typen und Verbraucher aller Pläne, die es je geladen hat oder in denen es in einer Sitzung war – ein neuer Plan startet mit dieser Bibliothek. Firmenlogo und Unterschrift kommen nur ins PDF vom PC.
 
 ### Plan vom PC aufs Handy und zurück (WLAN)
 1. **PC:** Header → **Teilen** → **QR-Code anzeigen**.
@@ -111,6 +118,7 @@ Stromplaner/
 │   ├── Stromplaner.html      ← Gebündelte App (Output von build.js)
 │   ├── Stromplaner.jsx       ← Quellcode (React 18)
 │   ├── sync/                 ← Sitzungen (Anbindung an den Planer-Server, auch von der Handy-App genutzt)
+│   ├── shared/               ← Prüfprotokoll (HTML) – gemeinsam für PC-PDF und Handy-PDF
 │   └── Standard.json         ← Vorgeladene Verteiler-Typen & Verbraucher
 ├── dist/                     ← NSIS-Installer (gitignoriert – wird via GitHub Releases verteilt)
 ├── Speicherstände/           ← Eigene Planungen (.json) ablegen
@@ -283,7 +291,7 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 Mehrere Personen bearbeiten denselben Plan gleichzeitig, jede Änderung erscheint sofort bei allen – am PC und in der Android-App. Voraussetzung ist ein erreichbarer [Planer-Server](#planer-server-für-sitzungen) und dieselbe Stromplaner-Version bei allen (PC und Handy).
 
 1. Header → **Sitzung** → Server-Adresse (z. B. `192.168.1.10` oder `http://server:3001`), ggf. Server-Token und den eigenen Namen eintragen.
-2. **Sitzung starten:** Name vergeben, optional einen Sitzungscode – der aktuelle Plan wird zum gemeinsamen Plan.
+2. **Sitzung starten:** Name vergeben, optional einen Sitzungscode – der aktuelle Plan wird zum gemeinsamen Plan. Das geht am PC und auf dem Handy (Tab **Sitzung** → **Sitzung starten**).
 3. **Beitreten:** Die anderen wählen die Sitzung aus der Liste (ggf. mit Code) – am PC unter **Sitzung**, auf dem Handy im Tab **Sitzung**. Ihr bisheriger Plan wird dabei durch den Stand der Sitzung ersetzt – vorher speichern bzw. Prüfergebnisse an den PC senden, falls nötig.
 
 **Gut zu wissen:**
@@ -337,7 +345,7 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | Persistenz | localStorage (Autosave, 600 ms debounce) |
 | Diagramm | SVG (manuelles Layout, kein D3 o. ä.) |
 | CI/CD | GitHub Actions (baut Windows + macOS + Android bei Tag-Push) |
-| Handy-App | React 18 + Vite, Capacitor 6 (Android-APK), PWA via GitHub Pages |
+| Handy-App | React 18 + Vite, Capacitor 8 (Android-APK), PWA via GitHub Pages; PDF mit html2canvas + jsPDF |
 | QR / Datenaustausch | `qrcode` (PC), `jsQR` (Handy), lokaler HTTP-Server auf Port 4747 |
 | Sitzungen | WebSocket zum [Planer-Server](https://github.com/Nomisimo/Planer-Server); Client in `app/sync/` (`sync-client.js`, `ops.js` unverändert aus dem Planer-Server übernommen, Apache 2.0 – siehe `app/sync/LICENSE` und `NOTICE`; Änderungen dort pflegen und hierher kopieren) |
 

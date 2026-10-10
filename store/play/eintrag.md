@@ -26,10 +26,11 @@ ERRICHTUNGSPRÜFUNG VOR ORT
 • Grenzwerte werden sofort geprüft: Werte außerhalb der Norm färben sich rot
 • „Weiter“ auf der Tastatur springt ins nächste Messfeld, „Nächster“ zum nächsten Verteiler
 • Unterverteilungen werden automatisch berücksichtigt
-• Das Prüfprotokoll als PDF entsteht anschließend am PC in der Stromplaner-Desktop-App
+• Prüfprotokoll als PDF direkt am Handy – teilen per Mail, Messenger oder Cloud
+• Spontan prüfen ohne PC: Plan und Verteiler-Typen direkt am Handy anlegen
 
 GEMEINSAM IN ECHTZEIT
-• In einer Sitzung arbeiten PC und Handys gleichzeitig am selben Plan
+• In einer Sitzung arbeiten PC und Handys gleichzeitig am selben Plan – starten lässt sie sich auch vom Handy
 • Messwerte vom Handy erscheinen sofort am PC
 • Benötigt einen selbst betriebenen Planer-Server – deine Daten bleiben bei dir
 
