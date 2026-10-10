@@ -33,3 +33,6 @@ apk-download/
 # Windows
 Thumbs.db
 desktop.ini
+
+# Play-Store-Material (Grafiken, Screenshots, Texte) nur lokal
+store/play/
