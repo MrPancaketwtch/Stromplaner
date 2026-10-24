@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
-import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode, Share2, TriangleAlert, Plug, Lightbulb, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info } from "lucide-react";
+import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode, Share2, TriangleAlert, Plug, Lightbulb, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info, Bluetooth, BluetoothOff } from "lucide-react";
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 import { pruefprotokollHtml } from "./shared/pruefprotokoll.js";
+import { btVerfuegbar, btVerbinden, btInfo, btHolen, btSenden } from "./bluetooth.js";
 
 const PHASES = ["L1","L2","L3"];
 const VOLT   = 230;
@@ -79,6 +80,8 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
   "1.4.0": [
+    "Pläne zwischen PC und Handy per Bluetooth austauschen – ohne WLAN oder Netzwerk: Handy unter „Teilen“ sichtbar machen, am PC unter Teilen → Bluetooth verbinden, dann vom Handy holen (nur Prüfergebnisse oder ganzer Plan) oder ans Handy senden. Der Weg übers WLAN bleibt zusätzlich",
+    "Android-App: Verteiler werden im Tab Steckplan angelegt – der Knopf in der Prüfung ist entfallen",
     "Android-App: mehrere Pläne auf dem Handy – anlegen, wechseln und löschen im Tab Projekt. Ein Plan per QR-Code oder das Beitreten einer Sitzung landet als eigener Plan in der Liste, statt den aktuellen zu überschreiben",
     "Android-App: Verbraucher anlegen und bearbeiten – im Tab Projekt oder direkt beim Stecken. Das Handy merkt sich alle Verbraucher wie die Verteiler-Typen, neue Pläne starten mit dieser Bibliothek",
     "Android-App: Unterverteiler direkt am Steckplatz anschließen oder dort neu anlegen, mit derselben Absicherungs-Warnung wie am PC",
@@ -422,6 +425,8 @@ const uiAlert  =(message)=>showDialog({message,confirm:false});
 const uiConfirm=(message)=>showDialog({message,confirm:true});
 // Zwei gleichwertige Antworten (true = ja, false = nein); Escape wählt die sichere Antwort escWert
 const uiWahl   =(message,{ja,nein,escWert=true})=>showDialog({message,confirm:true,ok:ja,abbrechen:nein,escWert});
+// Mehrere Antworten: liefert den Index des gewählten Knopfs, Escape = -1. Der erste Knopf ist hervorgehoben
+const uiAuswahl=(message,knoepfe)=>showDialog({message,confirm:true,knoepfe,escWert:-1});
 
 function DialogHost(){
   const [queue,setQueue]=useState([]);
@@ -455,9 +460,13 @@ function DialogHost(){
     <div style={overlay} onKeyDown={onKeyDown}>
       <div style={box} role="dialog" aria-modal="true">
         <div style={{whiteSpace:'pre-wrap',lineHeight:1.5,fontSize:13}}>{cur.message}</div>
-        <div style={{display:'flex',gap:10,marginTop:20,justifyContent:'flex-end'}}>
-          {cur.confirm&&<button style={btn({background:'#2a3547',color:'#aab'})} onClick={()=>close(false)}>{cur.abbrechen||"Abbrechen"}</button>}
-          <button ref={okRef} style={btn({background:'#3a7bd5',color:'#fff'})} onClick={()=>close(true)}>{cur.ok||"OK"}</button>
+        <div style={{display:'flex',gap:10,marginTop:20,justifyContent:'flex-end',flexWrap:'wrap'}}>
+          {cur.knoepfe
+            ? cur.knoepfe.map((k,i)=><button key={k} ref={i===0?okRef:undefined} style={btn(i===0?{background:'#3a7bd5',color:'#fff'}:{background:'#2a3547',color:'#aab'})} onClick={()=>close(i)}>{k}</button>)
+            : <>
+                {cur.confirm&&<button style={btn({background:'#2a3547',color:'#aab'})} onClick={()=>close(false)}>{cur.abbrechen||"Abbrechen"}</button>}
+                <button ref={okRef} style={btn({background:'#3a7bd5',color:'#fff'})} onClick={()=>close(true)}>{cur.ok||"OK"}</button>
+              </>}
         </div>
       </div>
     </div>
@@ -891,7 +900,8 @@ export default function App() {
     setLocalShare(null);
   };
 
-  useEffect(()=>window.electronAPI?.onLocalShareReceived?.(async({data,mode})=>{
+  // Vom Handy (WLAN oder Bluetooth): nur Prüfergebnisse oder den ganzen Plan übernehmen
+  const vomHandyUebernehmen=async(data,mode)=>{
     if(mode==="insp"){
       if(data.inspMeta) setInspMeta(data.inspMeta);
       setInspResults(data.inspResults||{});
@@ -899,7 +909,58 @@ export default function App() {
     } else if(await applyPlanData(data)){
       notify("Plan vom Handy übernommen.","info");
     }
-  }),[]);
+  };
+  useEffect(()=>window.electronAPI?.onLocalShareReceived?.(({data,mode})=>vomHandyUebernehmen(data,mode)),[]);
+
+  /* ── Bluetooth (ohne Netzwerk): das Handy macht sich sichtbar, der PC verbindet sich ── */
+  const planDaten=()=>({_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,
+    instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout});
+  const [bt,        setBt]        = useState(null);   // { v, name, info } solange verbunden
+  const [btGeraete, setBtGeraete] = useState(null);   // gefundene Handys während der Suche, sonst null
+  const [btStatus,  setBtStatus]  = useState({ msg:"", err:false });
+  const [btBusy,    setBtBusy]    = useState(false);
+  useEffect(()=>window.electronAPI?.onBtGeraete?.(liste=>setBtGeraete(g=>g===null?g:liste)),[]);
+
+  const btSuchen=async()=>{
+    setBtStatus({msg:"Suche … Am Handy unter „Teilen“ auf „Für den PC sichtbar machen“ tippen.",err:false});
+    setBtGeraete([]);
+    try{
+      const v=await btVerbinden();
+      v.geraet.addEventListener("gattserverdisconnected",()=>{ setBt(null); setBtStatus({msg:"Verbindung zum Handy getrennt.",err:false}); });
+      const info=await btInfo(v);
+      setBt({v,info,name:v.geraet.name||"Handy"});
+      setBtStatus({msg:"",err:false});
+    }catch(e){
+      setBtStatus(e?.name==="NotFoundError"?{msg:"",err:false}:{msg:"Verbindung fehlgeschlagen: "+(e?.message||e),err:true});
+    }finally{
+      setBtGeraete(null);
+    }
+  };
+  const btGeraetWaehlen=(id)=>{ window.electronAPI?.btWaehlen?.(id); setBtGeraete(null); };
+  const btVomHandy=async()=>{
+    setBtBusy(true);
+    try{
+      const data=await btHolen(bt.v,(n,g)=>setBtStatus({msg:`Hole Plan vom Handy … ${g?Math.round(n/g*100):0} %`,err:false}));
+      setBtStatus({msg:"",err:false});
+      const wahl=await uiAuswahl(
+        `Plan „${data.meta?.production||"ohne Namen"}“ vom Handy empfangen.\n\n`+
+        `Nur Prüfergebnisse: Prüfungsdetails und Messwerte übernehmen, die Planung am PC bleibt unverändert (empfohlen).\n`+
+        `Ganzen Plan: ersetzt den kompletten Plan am PC.`,
+        ["Nur Prüfergebnisse","Ganzen Plan","Abbrechen"]);
+      if(wahl===0) await vomHandyUebernehmen(data,"insp");
+      else if(wahl===1&&await ersetzenErlaubt()) await vomHandyUebernehmen(data,"plan");
+    }catch(e){ setBtStatus({msg:"Holen fehlgeschlagen: "+(e?.message||e),err:true}); }
+    setBtBusy(false);
+  };
+  const btAnsHandy=async()=>{
+    setBtBusy(true);
+    try{
+      await btSenden(bt.v,planDaten(),(i,n)=>setBtStatus({msg:`Sende Plan ans Handy … ${Math.round(i/n*100)} %`,err:false}));
+      setBtStatus({msg:`Plan an ${bt.name} gesendet – er liegt dort in der Planliste.`,err:false});
+    }catch(e){ setBtStatus({msg:"Senden fehlgeschlagen: "+(e?.message||e),err:true}); }
+    setBtBusy(false);
+  };
+  const btTrennen=()=>{ bt?.v.trennen(); setBt(null); setBtStatus({msg:"",err:false}); };
 
   // Solange geteilt wird, liefert der Server immer den aktuellen Stand aus
   useEffect(()=>{
@@ -1239,8 +1300,25 @@ export default function App() {
           </button>;
         })()}
         {window.electronAPI&&<div style={{position:"relative"}}>
-          <button style={S.ghostBtn} title="Plan per QR-Code im WLAN aufs Handy holen" onClick={()=>{setShowSharePanel(v=>!v);setShareStatus({msg:"",err:false});}}><Share2 size={14} aria-hidden="true"/>Teilen</button>
+          <button style={S.ghostBtn} title="Plan mit dem Handy austauschen – per Bluetooth oder im WLAN" onClick={()=>{setShowSharePanel(v=>!v);setShareStatus({msg:"",err:false});}}><Share2 size={14} aria-hidden="true"/>Teilen</button>
           {showSharePanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}}>
+            <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Per Bluetooth – ohne Netzwerk</div>
+            {!btVerfuegbar()
+              ? <div style={{fontSize:10,color:"#7c8794",marginBottom:8,lineHeight:1.5}}>Bluetooth ist auf diesem Rechner nicht verfügbar.</div>
+              : <>
+                  <div style={{fontSize:10,color:"#7c8794",marginBottom:8,lineHeight:1.5}}>Am Handy in der Stromplaner-App unter „Teilen“ auf „Für den PC sichtbar machen“ tippen, dann hier verbinden. Keine Kopplung nötig.</div>
+                  {btStatus.msg&&<div style={{fontSize:10,color:btStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{btStatus.msg}</div>}
+                  {!bt
+                    ? <button disabled={btGeraete!==null} onClick={btSuchen} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Bluetooth size={12} aria-hidden="true"/>{btGeraete!==null?"Suche …":"Mit Handy verbinden"}</button>
+                    : <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        <div style={{fontSize:11,color:"#c8d0da"}}><Bluetooth size={11} aria-hidden="true" style={{verticalAlign:"-1px",marginRight:4}}/>{bt.name}{bt.info?.name?` · „${bt.info.name}“`:""}{bt.info?.verteiler!=null?` · ${bt.info.verteiler} Verteiler`:""}</div>
+                        {(()=>{ const pc=typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"; return bt.info?.version&&bt.info.version!==pc&&<div style={{fontSize:9,color:"#e67e22"}}>Handy hat Version {bt.info.version}, der PC {pc}.</div>; })()}
+                        <button disabled={btBusy} onClick={btVomHandy} style={{...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Download size={12} aria-hidden="true"/>Vom Handy holen</button>
+                        <button disabled={btBusy} onClick={btAnsHandy} style={{...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Upload size={12} aria-hidden="true"/>Plan ans Handy senden</button>
+                        <button disabled={btBusy} onClick={btTrennen} style={{...S.ghostBtn,fontSize:10,justifyContent:"center"}}><BluetoothOff size={12} aria-hidden="true"/>Trennen</button>
+                      </div>}
+                </>}
+            <div style={{borderTop:"1px solid #2e3640",margin:"12px -12px 10px"}}/>
             <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Lokal im WLAN teilen</div>
             <div style={{fontSize:10,color:"#7c8794",marginBottom:8,lineHeight:1.5}}>QR-Code mit der Stromplaner-App auf dem Handy scannen (Tab „Teilen“). Funktioniert ohne Server, Handy und PC müssen im selben WLAN sein.</div>
             {shareStatus.msg&&<div style={{fontSize:10,color:shareStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{shareStatus.msg}</div>}
@@ -1346,6 +1424,17 @@ export default function App() {
         projektName={meta.production} version={typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"} onClose={()=>setShowSitzung(false)}/>}
       <ToastHost toasts={toasts}/>
       <DialogHost/>
+      {btGeraete!==null&&window.electronAPI?.btWaehlen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div role="dialog" aria-modal="true" aria-label="Handy wählen" style={{background:"#1e2530",border:"1px solid #2e3a4a",borderRadius:10,padding:"20px 24px",width:360,color:"#e8eaf0"}}>
+          <div style={{fontWeight:600,fontSize:14,marginBottom:6}}><Bluetooth size={14} aria-hidden="true" style={{verticalAlign:"-2px",marginRight:6}}/>Handy wählen</div>
+          <div style={{fontSize:11,color:"#9aa4af",marginBottom:12,lineHeight:1.5}}>Angezeigt werden nur Handys, auf denen Stromplaner gerade sichtbar ist (Teilen → „Für den PC sichtbar machen“).</div>
+          {!btGeraete.length&&<div style={{fontSize:12,color:"#9aa4af",fontStyle:"italic",marginBottom:12}}>Suche …</div>}
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+            {btGeraete.map(g=><button key={g.id} onClick={()=>btGeraetWaehlen(g.id)} style={{...S.ghostBtn,justifyContent:"flex-start",fontSize:12}}><Bluetooth size={13} aria-hidden="true"/>{g.name||"Handy ohne Namen"}</button>)}
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end"}}><button onClick={()=>btGeraetWaehlen("")} style={{padding:"7px 18px",borderRadius:5,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:"#2a3547",color:"#aab"}}>Abbrechen</button></div>
+        </div>
+      </div>}
       {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);goTab("help");}}/>}
     </div>
     </HelpContext.Provider>

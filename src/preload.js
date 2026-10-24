@@ -23,4 +23,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('local-share-received', handler);
   },
   makeQr:              (url) => ipcRenderer.invoke('make-qr', url),
+  // Bluetooth: gefundene Handys während der Suche, Auswahl zurück an Electron (leer = abbrechen)
+  onBtGeraete: (cb) => {
+    const handler = (_, liste) => cb(liste);
+    ipcRenderer.on('bt-geraete', handler);
+    return () => ipcRenderer.removeListener('bt-geraete', handler);
+  },
+  btWaehlen:           (id) => ipcRenderer.send('bt-waehlen', id),
 });

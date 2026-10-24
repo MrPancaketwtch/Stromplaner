@@ -9,6 +9,13 @@ const QRCode = require('qrcode');
 
 const root = app.getAppPath();
 let mainWindow = null;
+let btAuswahl = null; // Rückruf der laufenden Bluetooth-Geräteauswahl
+
+ipcMain.on('bt-waehlen', (_event, id) => {
+  const cb = btAuswahl;
+  btAuswahl = null;
+  cb?.(id || '');
+});
 
 // Native Dialoge (Speichern/Öffnen/MessageBox) geben unter Windows den Tastatur-Fokus
 // nicht zuverlässig an den Renderer zurück (electron#35872, #41602) → Textfelder
@@ -63,6 +70,14 @@ function createWindow() {
 
   mainWindow = win;
   win.setMenuBarVisibility(false);
+
+  // Web Bluetooth: Electron hat keine eigene Geräteauswahl – die gefundenen Handys gehen an die App,
+  // die Auswahl kommt über 'bt-waehlen' zurück (leere Id = abbrechen)
+  win.webContents.on('select-bluetooth-device', (event, geraete, callback) => {
+    event.preventDefault();
+    btAuswahl = callback;
+    win.webContents.send('bt-geraete', geraete.map(g => ({ id: g.deviceId, name: g.deviceName || '' })));
+  });
   win.loadFile(path.join(root, 'app', 'Stromplaner.html'));
 
   let shown = false;

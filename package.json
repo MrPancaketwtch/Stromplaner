@@ -47,7 +47,10 @@
           ]
         }
       ],
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "Stromplaner verbindet sich per Bluetooth mit der Handy-App, um Pläne ohne Netzwerk auszutauschen."
+      }
     },
     "nsis": {
       "oneClick": true,

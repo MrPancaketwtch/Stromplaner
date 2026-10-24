@@ -50,7 +50,7 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 | **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **Verteiler hinzufügen** legt direkt hier einen Verteiler an. **PDF speichern / drucken** öffnet den Android-Druckdialog („Als PDF speichern“ oder Drucker) – das PDF ist identisch mit dem vom PC, Text markierbar. **PDF direkt teilen** schickt eine Bild-Fassung sofort per Mail oder Messenger. Unter *Prüfungsdetails* lässt sich mit dem Finger unterschreiben. |
 | **Steckplan** | Verteiler und Steckungen ansehen und anpassen. Am Steckplatz Verbraucher stecken (auch neu anlegen) und Unterverteiler anschließen oder dort neu anlegen; alternativ am Verteiler unter **Hängt an** |
 | **Projekt** | **Planliste** (mehrere Pläne anlegen, wechseln, löschen), Projektdaten, **Firmenlogo** fürs PDF, **Verteiler-Typen** und **Verbraucher** (anlegen und bearbeiten) |
-| **Teilen** | Plan per QR-Code vom PC holen, An PC zurücksenden – ohne Server |
+| **Teilen** | Per **Bluetooth** ohne Netzwerk mit dem PC austauschen, oder im WLAN: Plan per QR-Code vom PC holen und an den PC zurücksenden – jeweils ohne Server |
 | **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten oder selbst eine starten: Prüfwerte erscheinen sofort bei allen (siehe „Sitzung“ weiter unten) |
 
 ### Spontane Prüfung nur mit dem Handy
@@ -60,6 +60,14 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 4. Prüfen wie gewohnt, danach **PDF speichern / drucken** oder **PDF direkt teilen**.
 
 Das Handy merkt sich die Verteiler-Typen und Verbraucher aller Pläne, die es je geladen hat oder in denen es in einer Sitzung war – ein neuer Plan startet mit dieser Bibliothek. Ein Plan per QR-Code und das Beitreten einer Sitzung legen jeweils einen eigenen Plan in der Liste an. Firmenlogo (Tab Projekt) und Unterschrift (Prüfungsdetails) bleiben wie am PC nur auf dem jeweiligen Gerät gespeichert.
+
+### Plan zwischen PC und Handy per Bluetooth (ohne Netzwerk)
+1. **Handy:** Tab **Teilen** → **Für den PC sichtbar machen** (beim ersten Mal die Berechtigung „Geräte in der Nähe“ erlauben, Bluetooth muss an sein). Alternativ im Tab Prüfung unter „An PC senden“ → **Per Bluetooth**.
+2. **PC:** Header → **Teilen** → **Mit Handy verbinden** → das Handy in der Liste wählen. Eine Kopplung ist nicht nötig.
+3. **Vom Handy holen:** wahlweise **Nur Prüfergebnisse** (empfohlen) oder **Ganzen Plan** übernehmen.
+4. **Plan ans Handy senden:** Der Plan landet auf dem Handy als eigener Eintrag in der Planliste.
+
+Der PC braucht Bluetooth LE (Windows 10/11, macOS fragt beim ersten Mal nach der Bluetooth-Erlaubnis). Der Plan wird komprimiert übertragen und ist meist in wenigen Sekunden durch. Solange das Handy sichtbar ist, holt der PC immer den aktuellen Stand.
 
 ### Plan vom PC aufs Handy und zurück (WLAN)
 1. **PC:** Header → **Teilen** → **QR-Code anzeigen**.

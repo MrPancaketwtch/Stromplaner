@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import jsQR from 'jsqr';
-import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, MonitorUp, Check, TriangleAlert, QrCode, CircleCheck, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, Play, Power, Printer, PenLine, ImagePlus } from 'lucide-react';
+import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, MonitorUp, Check, TriangleAlert, QrCode, CircleCheck, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, Play, Power, Printer, PenLine, ImagePlus, Bluetooth, BluetoothOff } from 'lucide-react';
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from '@sync/sitzung.js';
 import { migrateOutlet } from '@shared/pruefprotokoll.js';
 import { protokollPdf, pdfTeilen, pdfDateiname, protokollDrucken } from './pdf.js';
+import { packen, entpacken, zuBase64, ausBase64 } from '@shared/bt-protokoll.js';
+import { Capacitor } from '@capacitor/core';
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
@@ -275,6 +277,26 @@ export default function App() {
   ])), []);
   const sitzung = useSitzung({ doc: sitzungDoc, setters: sitzungSetters, defaults: PLAN_TEILE, notify, version: APP_VERSION });
 
+  // Plan von außen (QR-Code oder Bluetooth): eigener Eintrag in der Planliste, außer der aktuelle ist noch leer.
+  // In einer Sitzung gehört der Plan allen – dort wird er nach Rückfrage für alle ersetzt. Ergebnis: Meldung oder null
+  const planUebernehmen = (daten) => {
+    if (daten?._format !== 'stromplaner') throw new Error('Das ist kein Stromplaner-Plan.');
+    const neu  = migratePlan(daten);
+    const name = neu.meta?.production || 'Plan ohne Namen';
+    if (sitzung.aktiv) {
+      if (!window.confirm('Du bist in einer Sitzung. Der neue Plan ersetzt den Plan für alle Teilnehmer. Fortfahren?')) return null;
+      setPlan(neu);
+      return `Plan geladen: ${name}`;
+    }
+    if (!plan.instances.length && !hasInspData(plan)) {
+      setPlan(neu);
+      return `Plan geladen: ${name}`;
+    }
+    if (!planliste.neu(neu)) return null;
+    return `Plan geladen: ${name} – als neuer Plan, „${plan.meta.production || 'bisheriger Plan'}“ bleibt in der Planliste (Tab Projekt).`;
+  };
+  const bluetooth = useBluetooth({ plan, notify, planUebernehmen });
+
   if (!plan) return <div className="loading">Laden…</div>;
 
   const z = sitzung.zustand;
@@ -298,7 +320,7 @@ export default function App() {
 
       <main className="app-main">
         {tab === 'pruefung' && (
-          <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} sitzungAktiv={sitzung.aktiv} typen={typen} notify={notify} bild={bild} />
+          <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} sitzungAktiv={sitzung.aktiv} notify={notify} bild={bild} bluetooth={bluetooth} />
         )}
         {tab === 'steckplan' && (
           <SteckplanTab plan={plan} setPlan={setPlan} typen={typen} verbraucher={verbraucher} />
@@ -307,7 +329,7 @@ export default function App() {
           <ProjektTab plan={plan} setPlan={setPlan} lib={lib} typen={typen} verbraucher={verbraucher} planliste={planliste} sitzungAktiv={sitzung.aktiv} notify={notify} bild={bild} />
         )}
         {tab === 'teilen' && (
-          <TeilenTab plan={plan} setPlan={setPlan} planliste={planliste} pcUrl={pcUrl} setPcUrl={setPcUrl} sitzungAktiv={sitzung.aktiv} />
+          <TeilenTab plan={plan} planUebernehmen={planUebernehmen} bluetooth={bluetooth} pcUrl={pcUrl} setPcUrl={setPcUrl} />
         )}
         {tab === 'sitzung' && (
           <SitzungTab sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} projektName={plan.meta.production} planliste={planliste} />
@@ -1359,7 +1381,8 @@ function Segmented({ options, value, onChange }) {
   );
 }
 
-function SendToPc({ plan, pcUrl }) {
+// bluetooth: optional – dann wird zusätzlich der Weg ohne Netzwerk angeboten (Tab Prüfung)
+function SendToPc({ plan, pcUrl, bluetooth }) {
   const [busy, setBusy] = useState(false);
   const [msg,  setMsg]  = useState(null);
 
@@ -1383,37 +1406,43 @@ function SendToPc({ plan, pcUrl }) {
     }
   };
 
+  const bt = bluetooth?.verfuegbar ? bluetooth : null;
   return (
     <div className="section">
-      <div className="section-title">An PC zurücksenden</div>
+      <div className="section-title">{bluetooth ? 'An PC senden' : 'Im WLAN: An PC zurücksenden'}</div>
+      {bt && (bt.zustand ? (
+        <div className="sync-msg" style={{ marginBottom: 12 }}>
+          <Bluetooth size={16} aria-hidden="true" />
+          {bt.zustand.verbunden
+            ? `Verbunden mit ${bt.zustand.verbunden} – am PC „Vom Handy holen“ wählen.`
+            : 'Per Bluetooth sichtbar – am PC unter Teilen → Bluetooth dieses Handy wählen.'}
+        </div>
+      ) : (
+        <button className="btn btn--primary" style={{ width: '100%', marginBottom: 8 }} disabled={bt.busy} onClick={bt.starten}>
+          <Bluetooth size={18} aria-hidden="true" />{bt.busy ? 'Starte …' : 'Per Bluetooth (ohne Netzwerk)'}
+        </button>
+      ))}
       {pcUrl ? (
         <>
-          <button className="btn btn--primary" style={{ width: '100%' }} disabled={busy} onClick={send}>
-            {busy ? 'Warte auf PC…' : <><MonitorUp size={18} aria-hidden="true" />An PC zurücksenden</>}
+          <button className={'btn ' + (bt ? 'btn--secondary' : 'btn--primary')} style={{ width: '100%' }} disabled={busy} onClick={send}>
+            {busy ? 'Warte auf PC…' : <><MonitorUp size={18} aria-hidden="true" />{bt ? 'Im WLAN zurücksenden' : 'An PC zurücksenden'}</>}
           </button>
-          <div className="meas-hint" style={{ marginTop: 6 }}>Ziel: {pcUrl.replace(/^https?:\/\//, '').replace(/\/plan\.json$/, '')}</div>
+          <div className="meas-hint" style={{ marginTop: 6 }}>WLAN-Ziel: {pcUrl.replace(/^https?:\/\//, '').replace(/\/plan\.json$/, '')}</div>
         </>
       ) : (
-        <div className="meas-hint">Zuerst am PC „Teilen“ öffnen und im Tab „Teilen“ den QR-Code scannen.</div>
+        <div className="meas-hint">{bt ? 'Im WLAN: ' : ''}Zuerst am PC „Teilen“ öffnen und im Tab „Teilen“ den QR-Code scannen.</div>
       )}
       {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')} style={{ margin: '10px 0 0', padding: 0, background: 'none' }}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
     </div>
   );
 }
 
-function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify, bild }) {
+function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, notify, bild, bluetooth }) {
   const [openId,   setOpenId]   = useState(null);
   const [metaOpen, setMetaOpen] = useState(false);
-  const [adding,   setAdding]   = useState(false);
   const [pdf,      setPdf]      = useState(null); // null | 'Seite 2/5' …
   const [signPad,  setSignPad]  = useState(false);
   const bilder = { logo: bild.logo, signatur: bild.sign };
-
-  const addInstance = (type, name) => {
-    const inst = verteilerAnlegen(setPlan, plan, type, name);
-    setAdding(false);
-    setOpenId(inst.id);
-  };
 
   const pdfErstellen = async () => {
     setPdf('wird vorbereitet …');
@@ -1504,15 +1533,9 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify, bild }
       </div>
 
       {signPad && <UnterschriftPad onSave={(d) => { bild.setSign(d); setSignPad(false); }} onClose={() => setSignPad(false)} />}
-      {adding && <AddInstModal plan={plan} typen={typen} onAdd={addInstance} onClose={() => setAdding(false)} />}
 
       {sorted.length === 0 ? (
-        <>
-          <div className="notice">Keine Verteiler im Plan.{'\n'}Plan am PC über „Teilen“ freigeben und im Tab <strong>Teilen</strong> den QR-Code scannen, im Tab <strong>Sitzung</strong> einer Sitzung beitreten – oder direkt hier Verteiler anlegen und prüfen.</div>
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={() => setAdding(true)}>
-            <Plus size={18} aria-hidden="true" />Verteiler hinzufügen
-          </button>
-        </>
+        <div className="notice">Keine Verteiler im Plan.{'\n'}Verteiler im Tab <strong>Steckplan</strong> anlegen – oder einen Plan vom PC holen (Tab <strong>Teilen</strong>) bzw. einer Sitzung beitreten (Tab <strong>Sitzung</strong>).</div>
       ) : (
         <>
           <div className="insp-summary">
@@ -1544,9 +1567,6 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify, bild }
               );
             })}
           </div>
-          <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} onClick={() => setAdding(true)}>
-            <Plus size={16} aria-hidden="true" />Verteiler hinzufügen
-          </button>
           <div className="section-title" style={{ margin: '20px 4px 8px' }}>Prüfprotokoll</div>
           <button className="btn btn--primary" style={{ width: '100%' }} onClick={drucken}>
             <Printer size={18} aria-hidden="true" />PDF speichern / drucken
@@ -1558,7 +1578,7 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, typen, notify, bild }
           <div style={{ marginTop: 16 }}>
             {sitzungAktiv
               ? <div className="sync-msg"><Users size={16} aria-hidden="true" />Du bist in einer Sitzung – deine Werte erscheinen sofort am PC.</div>
-              : <SendToPc plan={plan} pcUrl={pcUrl} />}
+              : <SendToPc plan={plan} pcUrl={pcUrl} bluetooth={bluetooth} />}
           </div>
         </>
       )}
@@ -1859,13 +1879,76 @@ function QrScanner({ onResult, onClose }) {
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Teilen Tab – Plan per QR-Code vom PC holen und zurücksenden (ohne Server)  */
 /* ══════════════════════════════════════════════════════════════════════════ */
-function TeilenTab({ plan, setPlan, planliste, pcUrl, setPcUrl, sitzungAktiv }) {
+/* ── Bluetooth: Handy als Gegenstelle für den PC (ohne Netzwerk) ─────────── */
+// Solange sichtbar, liegt der aktuelle Plan bereit; der PC holt ihn oder schickt einen Plan, der in die Planliste kommt
+function useBluetooth({ plan, notify, planUebernehmen }) {
+  const [zustand, setZustand] = useState(null); // null | { name, verbunden: geraetename|null }
+  const [busy,    setBusy]    = useState(false);
+  const plugin    = useRef(null);
+  const listener  = useRef([]);
+  const uebernehmenRef = useRef(planUebernehmen);
+  uebernehmenRef.current = planUebernehmen;
+  const verfuegbar = Capacitor.isNativePlatform();
+
+  const bereitstellen = async (p) => plugin.current?.bereitstellen({
+    daten: zuBase64(await packen(p)),
+    info: JSON.stringify({ name: (p.meta?.production || '').slice(0, 120), verteiler: p.instances.length, version: APP_VERSION }),
+  });
+
+  const aufraeumen = () => { listener.current.forEach(h => h.remove()); listener.current = []; };
+
+  const starten = async () => {
+    setBusy(true);
+    try {
+      const { StromplanerBluetooth: P } = await import('stromplaner-bluetooth');
+      plugin.current = P;
+      aufraeumen();
+      listener.current = await Promise.all([
+        P.addListener('verbunden', e => setZustand(z => z && { ...z, verbunden: e.geraet })),
+        P.addListener('getrennt',  () => setZustand(z => z && { ...z, verbunden: null })),
+        P.addListener('gesendet',  e => notify(`Plan an ${e.geraet} gesendet.`)),
+        P.addListener('fehler',    e => notify(e.meldung, 'err')),
+        P.addListener('empfangen', async e => {
+          try {
+            const meldung = uebernehmenRef.current(await entpacken(ausBase64(e.daten)));
+            if (meldung) notify(`Vom PC (${e.geraet}) empfangen. ${meldung}`);
+          } catch (err) { notify('Empfangener Plan ist beschädigt: ' + err.message, 'err'); }
+        }),
+      ]);
+      await bereitstellen(plan);
+      const r = await P.starten();
+      setZustand({ name: r.name || 'dieses Handy', verbunden: null });
+    } catch (e) {
+      aufraeumen();
+      notify(e?.message || String(e), 'err');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stoppen = async () => {
+    try { await plugin.current?.stoppen(); } catch { /* schon beendet */ }
+    aufraeumen();
+    setZustand(null);
+  };
+
+  // Änderungen am Plan sofort bereitstellen, damit der PC immer den aktuellen Stand holt
+  useEffect(() => {
+    if (!zustand) return;
+    const t = setTimeout(() => bereitstellen(plan).catch(() => {}), 400);
+    return () => clearTimeout(t);
+  }, [plan, !!zustand]);
+
+  useEffect(() => () => { plugin.current?.stoppen().catch(() => {}); aufraeumen(); }, []);
+
+  return { verfuegbar, zustand, busy, starten, stoppen };
+}
+
+function TeilenTab({ plan, planUebernehmen, bluetooth, pcUrl, setPcUrl }) {
   const [loading,     setLoading]     = useState(false);
   const [msg,         setMsg]         = useState(null);
   const [showScanner, setShowScanner] = useState(false);
   const status = (text, err = false) => setMsg({ text, err });
-  const ersetzenOk = () => !sitzungAktiv ||
-    window.confirm('Du bist in einer Sitzung. Der neue Plan ersetzt den Plan für alle Teilnehmer. Fortfahren?');
 
   const handleQr = async (url) => {
     setShowScanner(false);
@@ -1873,22 +1956,9 @@ function TeilenTab({ plan, setPlan, planliste, pcUrl, setPcUrl, sitzungAktiv }) 
     try {
       const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
-      if (data._format !== 'stromplaner') throw new Error('Der QR-Code enthält keinen Stromplaner-Plan.');
-      const neu  = migratePlan(data);
-      const name = data.meta?.production || url;
-      // In einer Sitzung gehört der Plan allen; sonst kommt der Plan vom PC als eigener Eintrag in die Planliste
-      if (sitzungAktiv) {
-        if (!ersetzenOk()) { status('Import abgebrochen', true); return; }
-        setPlan(neu);
-        status('Plan geladen: ' + name);
-      } else if (!plan.instances.length && !hasInspData(plan)) {
-        setPlan(neu);
-        status('Plan geladen: ' + name);
-      } else {
-        if (!planliste.neu(neu)) return;
-        status(`Plan geladen: ${name} – als neuer Plan, „${plan.meta.production || 'bisheriger Plan'}“ bleibt in der Planliste (Tab Projekt).`);
-      }
+      const meldung = planUebernehmen(await r.json());
+      if (!meldung) { status('Import abgebrochen', true); return; }
+      status(meldung);
       setPcUrl(url);
     } catch (e) {
       status(e instanceof TypeError
@@ -1904,7 +1974,29 @@ function TeilenTab({ plan, setPlan, planliste, pcUrl, setPcUrl, sitzungAktiv }) 
     {showScanner && <QrScanner onResult={handleQr} onClose={() => setShowScanner(false)} />}
     <div className="page">
       <div className="section">
-        <div className="section-title">Plan vom PC holen</div>
+        <div className="section-title">Per Bluetooth – ohne Netzwerk</div>
+        {bluetooth.verfuegbar ? (
+          <>
+            <p className="meas-hint" style={{ marginBottom: 12 }}>Handy sichtbar machen, dann am PC unter <strong>Teilen → Bluetooth</strong> dieses Handy wählen. Der PC holt den aktuellen Plan (mit Prüfergebnissen) oder schickt einen Plan hierher – der landet in der Planliste.</p>
+            {bluetooth.zustand && (
+              <div className="sync-msg" style={{ marginBottom: 12 }}>
+                <Bluetooth size={16} aria-hidden="true" />
+                {bluetooth.zustand.verbunden
+                  ? `Verbunden mit ${bluetooth.zustand.verbunden}`
+                  : `Sichtbar als „${bluetooth.zustand.name}“ – warte auf den PC …`}
+              </div>
+            )}
+            {bluetooth.zustand
+              ? <button className="btn btn--secondary" style={{ width: '100%' }} onClick={bluetooth.stoppen}><BluetoothOff size={18} aria-hidden="true" />Nicht mehr sichtbar</button>
+              : <button className="btn btn--primary" style={{ width: '100%' }} disabled={bluetooth.busy} onClick={bluetooth.starten}><Bluetooth size={18} aria-hidden="true" />{bluetooth.busy ? 'Starte …' : 'Für den PC sichtbar machen'}</button>}
+          </>
+        ) : (
+          <p className="meas-hint">Nur in der Android-App verfügbar.</p>
+        )}
+      </div>
+
+      <div className="section">
+        <div className="section-title">Im WLAN: Plan vom PC holen</div>
         <p className="meas-hint" style={{ marginBottom: 12 }}>Am PC „Teilen“ öffnen und den QR-Code scannen. Funktioniert ohne Server – Handy und PC müssen im selben WLAN sein.</p>
         <button className="btn btn--primary" style={{ width: '100%' }} disabled={loading} onClick={() => setShowScanner(true)}>
           <QrCode size={18} aria-hidden="true" />{loading ? 'Lade …' : 'QR-Code scannen'}
