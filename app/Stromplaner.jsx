@@ -1654,19 +1654,25 @@ function SitzungAktiv({ sitzung, onClose }){
 
 function ChangelogModal({ version, onClose }) {
   const entries = changelogFor(version);
+  // Escape schließt; bei langen Notizen scrollt nur die Liste, Überschrift und Knopf bleiben sichtbar
+  useEffect(()=>{
+    const esc=(e)=>{ if(e.key==="Escape") onClose(); };
+    window.addEventListener("keydown",esc);
+    return ()=>window.removeEventListener("keydown",esc);
+  },[onClose]);
   const overlay = { position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center' };
-  const box     = { background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:12,padding:'28px 32px',maxWidth:420,width:'90%',color:'#e8eaf0',fontFamily:'inherit' };
+  const box     = { background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:12,padding:'28px 32px',maxWidth:420,width:'90%',maxHeight:'85vh',display:'flex',flexDirection:'column',boxSizing:'border-box',color:'#e8eaf0',fontFamily:'inherit' };
   return (
     <div style={overlay} onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={box}>
+      <div style={box} role="dialog" aria-modal="true" aria-label={`Was ist neu in v${version}`}>
         <div style={{fontSize:15,fontWeight:700,color:'#fff',marginBottom:4}}>Was ist neu in v{version}</div>
         <div style={{fontSize:11,color:'#5a6a7a',marginBottom:16}}>Stromplaner wurde aktualisiert</div>
-        <ul style={{margin:0,padding:'0 0 0 18px',display:'flex',flexDirection:'column',gap:7}}>
+        <ul style={{margin:0,padding:'0 6px 0 18px',display:'flex',flexDirection:'column',gap:7,overflowY:'auto',minHeight:0,flex:'1 1 auto'}}>
           {entries.map((e,i)=>(
             <li key={i} style={{fontSize:13,color:'#c8d0da',lineHeight:1.5}}>{e}</li>
           ))}
         </ul>
-        <div style={{marginTop:22,display:'flex',justifyContent:'flex-end'}}>
+        <div style={{marginTop:22,display:'flex',justifyContent:'flex-end',flexShrink:0}}>
           <button onClick={onClose} style={{padding:'7px 20px',borderRadius:6,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,background:'#3a7bd5',color:'#fff'}}>
             Los geht's
           </button>
