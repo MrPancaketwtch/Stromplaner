@@ -849,3 +849,12 @@ textarea.field-input { resize: vertical; font-family: inherit; }
   background: #fff; border-radius: 8px; touch-action: none; cursor: crosshair;
 }
 .haengt-an { padding: 0 16px 12px; }
+
+/* ── Planliste / Steckplatz: Unterverteiler und neue Verbraucher ──────────── */
+.plan-row-open { background: none; border: none; color: var(--text); text-align: left; padding: 0; cursor: pointer; font: inherit; }
+.plan-row-open:disabled { cursor: default; opacity: 1; }
+.plan-row--aktiv .plan-name { color: var(--accent); }
+.picker-anschluss { display: flex; gap: 8px; align-items: center; padding: 4px 16px 8px; }
+.picker-anschluss .field-select { flex: 1; min-width: 0; }
+.picker-item--neu { color: var(--accent); }
+.picker-item--neu .picker-name { display: inline-flex; align-items: center; gap: 6px; }

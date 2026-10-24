@@ -78,6 +78,12 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 // Betas (1.3.0-beta.1) zeigen die Einträge der kommenden Version (1.3.0)
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
+  "1.4.0": [
+    "Android-App: mehrere Pläne auf dem Handy – anlegen, wechseln und löschen im Tab Projekt. Ein Plan per QR-Code oder das Beitreten einer Sitzung landet als eigener Plan in der Liste, statt den aktuellen zu überschreiben",
+    "Android-App: Verbraucher anlegen und bearbeiten – im Tab Projekt oder direkt beim Stecken. Das Handy merkt sich alle Verbraucher wie die Verteiler-Typen, neue Pläne starten mit dieser Bibliothek",
+    "Android-App: Unterverteiler direkt am Steckplatz anschließen oder dort neu anlegen, mit derselben Absicherungs-Warnung wie am PC",
+    "Beim Laden eines Plans fragt Stromplaner, ob dessen Verteiler-Typen und Verbraucher deine Bibliothek ergänzen oder ersetzen sollen (gefragt wird nur, wenn sonst etwas verloren ginge)",
+  ],
   "1.3.0": [
     "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → Sitzung); auch die Android-App kann beitreten",
     "Android-App: neuer Tab „Sitzung“ – Prüfwerte vom Handy erscheinen live am PC",
@@ -414,6 +420,8 @@ const showDialog=(opts)=>new Promise(resolve=>{
 });
 const uiAlert  =(message)=>showDialog({message,confirm:false});
 const uiConfirm=(message)=>showDialog({message,confirm:true});
+// Zwei gleichwertige Antworten (true = ja, false = nein); Escape wählt die sichere Antwort escWert
+const uiWahl   =(message,{ja,nein,escWert=true})=>showDialog({message,confirm:true,ok:ja,abbrechen:nein,escWert});
 
 function DialogHost(){
   const [queue,setQueue]=useState([]);
@@ -438,7 +446,7 @@ function DialogHost(){
     setQueue(q=>q.slice(1));
   };
   const onKeyDown=(e)=>{
-    if(e.key==="Escape"){ e.preventDefault(); close(!cur.confirm); }
+    if(e.key==="Escape"){ e.preventDefault(); close(cur.escWert ?? !cur.confirm); }
   };
   const overlay={position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:2000,display:'flex',alignItems:'center',justifyContent:'center'};
   const box={background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:10,padding:'24px 28px',minWidth:340,maxWidth:480,color:'#e8eaf0',fontFamily:'inherit'};
@@ -448,8 +456,8 @@ function DialogHost(){
       <div style={box} role="dialog" aria-modal="true">
         <div style={{whiteSpace:'pre-wrap',lineHeight:1.5,fontSize:13}}>{cur.message}</div>
         <div style={{display:'flex',gap:10,marginTop:20,justifyContent:'flex-end'}}>
-          {cur.confirm&&<button style={btn({background:'#2a3547',color:'#aab'})} onClick={()=>close(false)}>Abbrechen</button>}
-          <button ref={okRef} style={btn({background:'#3a7bd5',color:'#fff'})} onClick={()=>close(true)}>OK</button>
+          {cur.confirm&&<button style={btn({background:'#2a3547',color:'#aab'})} onClick={()=>close(false)}>{cur.abbrechen||"Abbrechen"}</button>}
+          <button ref={okRef} style={btn({background:'#3a7bd5',color:'#fff'})} onClick={()=>close(true)}>{cur.ok||"OK"}</button>
         </div>
       </div>
     </div>
@@ -608,6 +616,9 @@ export default function App() {
   });
   const setBoxTypesBib=useCallback(libLoeschenMerken("boxTypes",setBoxTypes),[]);
   const setLoadsBib=useCallback(libLoeschenMerken("loads",setLoads),[]);
+  // Aktueller Stand für Abläufe, die nicht neu gerendert werden (z. B. Empfang vom Handy)
+  const bibAktuell=useRef({boxTypes:[],loads:[]});
+  bibAktuell.current={boxTypes,loads};
 
   // Save on every change (debounced 600ms)
   const saveTimer = useRef(null);
@@ -792,12 +803,34 @@ export default function App() {
   };
 
   /* ── JSON Save/Load ────────────────────────────────────────────────────── */
-  const applyPlanData=(d)=>{
+  // Verteiler-Typen und Verbraucher eines geladenen Plans zur Bibliothek hinzufügen oder sie damit ersetzen.
+  // Gefragt wird nur, wenn beim Ersetzen etwas aus der Bibliothek verloren ginge.
+  const bibliothekAusPlan=async(d)=>{
+    const pT=(d.boxTypes||[]).map(migrateBoxType), pL=(d.loads||[]).map(l=>({...l,threePhase:l.threePhase||false}));
+    const {boxTypes:aT,loads:aL}=bibAktuell.current;
+    const fehlt=(aktuell,imPlan)=>{ const ids=new Set(imPlan.map(x=>x.id)); return aktuell.filter(x=>!ids.has(x.id)); };
+    const fT=d.boxTypes?fehlt(aT,pT):[], fL=d.loads?fehlt(aL,pL):[];
+    let ersetzen=true;
+    if(fT.length||fL.length){
+      const typ=(n)=>`${n} Verteiler-Typ${n===1?"":"en"}`;
+      ersetzen=!await uiWahl(
+        `Der Plan bringt ${typ(pT.length)} und ${pL.length} Verbraucher mit. In deiner Bibliothek sind ${typ(fT.length)} und ${fL.length} Verbraucher, die im Plan nicht vorkommen.\n\n`+
+        `Hinzufügen: Typen und Verbraucher des Plans kommen zu deiner Bibliothek dazu, deine bleiben erhalten.\n`+
+        `Ersetzen: Deine Bibliothek besteht danach nur noch aus denen des Plans.`,
+        {ja:"Hinzufügen",nein:"Ersetzen"});
+    }
+    const merge=(alt,neu)=>{ const m=new Map(alt.map(x=>[x.id,x])); neu.forEach(x=>m.set(x.id,x)); return [...m.values()]; };
+    if(d.boxTypes) setBoxTypes(alphaSort(ersetzen?pT:merge(aT,pT),"name"));
+    if(d.loads)    setLoads(alphaSort(ersetzen?pL:merge(aL,pL),"name"));
+    // Ersetzen soll auch die gespeicherte Bibliothek verkleinern (sonst käme sie beim nächsten Start zurück)
+    if(ersetzen){ fT.forEach(x=>libGeloescht.current.boxTypes.add(x.id)); fL.forEach(x=>libGeloescht.current.loads.add(x.id)); }
+  };
+
+  const applyPlanData=async(d)=>{
     if(d._format!=="stromplaner"){ uiAlert("Keine gültige Stromplaner-Datei."); return false; }
+    await bibliothekAusPlan(d);
     if(d.meta)        setMeta(d.meta);
     if(d.mainConns)   setMainConns(d.mainConns||[]);
-    if(d.boxTypes)    setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType),"name"));
-    if(d.loads)       setLoads(alphaSort(d.loads.map(l=>({...l,threePhase:l.threePhase||false})),"name"));
     if(d.instances)   setInstances(d.instances.map(migrateInstance));
     if(d.placements)  setPlacements(d.placements);
     if(d.inspMeta)    setInspMeta(d.inspMeta);
@@ -824,7 +857,7 @@ export default function App() {
     if(window.electronAPI?.openPlan){
       const result=await window.electronAPI.openPlan();
       if(!result) return;
-      try{ if(applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }
+      try{ if(await applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }
       catch(err){ uiAlert("Fehler: "+err.message); }
     } else {
       fileInputRef.current?.click();
@@ -837,7 +870,7 @@ export default function App() {
     const result=await window.electronAPI?.openRecent?.(filePath);
     if(result.error==="not-found"){ uiAlert("Datei nicht gefunden – wurde sie verschoben oder gelöscht?"); if(result.recents) setRecents(result.recents); return; }
     if(result.error){ uiAlert("Fehler: "+result.error); return; }
-    try{ if(applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }
+    try{ if(await applyPlanData(JSON.parse(result.data))){ if(result.recents) setRecents(result.recents); } }
     catch(err){ uiAlert("Fehler: "+err.message); }
   };
 
@@ -858,12 +891,12 @@ export default function App() {
     setLocalShare(null);
   };
 
-  useEffect(()=>window.electronAPI?.onLocalShareReceived?.(({data,mode})=>{
+  useEffect(()=>window.electronAPI?.onLocalShareReceived?.(async({data,mode})=>{
     if(mode==="insp"){
       if(data.inspMeta) setInspMeta(data.inspMeta);
       setInspResults(data.inspResults||{});
       notify("Prüfergebnisse vom Handy übernommen.","info");
-    } else if(applyPlanData(data)){
+    } else if(await applyPlanData(data)){
       notify("Plan vom Handy übernommen.","info");
     }
   }),[]);
@@ -883,8 +916,8 @@ export default function App() {
   const loadJSON=(e)=>{
     const file=e.target.files?.[0]; if(!file) return;
     const reader=new FileReader();
-    reader.onload=(ev)=>{
-      try{ applyPlanData(JSON.parse(ev.target.result)); }
+    reader.onload=async(ev)=>{
+      try{ await applyPlanData(JSON.parse(ev.target.result)); }
       catch(err){ uiAlert("Fehler: "+err.message); }
     };
     reader.readAsText(file);

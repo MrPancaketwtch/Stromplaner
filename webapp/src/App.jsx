@@ -82,6 +82,31 @@ const planAusBibliothek = (lib, alt) => {
   return p;
 };
 
+/* ── Planliste ───────────────────────────────────────────────────────────── */
+// Jeder Plan liegt unter einem eigenen Schlüssel; die Liste hält nur Name, Anzahl Verteiler und Änderungszeit
+const PLAENE_KEY = 'sp_mobile_plaene';
+const AKTIV_KEY  = 'sp_mobile_aktiv';
+const planKey    = (id) => 'sp_mobile_plan_' + id;
+const planEintrag = (id, p) => ({ id, name: p.meta?.production || '', verteiler: p.instances?.length || 0, geaendert: Date.now() });
+
+const ladePlanliste = () => {
+  try {
+    const index = JSON.parse(localStorage.getItem(PLAENE_KEY) || 'null');
+    if (Array.isArray(index) && index.length) {
+      const gemerkt = localStorage.getItem(AKTIV_KEY);
+      for (const e of [...index].sort((a, b) => (b.id === gemerkt) - (a.id === gemerkt))) {
+        const raw = localStorage.getItem(planKey(e.id));
+        if (raw) return { index, aktiv: e.id, plan: migratePlan(JSON.parse(raw)) };
+      }
+    }
+  } catch { /* Liste unlesbar – unten neu beginnen */ }
+  // Umstieg: bis 1.3.0 gab es genau einen Plan (sp_mobile_v1) – er wird der erste Eintrag der Liste
+  let plan = null;
+  try { const alt = localStorage.getItem(LS_KEY); if (alt) plan = migratePlan(JSON.parse(alt)); } catch { /* kein alter Plan */ }
+  plan = plan || planAusBibliothek(ladeBibliothek(), null);
+  return { index: [], aktiv: uid(), plan };
+};
+
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 const getBoxType  = (plan, id)    => plan.boxTypes.find(b => b.id === id);
 const getLoad     = (plan, id)    => plan.loads.find(l => l.id === id);
@@ -133,7 +158,10 @@ const loadSummary = (plan, pls) => {
 /* ══════════════════════════════════════════════════════════════════════════ */
 export default function App() {
   const [tab,     setTab]     = useState('pruefung');
-  const [plan,    setPlan]    = useState(null);
+  const [start]               = useState(ladePlanliste);
+  const [plan,    setPlan]    = useState(start.plan);
+  const [plaene,  setPlaene]  = useState(start.index);
+  const [aktivId, setAktivId] = useState(start.aktiv);
   const [server,  setServer]  = useState(() => localStorage.getItem(SERVER_KEY) || '');
   const [token,   setToken]   = useState(() => localStorage.getItem(TOKEN_KEY)  || '');
   const [pcUrl,   setPcUrl]   = useState(() => localStorage.getItem(PC_URL_KEY) || '');
@@ -143,20 +171,52 @@ export default function App() {
   const [logo,    setLogo]    = useState(() => localStorage.getItem(LOGO_KEY) || '');
   const [sign,    setSign]    = useState(() => localStorage.getItem(SIGN_KEY) || '');
 
-  /* load */
+  /* autosave: aktiven Plan speichern und seinen Eintrag in der Planliste aktualisieren */
   useEffect(() => {
+    const json = JSON.stringify(plan);
     try {
-      const raw = localStorage.getItem(LS_KEY);
-      setPlan(raw ? migratePlan(JSON.parse(raw)) : newPlan());
+      localStorage.setItem(AKTIV_KEY, aktivId);
+      if (localStorage.getItem(planKey(aktivId)) === json) return;
+      localStorage.setItem(planKey(aktivId), json);
     } catch {
-      setPlan(newPlan());
+      notify('Speicher des Handys ist voll – Plan konnte nicht gespeichert werden. Alte Pläne löschen.', 'err');
+      return;
     }
-  }, []);
+    const eintrag = planEintrag(aktivId, plan);
+    setPlaene(ps => ps.some(e => e.id === aktivId) ? ps.map(e => e.id === aktivId ? eintrag : e) : [eintrag, ...ps]);
+  }, [plan, aktivId]);
+  useEffect(() => { try { localStorage.setItem(PLAENE_KEY, JSON.stringify(plaene)); } catch { /* Liste baut sich beim nächsten Speichern neu auf */ } }, [plaene]);
 
-  /* autosave */
-  useEffect(() => {
-    if (plan) localStorage.setItem(LS_KEY, JSON.stringify(plan));
-  }, [plan]);
+  const planliste = {
+    eintraege: plaene,
+    aktivId,
+    oeffnen: (id) => {
+      if (id === aktivId) return;
+      try {
+        setPlan(migratePlan(JSON.parse(localStorage.getItem(planKey(id)))));
+        setAktivId(id);
+      } catch { notify('Plan konnte nicht geladen werden.', 'err'); }
+    },
+    // Neuen Plan speichern und öffnen; die bisherigen bleiben in der Liste
+    neu: (p) => {
+      const id = uid();
+      try { localStorage.setItem(planKey(id), JSON.stringify(p)); }
+      catch { notify('Speicher des Handys ist voll – alte Pläne löschen.', 'err'); return false; }
+      setPlaene(ps => [planEintrag(id, p), ...ps]);
+      setPlan(p);
+      setAktivId(id);
+      return true;
+    },
+    loeschen: (id) => {
+      localStorage.removeItem(planKey(id));
+      const rest = plaene.filter(e => e.id !== id);
+      setPlaene(rest);
+      if (id !== aktivId) return;
+      const naechster = rest.find(e => localStorage.getItem(planKey(e.id)));
+      if (naechster) planliste.oeffnen(naechster.id);
+      else planliste.neu(planAusBibliothek(lib, plan));
+    },
+  };
 
   /* persist config */
   useEffect(() => { localStorage.setItem(SERVER_KEY, server); }, [server]);
@@ -186,6 +246,18 @@ export default function App() {
       setLib(l => ({ ...l, boxTypes: l.boxTypes.filter(b => b.id !== id) }));
     },
   }), [lib, plan?.boxTypes]);
+
+  const verbraucher = useMemo(() => ({
+    alle: mergeById(lib.loads, plan?.loads || []).sort(byName),
+    speichern: (l) => setPlan(p => ({
+      ...p,
+      loads: p.loads.some(x => x.id === l.id) ? p.loads.map(x => x.id === l.id ? l : x) : [...p.loads, l].sort(byName),
+    })),
+    loeschen: (id) => {
+      setPlan(p => ({ ...p, loads: p.loads.filter(x => x.id !== id) }));
+      setLib(l => ({ ...l, loads: l.loads.filter(x => x.id !== id) }));
+    },
+  }), [lib, plan?.loads]);
 
   const notify = useCallback((text, art = 'info') => {
     const id = uid();
@@ -229,16 +301,16 @@ export default function App() {
           <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} sitzungAktiv={sitzung.aktiv} typen={typen} notify={notify} bild={bild} />
         )}
         {tab === 'steckplan' && (
-          <SteckplanTab plan={plan} setPlan={setPlan} typen={typen} />
+          <SteckplanTab plan={plan} setPlan={setPlan} typen={typen} verbraucher={verbraucher} />
         )}
         {tab === 'projekt' && (
-          <ProjektTab plan={plan} setPlan={setPlan} lib={lib} typen={typen} sitzungAktiv={sitzung.aktiv} notify={notify} bild={bild} />
+          <ProjektTab plan={plan} setPlan={setPlan} lib={lib} typen={typen} verbraucher={verbraucher} planliste={planliste} sitzungAktiv={sitzung.aktiv} notify={notify} bild={bild} />
         )}
         {tab === 'teilen' && (
-          <TeilenTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} setPcUrl={setPcUrl} sitzungAktiv={sitzung.aktiv} />
+          <TeilenTab plan={plan} setPlan={setPlan} planliste={planliste} pcUrl={pcUrl} setPcUrl={setPcUrl} sitzungAktiv={sitzung.aktiv} />
         )}
         {tab === 'sitzung' && (
-          <SitzungTab sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} projektName={plan.meta.production} />
+          <SitzungTab sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} projektName={plan.meta.production} planliste={planliste} />
         )}
       </main>
 
@@ -273,14 +345,16 @@ export default function App() {
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Steckplan Tab                                                             */
 /* ══════════════════════════════════════════════════════════════════════════ */
-function SteckplanTab({ plan, setPlan, typen }) {
+function SteckplanTab({ plan, setPlan, typen, verbraucher }) {
   const [modal, setModal] = useState(null);
-  // modal: null | {kind:'add'} | {kind:'inst', instId} | {kind:'pick', instId, slotKey}
+  // modal: null | {kind:'add', anschluss?} | {kind:'inst', instId} | {kind:'pick', instId, slotKey}
 
   // Datenmodell wie am Desktop (addInstance / removeInstance / addPlacement / removePlacement)
   const addInstance = (type, name) => {
-    const inst = verteilerAnlegen(setPlan, plan, type, name);
-    setModal({ kind: 'inst', instId: inst.id });
+    const a = modal?.anschluss;
+    if (a && !absicherungOk(type, a.outlet)) return;
+    const inst = verteilerAnlegen(setPlan, plan, type, name, a && { parentId: a.parentId, parentOutletId: a.parentOutletId });
+    setModal(a ? { kind: 'pick', instId: a.parentId, slotKey: a.parentOutletId } : { kind: 'inst', instId: inst.id });
   };
 
   const updateInstance = (id, patch) =>
@@ -338,8 +412,9 @@ function SteckplanTab({ plan, setPlan, typen }) {
         <AddInstModal
           plan={plan}
           typen={typen}
+          titel={modal.anschluss ? `Neuer Verteiler an ${modal.anschluss.titel}` : undefined}
           onAdd={addInstance}
-          onClose={() => setModal(null)}
+          onClose={() => setModal(modal.anschluss ? { kind: 'pick', instId: modal.anschluss.parentId, slotKey: modal.anschluss.parentOutletId } : null)}
         />
       )}
 
@@ -364,17 +439,29 @@ function SteckplanTab({ plan, setPlan, typen }) {
         const inst = plan.instances.find(i => i.id === modal.instId);
         const slot = slotGroups(getBoxType(plan, inst?.typeId)).flatMap(g => g.slots).find(s => s.key === modal.slotKey);
         if (!inst || !slot) return null;
-        const pls  = slotPlacements(plan, inst.id, slot);
-        const back = () => setModal({ kind: 'inst', instId: inst.id });
+        const pls   = slotPlacements(plan, inst.id, slot);
+        const back  = () => setModal({ kind: 'inst', instId: inst.id });
+        const titel = slot.mcSlot ? `${slot.outlet.label} – ${slot.label}` : slot.label;
+        const gesperrt = vorfahren(plan, inst);
         return (
           <PickerSheet
             plan={plan}
-            title={slot.mcSlot ? `${slot.outlet.label} – ${slot.label}` : slot.label}
+            title={titel}
             threePhase={is3ph(slot.outlet.connector)}
             placements={pls}
-            onAdd={(loadId) => { addPlacement(inst.id, slot.outlet.id, slot.mcSlot, loadId); back(); }}
+            verbraucher={verbraucher}
+            kinder={slotKids(plan, inst.id, slot.key)}
+            kandidaten={sortTopo(plan.instances).map(s => s.inst).filter(i => !gesperrt.has(i.id) && !(i.parentId === inst.id && i.parentOutletId === slot.key))}
+            onAdd={(l) => {
+              if (!plan.loads.some(x => x.id === l.id)) verbraucher.speichern(l);
+              addPlacement(inst.id, slot.outlet.id, slot.mcSlot, l.id);
+              back();
+            }}
             onRemove={(id) => removePlacements([id])}
             onClear={() => removePlacements(pls.map(p => p.id))}
+            onAnschliessen={(kind) => { if (absicherungOk(getBoxType(plan, kind.typeId), slot.outlet)) updateInstance(kind.id, { parentId: inst.id, parentOutletId: slot.key }); }}
+            onLoesen={(kind) => updateInstance(kind.id, { parentId: null, parentOutletId: null })}
+            onNeuerVerteiler={() => setModal({ kind: 'add', anschluss: { parentId: inst.id, parentOutletId: slot.key, outlet: slot.outlet, titel: `${instName(inst)} › ${titel}` } })}
             onClose={back}
           />
         );
@@ -383,13 +470,14 @@ function SteckplanTab({ plan, setPlan, typen }) {
   );
 }
 
-// Verteiler anlegen wie am Desktop (addInstance); ein Typ aus der Bibliothek kommt dabei in den Plan
-const verteilerAnlegen = (setPlan, plan, type, name) => {
+// Verteiler anlegen wie am Desktop (addInstance); ein Typ aus der Bibliothek kommt dabei in den Plan.
+// anschluss: { parentId, parentOutletId } – direkt als Unterverteiler an einen Steckplatz hängen
+const verteilerAnlegen = (setPlan, plan, type, name, anschluss = null) => {
   const count = plan.instances.filter(i => i.typeId === type.id).length;
   const inst = {
     id: uid(), typeId: type.id,
     name: name.trim() || (count > 0 ? `${type.name} #${count + 1}` : type.name),
-    parentId: null, parentOutletId: null, mainConnectionId: null,
+    parentId: anschluss?.parentId || null, parentOutletId: anschluss?.parentOutletId || null, mainConnectionId: null,
   };
   setPlan(p => ({
     ...p,
@@ -400,7 +488,7 @@ const verteilerAnlegen = (setPlan, plan, type, name) => {
 };
 
 /* ── Add instance modal ──────────────────────────────────────────────────── */
-function AddInstModal({ plan, typen, onAdd, onClose }) {
+function AddInstModal({ plan, typen, titel = 'Neuer Verteiler', onAdd, onClose }) {
   const [boxId,  setBoxId]  = useState(typen.alle[0]?.id || '');
   const [name,   setName]   = useState('');
   const [editor, setEditor] = useState(false);
@@ -419,7 +507,7 @@ function AddInstModal({ plan, typen, onAdd, onClose }) {
     <div className="overlay" onClick={onClose}>
       <div className="sheet sheet--center" onClick={e => e.stopPropagation()}>
         <div className="sheet-header">
-          <span className="sheet-title">Neuer Verteiler</span>
+          <span className="sheet-title">{titel}</span>
           <button className="sheet-close" aria-label="Schließen" onClick={onClose}><X size={20} /></button>
         </div>
         <div className="sheet-body">
@@ -454,6 +542,46 @@ function AddInstModal({ plan, typen, onAdd, onClose }) {
           <button className="btn btn--primary" disabled={!type} onClick={add}>
             Hinzufügen
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Verbraucher anlegen / bearbeiten (Datenformat wie am PC: name, watt, threePhase) ── */
+function VerbraucherEditor({ last, dreiphasig, inUse, onSave, onDelete, onClose }) {
+  const [name,  setName]  = useState(last?.name || '');
+  const [watt,  setWatt]  = useState(last?.watt ?? '');
+  const [dreiP, setDreiP] = useState(last ? !!last.threePhase : !!dreiphasig);
+  const ok = name.trim().length > 0;
+  const save = () => ok && onSave({ ...(last || {}), id: last?.id || uid(), name: name.trim(), watt: watt === '' ? '' : Number(watt), threePhase: dreiP });
+  const amp = watt ? (Number(watt) / 230).toFixed(1).replace('.', ',') : null;
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="sheet sheet--center" onClick={e => e.stopPropagation()}>
+        <div className="sheet-header">
+          <span className="sheet-title">{last ? 'Verbraucher bearbeiten' : 'Neuer Verbraucher'}</span>
+          <button className="sheet-close" aria-label="Schließen" onClick={onClose}><X size={20} /></button>
+        </div>
+        <div className="sheet-body">
+          <label className="field-label" htmlFor="vb-name">Name</label>
+          <input id="vb-name" className="field-input" value={name} placeholder="z. B. Moving Head" onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && save()} />
+          <label className="field-label" htmlFor="vb-watt" style={{ marginTop: 12 }}>Leistung (W)</label>
+          <input id="vb-watt" className="field-input" type="number" inputMode="numeric" min="0" value={watt} placeholder="z. B. 1200" onChange={e => setWatt(e.target.value)} />
+          {amp && <p className="meas-hint" style={{ marginTop: 4 }}>≈ {amp} A{dreiP ? ' je Phase (wie am PC)' : ''}</p>}
+          <label className="field-label" style={{ marginTop: 12 }}>Anschluss</label>
+          <Segmented options={[[false, '1-phasig'], [true, '3-phasig (CEE rot, Powerlock)']]} value={dreiP} onChange={setDreiP} />
+        </div>
+        <div className={'sheet-footer' + (onDelete ? ' sheet-footer--split' : '')}>
+          {onDelete && (
+            <button className="btn btn--danger" disabled={inUse} title={inUse ? 'Ist im Plan gesteckt' : ''}
+              onClick={() => window.confirm(`„${last.name}“ vom Handy löschen?`) && onDelete()}>
+              Löschen
+            </button>
+          )}
+          <button className="btn btn--secondary" onClick={onClose}>Abbrechen</button>
+          <button className="btn btn--primary" disabled={!ok} onClick={save}>Speichern</button>
         </div>
       </div>
     </div>
@@ -627,6 +755,16 @@ function TypEditor({ typ, inUse, onSave, onDelete, onClose }) {
 }
 
 /* ── Instance detail sheet ───────────────────────────────────────────────── */
+// Der Verteiler selbst und alles, woran er (über beliebig viele Ebenen) hängt – dort darf er nicht angeschlossen werden
+const vorfahren = (plan, inst) => {
+  const s = new Set();
+  for (let i = inst; i && !s.has(i.id); i = plan.instances.find(x => x.id === i.parentId)) s.add(i.id);
+  return s;
+};
+// Wie am PC: Warnung, wenn ein größerer Verteiler an einem kleiner abgesicherten Abgang hängt
+const absicherungOk = (bt, outlet) => !(bt?.feedAmp > (outlet?.amp || 0)) ||
+  window.confirm(`${bt.name} (${bt.feedAmp} A) wird auf einen ${outlet.amp} A Anschluss gesteckt.\nEffektive Absicherung: ${outlet.amp} A.\n\nFortfahren?`);
+
 // Wo ein Verteiler angeschlossen werden kann: alle Steckplätze der anderen Verteiler, außer bei ihm selbst und seinen Unterverteilern
 const anschlussZiele = (plan, inst) => {
   const unter = new Set([inst.id]);
@@ -652,9 +790,7 @@ function HaengtAn({ inst, bt, plan, onSetParent }) {
     if (!v) { onSetParent(null, null); return; }
     const [pid, key] = v.split('|');
     const slot = ziele.find(z => z.inst.id === pid)?.slots.find(s => s.key === key);
-    // Wie am PC: Warnung, wenn ein größerer Verteiler an einem kleiner abgesicherten Abgang hängt
-    if (slot && bt?.feedAmp > (slot.outlet.amp || 0) &&
-      !window.confirm(`${bt.name} (${bt.feedAmp} A) wird auf einen ${slot.outlet.amp} A Anschluss gesteckt.\nEffektive Absicherung: ${slot.outlet.amp} A.\n\nFortfahren?`)) return;
+    if (slot && !absicherungOk(bt, slot.outlet)) return;
     onSetParent(pid, key);
   };
   return (
@@ -792,68 +928,84 @@ function InstSheet({ inst, bt, plan, onPickSlot, onRename, onSetParent, onDelete
 }
 
 /* ── Consumer picker sheet ───────────────────────────────────────────────── */
-function PickerSheet({ plan, title, threePhase, placements, onAdd, onRemove, onClear, onClose }) {
+function PickerSheet({ plan, title, threePhase, placements, verbraucher, kinder, kandidaten, onAdd, onRemove, onClear, onAnschliessen, onLoesen, onNeuerVerteiler, onClose }) {
   const [search, setSearch] = useState('');
+  const [neu,    setNeu]    = useState(false);
   // Wie am Desktop: 3-phasige Verbraucher nur an 3-phasige Anschlüsse und umgekehrt
-  const loads = plan.loads
-    .filter(l => !!l.threePhase === threePhase)
-    .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'de', { numeric: true, sensitivity: 'base' }));
+  const loads = verbraucher.alle.filter(l => !!l.threePhase === threePhase);
   const filtered = loads.filter(l =>
     !search || (l.name || '').toLowerCase().includes(search.toLowerCase())
   );
   const countOf = (loadId) => placements.filter(p => p.loadId === loadId).length;
+  const anschliessen = (id) => { const k = kandidaten.find(i => i.id === id); if (k) onAnschliessen(k); };
+
+  if (neu) {
+    return <VerbraucherEditor last={null} dreiphasig={threePhase} onClose={() => setNeu(false)}
+      onSave={(l) => {
+        verbraucher.speichern(l);
+        // Nur passend gesteckt, wenn die Phasigkeit zum Steckplatz passt
+        if (!!l.threePhase === threePhase) onAdd(l); else setNeu(false);
+      }} />;
+  }
 
   return (
     <div className="overlay" onClick={onClose}>
       <div className="sheet sheet--bottom sheet--tall" onClick={e => e.stopPropagation()}>
         <div className="sheet-handle" />
         <div className="sheet-header">
-          <span className="sheet-title">Verbraucher — {title}</span>
+          <span className="sheet-title">{title}</span>
           <button className="sheet-close" aria-label="Schließen" onClick={onClose}><X size={20} /></button>
         </div>
-        <div className="picker-search">
-          <input
-            className="field-input"
-            placeholder="Suchen…"
-            value={search}
-            autoFocus
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
         <div className="picker-list">
-          {placements.length > 0 && (
-            <>
-              <div className="picker-section">
-                <span>Gesteckt ({placements.length})</span>
-                <button className="link-btn link-btn--muted" onClick={onClear}>Alle entfernen</button>
-              </div>
-              {placements.map(p => {
-                const l = getLoad(plan, p.loadId);
-                return (
-                  <div key={p.id} className="picker-item picker-item--selected">
-                    <span className="picker-name">{l?.name || '(unbekannt)'}</span>
-                    <span className="picker-actions">
-                      {l && <span className="picker-meta">{l.watt || '?'} W{l.threePhase ? ' 3ph' : ''}</span>}
-                      <button className="picker-remove" aria-label="Entfernen" onClick={() => onRemove(p.id)}><X size={18} /></button>
-                    </span>
-                  </div>
-                );
+          <div className="picker-section"><span>Unterverteiler an diesem Steckplatz</span></div>
+          {kinder.map(k => (
+            <div key={k.id} className="picker-item picker-item--selected">
+              <span className="picker-name"><CornerDownRight size={14} className="inline-icon" aria-hidden="true" />{instName(k)}</span>
+              <button className="picker-remove" aria-label={`${instName(k)} lösen`} onClick={() => onLoesen(k)}><X size={18} /></button>
+            </div>
+          ))}
+          <div className="picker-anschluss">
+            <select className="field-select" aria-label="Vorhandenen Verteiler anschließen" value="" onChange={e => anschliessen(e.target.value)} disabled={!kandidaten.length}>
+              <option value="">{kandidaten.length ? 'Vorhandenen Verteiler anschließen …' : 'Kein weiterer Verteiler im Plan'}</option>
+              {kandidaten.map(i => {
+                const an = plan.instances.find(p => p.id === i.parentId);
+                return <option key={i.id} value={i.id}>{instName(i)}{an ? ` (hängt an ${instName(an)})` : ''}</option>;
               })}
-              <div className="picker-section"><span>Weiteren Verbraucher stecken</span></div>
-            </>
-          )}
-          {placements.length === 0 && (
-            <button className="picker-item picker-item--selected" onClick={onClose}>
-              <span className="picker-name">Leer</span>
-            </button>
-          )}
+            </select>
+            <button className="btn btn--secondary btn--small" onClick={onNeuerVerteiler}><Plus size={14} aria-hidden="true" />Neuer</button>
+          </div>
+
+          <div className="picker-section">
+            <span>Verbraucher{placements.length ? ` – gesteckt (${placements.length})` : ''}</span>
+            {placements.length > 0 && <button className="link-btn link-btn--muted" onClick={onClear}>Alle entfernen</button>}
+          </div>
+          {placements.map(p => {
+            const l = getLoad(plan, p.loadId);
+            return (
+              <div key={p.id} className="picker-item picker-item--selected">
+                <span className="picker-name">{l?.name || '(unbekannt)'}</span>
+                <span className="picker-actions">
+                  {l && <span className="picker-meta">{l.watt || '?'} W{l.threePhase ? ' 3ph' : ''}</span>}
+                  <button className="picker-remove" aria-label="Entfernen" onClick={() => onRemove(p.id)}><X size={18} /></button>
+                </span>
+              </div>
+            );
+          })}
+          <div className="picker-search">
+            <input
+              className="field-input"
+              placeholder={`${threePhase ? '3-phasigen' : '1-phasigen'} Verbraucher suchen …`}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
           {filtered.map(l => {
             const n = countOf(l.id);
             return (
               <button
                 key={l.id}
                 className="picker-item"
-                onClick={() => onAdd(l.id)}
+                onClick={() => onAdd(l)}
               >
                 <span className="picker-name">{l.name}</span>
                 <span className="picker-meta">{n > 0 && `${n}× gesteckt · `}{l.watt || '?'} W{l.threePhase ? ' 3ph' : ''}</span>
@@ -865,6 +1017,9 @@ function PickerSheet({ plan, title, threePhase, placements, onAdd, onRemove, onC
               {loads.length ? 'Keine Treffer' : `Keine ${threePhase ? '3-phasigen' : '1-phasigen'} Verbraucher in der Bibliothek`}
             </div>
           )}
+          <button className="picker-item picker-item--neu" onClick={() => setNeu(true)}>
+            <span className="picker-name"><Plus size={14} className="inline-icon" aria-hidden="true" />Neuer Verbraucher{search ? ` „${search}“` : ''}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -874,8 +1029,10 @@ function PickerSheet({ plan, title, threePhase, placements, onAdd, onRemove, onC
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Projekt Tab                                                               */
 /* ══════════════════════════════════════════════════════════════════════════ */
-function ProjektTab({ plan, setPlan, lib, typen, sitzungAktiv, notify, bild }) {
-  const [edit, setEdit] = useState(null); // null | { typ } (typ null = neu)
+function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzungAktiv, notify, bild }) {
+  const [edit,     setEdit]     = useState(null); // null | { typ } (typ null = neu)
+  const [editLast, setEditLast] = useState(null); // null | { last } (last null = neu)
+  const [offen,    setOffen]    = useState({ typen: false, verbraucher: false });
   const logoInput = useRef(null);
   const logoWaehlen = async (e) => {
     const datei = e.target.files?.[0];
@@ -887,13 +1044,19 @@ function ProjektTab({ plan, setPlan, lib, typen, sitzungAktiv, notify, bild }) {
   const set = (key, val) => setPlan(p => ({ ...p, meta: { ...p.meta, [key]: val } }));
 
   const neuerPlan = () => {
-    const warnung = hasInspData(plan) ? '\n\nDie Prüfergebnisse auf dem Handy gehen dabei verloren – vorher als PDF sichern oder an den PC senden.' : '';
-    if (!window.confirm(`Aktuellen Plan verwerfen und einen neuen Plan anlegen?${warnung}`)) return;
-    setPlan(planAusBibliothek(lib, plan));
-    const n = lib.boxTypes.length;
-    notify(`Neuer Plan angelegt${n ? ` – ${n} Verteiler-Typ${n === 1 ? '' : 'en'} aus der Bibliothek` : ''}.`);
+    if (!planliste.neu(planAusBibliothek(lib, plan))) return;
+    const n = lib.boxTypes.length, m = lib.loads.length;
+    notify(`Neuer Plan angelegt${n || m ? ` – mit ${n} Verteiler-Typ${n === 1 ? '' : 'en'} und ${m} Verbraucher${m === 1 ? '' : 'n'} aus der Bibliothek` : ''}. Der bisherige Plan bleibt in der Liste.`);
   };
-  const benutzt = (id) => plan.instances.some(i => instTypeId(i) === id);
+  const loeschen = (e) => {
+    const name = e.name || 'Plan ohne Namen';
+    if (!window.confirm(`„${name}“ (${e.verteiler} Verteiler) mit allen Prüfergebnissen vom Handy löschen?`)) return;
+    planliste.loeschen(e.id);
+  };
+  const benutzt     = (id) => plan.instances.some(i => instTypeId(i) === id);
+  const gesteckt    = (id) => plan.placements.filter(p => p.loadId === id).length;
+  const datum       = (t) => new Date(t).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const eintraege   = [...planliste.eintraege].sort((a, b) => b.geaendert - a.geaendert);
 
   const fields = [
     { key: 'production', label: 'Veranstaltung',   type: 'text'  },
@@ -914,13 +1077,35 @@ function ProjektTab({ plan, setPlan, lib, typen, sitzungAktiv, notify, bild }) {
         />
       )}
 
+      {editLast && (
+        <VerbraucherEditor
+          last={editLast.last}
+          inUse={editLast.last ? gesteckt(editLast.last.id) > 0 : false}
+          onSave={(l) => { verbraucher.speichern(l); setEditLast(null); }}
+          onDelete={editLast.last ? () => { verbraucher.loeschen(editLast.last.id); setEditLast(null); } : null}
+          onClose={() => setEditLast(null)}
+        />
+      )}
+
       <div className="section">
-        <div className="section-title">Plan</div>
-        <p className="meas-hint" style={{ marginBottom: 12 }}>Für eine spontane Prüfung: neuen Plan anlegen, Veranstaltung eintragen und im Tab <strong>Prüfung</strong> die Verteiler hinzufügen.</p>
-        <button className="btn btn--secondary" style={{ width: '100%' }} disabled={sitzungAktiv} onClick={neuerPlan}>
+        <div className="section-title">Pläne ({eintraege.length})</div>
+        {sitzungAktiv && <p className="meas-hint" style={{ marginBottom: 8 }}>Während einer Sitzung lässt sich der Plan nicht wechseln – erst die Sitzung verlassen.</p>}
+        {eintraege.map(e => {
+          const aktiv = e.id === planliste.aktivId;
+          return (
+            <div key={e.id} className={'plan-row' + (aktiv ? ' plan-row--aktiv' : '')}>
+              <button className="plan-row-info plan-row-open" disabled={aktiv || sitzungAktiv} onClick={() => planliste.oeffnen(e.id)}
+                aria-label={aktiv ? `${e.name || 'Plan ohne Namen'} (geöffnet)` : `${e.name || 'Plan ohne Namen'} öffnen`}>
+                <span className="plan-name">{e.name || 'Plan ohne Namen'}</span>
+                <span className="plan-date">{aktiv ? 'geöffnet · ' : ''}{e.verteiler} Verteiler · {datum(e.geaendert)}</span>
+              </button>
+              <button className="picker-remove" aria-label={`${e.name || 'Plan ohne Namen'} löschen`} disabled={sitzungAktiv && aktiv} onClick={() => loeschen(e)}><Trash2 size={16} /></button>
+            </div>
+          );
+        })}
+        <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} disabled={sitzungAktiv} onClick={neuerPlan}>
           <FilePlus2 size={16} aria-hidden="true" />Neuer Plan
         </button>
-        {sitzungAktiv && <p className="meas-hint" style={{ marginTop: 8 }}>In einer Sitzung nicht möglich – der Plan gehört allen Teilnehmern. Erst die Sitzung verlassen.</p>}
       </div>
 
       <div className="section">
@@ -954,30 +1139,49 @@ function ProjektTab({ plan, setPlan, lib, typen, sitzungAktiv, notify, bild }) {
       </div>
 
       <div className="section">
-        <div className="section-title">Verteiler-Typen</div>
-        <p className="meas-hint" style={{ marginBottom: 8 }}>Das Handy merkt sich die Typen aller Pläne, die du geladen oder angelegt hast.</p>
-        {typen.alle.map(bt => (
-          <button key={bt.id} className="stat-row typ-row" onClick={() => setEdit({ typ: bt })}>
-            <span>{bt.name}</span>
-            <span className="typ-row-meta">{(bt.outlets || []).length} Abgänge{benutzt(bt.id) ? ' · im Plan' : ''}<Pencil size={13} className="inline-icon" aria-hidden="true" /></span>
-          </button>
-        ))}
-        <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} onClick={() => setEdit({ typ: null })}>
-          <Plus size={16} aria-hidden="true" />Neuer Typ
+        <button className="collapse-head" aria-expanded={offen.typen} onClick={() => setOffen(o => ({ ...o, typen: !o.typen }))}>
+          <span className="section-title" style={{ margin: 0 }}>Verteiler-Typen</span>
+          <span className="collapse-sum">{typen.alle.length}</span>
+          <span className="collapse-arrow">{offen.typen ? '▴' : '▾'}</span>
         </button>
+        {offen.typen && (
+          <div style={{ marginTop: 8 }}>
+            <p className="meas-hint" style={{ marginBottom: 8 }}>Das Handy merkt sich die Typen aller Pläne, die du geladen oder angelegt hast.</p>
+            {typen.alle.map(bt => (
+              <button key={bt.id} className="stat-row typ-row" onClick={() => setEdit({ typ: bt })}>
+                <span>{bt.name}</span>
+                <span className="typ-row-meta">{(bt.outlets || []).length} Abgänge{benutzt(bt.id) ? ' · im Plan' : ''}<Pencil size={13} className="inline-icon" aria-hidden="true" /></span>
+              </button>
+            ))}
+            <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} onClick={() => setEdit({ typ: null })}>
+              <Plus size={16} aria-hidden="true" />Neuer Typ
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="section">
-        <div className="section-title">Im Plan</div>
-        <div className="stat-row">
-          <span>Verteiler</span>
-          <strong>{plan.instances.length}</strong>
-        </div>
-        <div className="stat-row">
-          <span>Verbraucher-Bibliothek</span>
-          <strong>{plan.loads.length}</strong>
-        </div>
+        <button className="collapse-head" aria-expanded={offen.verbraucher} onClick={() => setOffen(o => ({ ...o, verbraucher: !o.verbraucher }))}>
+          <span className="section-title" style={{ margin: 0 }}>Verbraucher</span>
+          <span className="collapse-sum">{verbraucher.alle.length}</span>
+          <span className="collapse-arrow">{offen.verbraucher ? '▴' : '▾'}</span>
+        </button>
+        {offen.verbraucher && (
+          <div style={{ marginTop: 8 }}>
+            <p className="meas-hint" style={{ marginBottom: 8 }}>Auch die Verbraucher aller geladenen Pläne merkt sich das Handy. Neue lassen sich auch direkt beim Stecken anlegen.</p>
+            {verbraucher.alle.map(l => (
+              <button key={l.id} className="stat-row typ-row" onClick={() => setEditLast({ last: l })}>
+                <span>{l.name || '(ohne Namen)'}</span>
+                <span className="typ-row-meta">{l.watt || '?'} W{l.threePhase ? ' · 3ph' : ''}{gesteckt(l.id) ? ` · ${gesteckt(l.id)}× gesteckt` : ''}<Pencil size={13} className="inline-icon" aria-hidden="true" /></span>
+              </button>
+            ))}
+            <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} onClick={() => setEditLast({ last: null })}>
+              <Plus size={16} aria-hidden="true" />Neuer Verbraucher
+            </button>
+          </div>
+        )}
       </div>
+
     </div>
   );
 }
@@ -1023,8 +1227,6 @@ const chk = (val, min, max) => {
 };
 
 const hasInspData   = (plan) => Object.keys(plan?.inspResults || {}).length > 0;
-const confirmReplace = (plan) => !hasInspData(plan) ||
-  window.confirm('Auf dem Handy sind Prüfergebnisse gespeichert. Wirklich durch den neuen Plan ersetzen?');
 
 const irOf = (res, iid) => {
   const sv = res[iid] || {};
@@ -1674,7 +1876,7 @@ function QrScanner({ onResult, onClose }) {
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Teilen Tab – Plan per QR-Code vom PC holen und zurücksenden (ohne Server)  */
 /* ══════════════════════════════════════════════════════════════════════════ */
-function TeilenTab({ plan, setPlan, pcUrl, setPcUrl, sitzungAktiv }) {
+function TeilenTab({ plan, setPlan, planliste, pcUrl, setPcUrl, sitzungAktiv }) {
   const [loading,     setLoading]     = useState(false);
   const [msg,         setMsg]         = useState(null);
   const [showScanner, setShowScanner] = useState(false);
@@ -1690,10 +1892,21 @@ function TeilenTab({ plan, setPlan, pcUrl, setPcUrl, sitzungAktiv }) {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       if (data._format !== 'stromplaner') throw new Error('Der QR-Code enthält keinen Stromplaner-Plan.');
-      if (!confirmReplace(plan) || !ersetzenOk()) { status('Import abgebrochen', true); return; }
-      setPlan(migratePlan(data));
+      const neu  = migratePlan(data);
+      const name = data.meta?.production || url;
+      // In einer Sitzung gehört der Plan allen; sonst kommt der Plan vom PC als eigener Eintrag in die Planliste
+      if (sitzungAktiv) {
+        if (!ersetzenOk()) { status('Import abgebrochen', true); return; }
+        setPlan(neu);
+        status('Plan geladen: ' + name);
+      } else if (!plan.instances.length && !hasInspData(plan)) {
+        setPlan(neu);
+        status('Plan geladen: ' + name);
+      } else {
+        if (!planliste.neu(neu)) return;
+        status(`Plan geladen: ${name} – als neuer Plan, „${plan.meta.production || 'bisheriger Plan'}“ bleibt in der Planliste (Tab Projekt).`);
+      }
       setPcUrl(url);
-      status('Plan geladen: ' + (data.meta?.production || url));
     } catch (e) {
       status(e instanceof TypeError
         ? 'PC nicht erreichbar. Läuft am PC „Teilen“ und ist das Handy im selben WLAN (nicht über VPN)?'
@@ -1738,16 +1951,16 @@ function TeilenTab({ plan, setPlan, pcUrl, setPcUrl, sitzungAktiv }) {
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Sitzung Tab – einer gemeinsamen Sitzung auf dem Planer-Server beitreten   */
 /* ══════════════════════════════════════════════════════════════════════════ */
-function SitzungTab({ sitzung, server, setServer, token, setToken, projektName }) {
+function SitzungTab({ sitzung, server, setServer, token, setToken, projektName, planliste }) {
   const z = sitzung.zustand;
   return (
     <div className="page">
-      {z ? <SitzungAktiv sitzung={sitzung} /> : <SitzungBeitreten sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} projektName={projektName} />}
+      {z ? <SitzungAktiv sitzung={sitzung} /> : <SitzungBeitreten sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} projektName={projektName} planliste={planliste} />}
     </div>
   );
 }
 
-function SitzungBeitreten({ sitzung, server, setServer, token, setToken, projektName }) {
+function SitzungBeitreten({ sitzung, server, setServer, token, setToken, projektName, planliste }) {
   const [name,    setName]    = useState(ladeName);
   const [liste,   setListe]   = useState(null);
   const [busy,    setBusy]    = useState(false);
@@ -1774,7 +1987,9 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken, projekt
       catch (e) { setAbfrage(a => ({ ...a, fehler: e.message })); return; }
     }
     const b = beitrittMoeglich(s, APP_VERSION);
-    if (!window.confirm(`Dein Plan auf dem Handy wird durch den Stand der Sitzung „${s.name}“ ersetzt. Noch nicht gesendete Prüfergebnisse vorher an den PC schicken.${b.umstellen ? '\n\n' + b.grund : ''}\n\nBeitreten?`)) return;
+    if (!window.confirm(`Für die Sitzung „${s.name}“ wird ein neuer Plan auf dem Handy angelegt – deine anderen Pläne bleiben unverändert in der Planliste.${b.umstellen ? '\n\n' + b.grund : ''}\n\nBeitreten?`)) return;
+    // Leerer Plan als Ziel: der Stand der Sitzung kommt vom Server und überschreibt so keinen vorhandenen Plan
+    if (!planliste.neu(newPlan())) return;
     sitzung.verbinden({ server, token, session: s.id, code: code || undefined, name: name.trim(), info: s });
   };
 

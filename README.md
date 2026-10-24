@@ -23,7 +23,7 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Vertei
 
 Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen, um zu archivieren, oder um in einem anderem Projekt zu arbeiten und vorher den aktuellen Stand zu sichern.
 
-**Verteiler-Typen und Verbraucher** werden zusätzlich automatisch als Bibliothek in AppData gespeichert (`AppData\Stromplaner\Speicherstände\Bibliothek.json` auf Windows, `~/Library/Application Support/Stromplaner/Speicherstände/Bibliothek.json` auf macOS) und beim Start von dort geladen – sie bleiben also erhalten, auch wenn ein anderer Planungsstand geöffnet wird.
+**Verteiler-Typen und Verbraucher** werden zusätzlich automatisch als Bibliothek in AppData gespeichert (`AppData\Stromplaner\Speicherstände\Bibliothek.json` auf Windows, `~/Library/Application Support/Stromplaner/Speicherstände/Bibliothek.json` auf macOS) und beim Start von dort geladen – sie bleiben also erhalten, auch wenn ein anderer Planungsstand geöffnet wird. Bringt ein geladener Plan andere Typen oder Verbraucher mit, fragt Stromplaner, ob sie die Bibliothek **ergänzen** oder **ersetzen** sollen.
 
 **Updates** werden unter Windows automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **Update bereit**-Button, der einen Neustart-Dialog öffnet.
 
@@ -48,18 +48,18 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 | Tab | Inhalt |
 |-----|--------|
 | **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **Verteiler hinzufügen** legt direkt hier einen Verteiler an. **PDF speichern / drucken** öffnet den Android-Druckdialog („Als PDF speichern“ oder Drucker) – das PDF ist identisch mit dem vom PC, Text markierbar. **PDF direkt teilen** schickt eine Bild-Fassung sofort per Mail oder Messenger. Unter *Prüfungsdetails* lässt sich mit dem Finger unterschreiben. |
-| **Steckplan** | Verteiler und Steckungen ansehen und anpassen; unter **Hängt an** einen Verteiler als Unterverteiler an einen Abgang eines anderen hängen |
-| **Projekt** | **Neuer Plan**, Projektdaten, **Firmenlogo** fürs PDF und **Verteiler-Typen** (anlegen und bearbeiten) |
+| **Steckplan** | Verteiler und Steckungen ansehen und anpassen. Am Steckplatz Verbraucher stecken (auch neu anlegen) und Unterverteiler anschließen oder dort neu anlegen; alternativ am Verteiler unter **Hängt an** |
+| **Projekt** | **Planliste** (mehrere Pläne anlegen, wechseln, löschen), Projektdaten, **Firmenlogo** fürs PDF, **Verteiler-Typen** und **Verbraucher** (anlegen und bearbeiten) |
 | **Teilen** | Plan per QR-Code vom PC holen, An PC zurücksenden – ohne Server |
 | **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten oder selbst eine starten: Prüfwerte erscheinen sofort bei allen (siehe „Sitzung“ weiter unten) |
 
 ### Spontane Prüfung nur mit dem Handy
-1. **Projekt** → **Neuer Plan**, Veranstaltung eintragen.
+1. **Projekt** → **Neuer Plan**, Veranstaltung eintragen. Die bisherigen Pläne bleiben in der Planliste.
 2. **Prüfung** → **Verteiler hinzufügen** → Typ wählen. Fehlt der Typ, über **Neuen Typ anlegen** Name, Einspeisung und Abgänge antippen (Schuko, CEE, Multicore …; Schutz LS/RCBO und Auslösecharakteristik je Abgang).
-3. Unterverteiler im Tab **Steckplan** unter **Hängt an** zuordnen.
+3. Unterverteiler im Tab **Steckplan** am Steckplatz anschließen (oder dort neu anlegen), Verbraucher stecken – fehlt einer, über **Neuer Verbraucher** anlegen.
 4. Prüfen wie gewohnt, danach **PDF speichern / drucken** oder **PDF direkt teilen**.
 
-Das Handy merkt sich die Verteiler-Typen und Verbraucher aller Pläne, die es je geladen hat oder in denen es in einer Sitzung war – ein neuer Plan startet mit dieser Bibliothek. Firmenlogo (Tab Projekt) und Unterschrift (Prüfungsdetails) bleiben wie am PC nur auf dem jeweiligen Gerät gespeichert.
+Das Handy merkt sich die Verteiler-Typen und Verbraucher aller Pläne, die es je geladen hat oder in denen es in einer Sitzung war – ein neuer Plan startet mit dieser Bibliothek. Ein Plan per QR-Code und das Beitreten einer Sitzung legen jeweils einen eigenen Plan in der Liste an. Firmenlogo (Tab Projekt) und Unterschrift (Prüfungsdetails) bleiben wie am PC nur auf dem jeweiligen Gerät gespeichert.
 
 ### Plan vom PC aufs Handy und zurück (WLAN)
 1. **PC:** Header → **Teilen** → **QR-Code anzeigen**.
@@ -275,7 +275,7 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 |--------|----------|
 | **Logo** | Firmenlogo hochladen oder ersetzen (PNG, JPG, SVG) — erscheint in der App und im PDF |
 | **✕** *(neben Logo, nur wenn eins gesetzt ist)* | Hochgeladenes Logo entfernen |
-| **Laden** | Gespeicherten Stand (`.json`) laden |
+| **Laden** | Gespeicherten Stand (`.json`) laden – mit Rückfrage, ob dessen Verteiler-Typen und Verbraucher die Bibliothek ergänzen oder ersetzen |
 | **Speichern** | Aktuellen Stand als `.json` exportieren |
 | **Neu** | Planung zurücksetzen (Verteiler-Typen und Verbraucher bleiben erhalten) |
 | **Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
