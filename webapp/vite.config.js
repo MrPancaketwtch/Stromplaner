@@ -25,6 +25,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registrierung selbst in main.jsx – nur im Browser, nicht in der Android-App
+      injectRegister: false,
       includeAssets: ['icon.png'],
       manifest: {
         name: 'Stromplaner',
