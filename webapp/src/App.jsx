@@ -1032,7 +1032,6 @@ function PickerSheet({ plan, title, threePhase, placements, verbraucher, kinder,
 function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzungAktiv, notify, bild }) {
   const [edit,     setEdit]     = useState(null); // null | { typ } (typ null = neu)
   const [editLast, setEditLast] = useState(null); // null | { last } (last null = neu)
-  const [offen,    setOffen]    = useState({ typen: false, verbraucher: false });
   const logoInput = useRef(null);
   const logoWaehlen = async (e) => {
     const datei = e.target.files?.[0];
@@ -1124,6 +1123,33 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
       </div>
 
       <div className="section">
+        <div className="section-title">Bibliothek</div>
+        <p className="meas-hint" style={{ marginBottom: 4 }}>Verteiler-Typen und Verbraucher aller Pläne, die auf dem Handy waren. Neue Pläne starten damit; Verbraucher lassen sich auch direkt beim Stecken anlegen.</p>
+
+        <div className="bib-head"><span>Verteiler-Typen ({typen.alle.length})</span></div>
+        {typen.alle.map(bt => (
+          <button key={bt.id} className="stat-row typ-row" onClick={() => setEdit({ typ: bt })}>
+            <span>{bt.name}</span>
+            <span className="typ-row-meta">{(bt.outlets || []).length} Abgänge{benutzt(bt.id) ? ' · im Plan' : ''}<Pencil size={13} className="inline-icon" aria-hidden="true" /></span>
+          </button>
+        ))}
+        <button className="btn btn--secondary" style={{ width: '100%', marginTop: 10 }} onClick={() => setEdit({ typ: null })}>
+          <Plus size={16} aria-hidden="true" />Neuer Typ
+        </button>
+
+        <div className="bib-head"><span>Verbraucher ({verbraucher.alle.length})</span></div>
+        {verbraucher.alle.map(l => (
+          <button key={l.id} className="stat-row typ-row" onClick={() => setEditLast({ last: l })}>
+            <span>{l.name || '(ohne Namen)'}</span>
+            <span className="typ-row-meta">{l.watt || '?'} W{l.threePhase ? ' · 3ph' : ''}{gesteckt(l.id) ? ` · ${gesteckt(l.id)}× gesteckt` : ''}<Pencil size={13} className="inline-icon" aria-hidden="true" /></span>
+          </button>
+        ))}
+        <button className="btn btn--secondary" style={{ width: '100%', marginTop: 10 }} onClick={() => setEditLast({ last: null })}>
+          <Plus size={16} aria-hidden="true" />Neuer Verbraucher
+        </button>
+      </div>
+
+      <div className="section">
         <div className="section-title">Firmenlogo fürs PDF</div>
         <p className="meas-hint" style={{ marginBottom: 8 }}>Erscheint oben rechts auf jeder Seite des Prüfprotokolls. Bleibt nur auf diesem Handy.</p>
         <div className="bild-row">
@@ -1138,49 +1164,6 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
         </div>
       </div>
 
-      <div className="section">
-        <button className="collapse-head" aria-expanded={offen.typen} onClick={() => setOffen(o => ({ ...o, typen: !o.typen }))}>
-          <span className="section-title" style={{ margin: 0 }}>Verteiler-Typen</span>
-          <span className="collapse-sum">{typen.alle.length}</span>
-          <span className="collapse-arrow">{offen.typen ? '▴' : '▾'}</span>
-        </button>
-        {offen.typen && (
-          <div style={{ marginTop: 8 }}>
-            <p className="meas-hint" style={{ marginBottom: 8 }}>Das Handy merkt sich die Typen aller Pläne, die du geladen oder angelegt hast.</p>
-            {typen.alle.map(bt => (
-              <button key={bt.id} className="stat-row typ-row" onClick={() => setEdit({ typ: bt })}>
-                <span>{bt.name}</span>
-                <span className="typ-row-meta">{(bt.outlets || []).length} Abgänge{benutzt(bt.id) ? ' · im Plan' : ''}<Pencil size={13} className="inline-icon" aria-hidden="true" /></span>
-              </button>
-            ))}
-            <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} onClick={() => setEdit({ typ: null })}>
-              <Plus size={16} aria-hidden="true" />Neuer Typ
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="section">
-        <button className="collapse-head" aria-expanded={offen.verbraucher} onClick={() => setOffen(o => ({ ...o, verbraucher: !o.verbraucher }))}>
-          <span className="section-title" style={{ margin: 0 }}>Verbraucher</span>
-          <span className="collapse-sum">{verbraucher.alle.length}</span>
-          <span className="collapse-arrow">{offen.verbraucher ? '▴' : '▾'}</span>
-        </button>
-        {offen.verbraucher && (
-          <div style={{ marginTop: 8 }}>
-            <p className="meas-hint" style={{ marginBottom: 8 }}>Auch die Verbraucher aller geladenen Pläne merkt sich das Handy. Neue lassen sich auch direkt beim Stecken anlegen.</p>
-            {verbraucher.alle.map(l => (
-              <button key={l.id} className="stat-row typ-row" onClick={() => setEditLast({ last: l })}>
-                <span>{l.name || '(ohne Namen)'}</span>
-                <span className="typ-row-meta">{l.watt || '?'} W{l.threePhase ? ' · 3ph' : ''}{gesteckt(l.id) ? ` · ${gesteckt(l.id)}× gesteckt` : ''}<Pencil size={13} className="inline-icon" aria-hidden="true" /></span>
-              </button>
-            ))}
-            <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} onClick={() => setEditLast({ last: null })}>
-              <Plus size={16} aria-hidden="true" />Neuer Verbraucher
-            </button>
-          </div>
-        )}
-      </div>
 
     </div>
   );

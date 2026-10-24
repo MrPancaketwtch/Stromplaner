@@ -858,3 +858,7 @@ textarea.field-input { resize: vertical; font-family: inherit; }
 .picker-anschluss .field-select { flex: 1; min-width: 0; }
 .picker-item--neu { color: var(--accent); }
 .picker-item--neu .picker-name { display: inline-flex; align-items: center; gap: 6px; }
+.bib-head {
+  margin: 16px 0 2px; font-size: 12px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent);
+}
