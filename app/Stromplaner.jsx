@@ -660,7 +660,7 @@ export default function App() {
     inspResults:()=>({}),cableCalcs:()=>[],voltCalcs:()=>[],schaltbildLayout:()=>({positions:{},consumerPositions:{},annotations:[]})}),[]);
   const sitzung=useSitzung({doc:sitzungDoc,setters:sitzungSetters,defaults:sitzungDefaults,notify,
     version:typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"});
-  // Laden/Neu in einer Sitzung ersetzt den Plan für alle
+  // Öffnen/Neu in einer Sitzung ersetzt den Plan für alle
   const ersetzenErlaubt=async()=>!sitzung.aktiv||await uiConfirm("Du bist in einer gemeinsamen Sitzung. Der neue Stand ersetzt den Plan für alle Teilnehmer.\n\nFortfahren?");
 
   /* ── Derived ───────────────────────────────────────────────────────────── */
@@ -1279,7 +1279,7 @@ export default function App() {
         <div style={S.headerMeta}>{meta.production} · v{meta.version} · {meta.date}</div>
         <input ref={fileInputRef} type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/>
         <button style={S.ghostBtn} onClick={resetAll}><FilePlus2 size={14} aria-hidden="true"/>Neu</button>
-        <button style={S.ghostBtn} onClick={openPlan}><FolderOpen size={14} aria-hidden="true"/>Laden</button>
+        <button style={S.ghostBtn} onClick={openPlan}><FolderOpen size={14} aria-hidden="true"/>Öffnen</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
           <button style={S.ghostBtn} onClick={()=>setShowRecents(v=>!v)}><History size={14} aria-hidden="true"/>Zuletzt geöffnet</button>
           {showRecents&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",minWidth:280,maxWidth:380,marginTop:4}} onMouseLeave={()=>setShowRecents(false)}>
@@ -3497,8 +3497,8 @@ const HELP_SECTIONS = {
     extra: 'Hast du kaskadierte Verteiler – also eine Unterverteilung die an einem Steckplatz eines übergeordneten Verteilers hängt – übernimmt das Tool die ungünstigsten Messwerte (Zs und Kurzschlussstrom) aus der Unterverteilung automatisch für den entsprechenden Steckplatz des Hauptverteilers. Wenn du die Werte dort zusätzlich separat gemessen hast, kannst du sie manuell überschreiben; sie werden dann mit einem ✎ gekennzeichnet.'
   },
   speichern: {
-    title: 'Speichern, Laden & Exportieren',
-    text: 'Im Header findest du zwei Schaltflächen: "Laden" öffnet eine JSON-Datei, die du zuvor gespeichert hast, und stellt den kompletten Projektstand wieder her. "Speichern" exportiert den aktuellen Stand als JSON-Datei auf deinen Rechner – inklusive aller Verteiler, Steckungen, Messwerte und Einstellungen.',
+    title: 'Speichern, Öffnen & Exportieren',
+    text: 'Im Header findest du zwei Schaltflächen: "Öffnen" lädt eine JSON-Datei, die du zuvor gespeichert hast, und stellt den kompletten Projektstand wieder her. "Speichern" exportiert den aktuellen Stand als JSON-Datei auf deinen Rechner – inklusive aller Verteiler, Steckungen, Messwerte und Einstellungen.',
     extra: 'Verteiler-Typen und Verbraucher lassen sich separat im jeweiligen Tab im- und exportieren, um die Bibliotheken geräteübergreifend zu nutzen.'
   },
   logo: {

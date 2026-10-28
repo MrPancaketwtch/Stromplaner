@@ -16,7 +16,7 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Vertei
    - **macOS (Intel):** `Stromplaner-x.x.x.dmg`
    
    > **macOS-Hinweis:** Beim ersten Öffnen erscheint eine Warnung „Entwickler nicht verifiziert". Rechtsklick auf die App → **Öffnen** → **Öffnen** umgeht diese Meldung einmalig.
-2. **Erster Start:** **Verteiler-Typen und Verbraucher selber anlegen** oder **Laden** → `app/Standard.json` auswählen, um Verteiler-Typen und Verbraucher vorzuladen
+2. **Erster Start:** **Verteiler-Typen und Verbraucher selber anlegen** oder **Öffnen** → `app/Standard.json` auswählen, um Verteiler-Typen und Verbraucher vorzuladen
 3. Planen, stecken, prüfen
 4. Mit **Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
 5. **PDF** für den fertigen Stromplan oder das Prüfprotokoll → **Achtung** zwei verschiedene Exports: Einer für den Plan, einer für die Errichtungsprüfung
@@ -284,7 +284,7 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 | **Logo** | Firmenlogo hochladen oder ersetzen (PNG, JPG, SVG) — erscheint in der App und im PDF |
 | **✕** *(neben Logo, nur wenn eins gesetzt ist)* | Hochgeladenes Logo entfernen |
 | **Neu** | Planung zurücksetzen (Verteiler-Typen und Verbraucher bleiben erhalten) |
-| **Laden** | Gespeicherten Stand (`.json`) laden – mit Rückfrage, ob dessen Verteiler-Typen und Verbraucher die Bibliothek ergänzen oder ersetzen |
+| **Öffnen** | Gespeicherten Stand (`.json`) öffnen – mit Rückfrage, ob dessen Verteiler-Typen und Verbraucher die Bibliothek ergänzen oder ersetzen |
 | **Zuletzt geöffnet** | Schnellzugriff auf die zuletzt geöffneten Planungsstände |
 | **Speichern** | Aktuellen Stand als `.json` exportieren |
 | **Teilen** | Plan mit dem Handy austauschen – per Bluetooth ohne Netzwerk oder im WLAN per QR-Code, jeweils ohne Server |
@@ -307,7 +307,7 @@ Mehrere Personen bearbeiten denselben Plan gleichzeitig, jede Änderung erschein
 - Wer in einem Textfeld tippt, sperrt es kurz für die anderen; wer gleichzeitig dasselbe Feld ändern will, bekommt einen Hinweis und seine Eingabe wird zurückgenommen.
 - Ändern zwei Personen dasselbe Feld kurz nacheinander, gilt die letzte Änderung; die andere Person bekommt einen Hinweis.
 - Bricht die Verbindung ab, arbeitet man weiter – die Änderungen werden beim Wiederverbinden nachgeschickt.
-- **Laden** und **Neu** (am Handy auch ein neu gescannter Plan) ersetzen in einer Sitzung den Plan für alle (mit Rückfrage).
+- **Öffnen** und **Neu** (am Handy auch ein neu gescannter Plan) ersetzen in einer Sitzung den Plan für alle (mit Rückfrage).
 - **Handy:** In der Android-App funktionieren Server mit `http://`. Die Web-App im Browser erreicht nur einen Server mit `https://`.
 - Verteiler-Typen und Verbraucher der Sitzung landen – wie beim Laden eines Plans – auch in der eigenen Bibliothek.
 - **Verlassen:** Man kann später wieder beitreten, der Plan bleibt lokal erhalten. **Für alle beenden** löscht die Sitzung auf dem Server; die anderen behalten ihren Stand als lokalen Plan.
