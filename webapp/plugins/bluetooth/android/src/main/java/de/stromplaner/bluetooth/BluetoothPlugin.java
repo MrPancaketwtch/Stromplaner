@@ -333,7 +333,9 @@ public class BluetoothPlugin extends Plugin {
             sendeschlange.add(r);
         } else {
             Integer m = mtu.get(geraet.getAddress());
-            int nutzlast = Math.max(20, (m == null ? 23 : m) - 3) - 1;
+            // MTU - 3 Bytes passen in eine Benachrichtigung, aber nie mehr als 512 (GATT-Grenze). Windows handelt
+            // oft MTU 525–527 aus – 244 Bytes passen zudem in ein einzelnes Funkpaket und laufen am zuverlässigsten.
+            int nutzlast = Math.min(244, Math.max(20, (m == null ? 23 : m) - 3)) - 1;
             sendeschlange.add(ByteBuffer.allocate(5).put(START).putInt(bereit.length).array());
             for (int i = 0; i < bereit.length; i += nutzlast) {
                 int n = Math.min(nutzlast, bereit.length - i);
@@ -353,22 +355,27 @@ public class BluetoothPlugin extends Plugin {
         byte[] r = sendeschlange.poll();
         if (r == null) return;
         boolean ok;
+        String code;
         try {
             if (Build.VERSION.SDK_INT >= 33) {
-                ok = server.notifyCharacteristicChanged(sendeziel, tx, false, r) == BluetoothStatusCodes.SUCCESS;
+                int status = server.notifyCharacteristicChanged(sendeziel, tx, false, r);
+                ok = status == BluetoothStatusCodes.SUCCESS;
+                code = String.valueOf(status);
             } else {
                 tx.setValue(r);
                 ok = server.notifyCharacteristicChanged(sendeziel, tx, false);
+                code = "false";
             }
         } catch (SecurityException e) {
             ok = false;
+            code = "Berechtigung";
         }
         if (!ok) {
             // Puffer voll – kurz warten und denselben Rahmen erneut senden; nach ~5 s aufgeben (Verbindung weg)
             if (++fehlversuche > 200) {
                 sendeschlange.clear();
                 fehlversuche = 0;
-                melden("fehler", "Senden an den PC abgebrochen – Verbindung verloren.");
+                melden("fehler", "Senden an den PC abgebrochen (Code " + code + ", Paket " + r.length + " Bytes).");
                 return;
             }
             sendeschlange.addFirst(r);

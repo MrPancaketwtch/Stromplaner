@@ -14,15 +14,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getRecents:          () => ipcRenderer.invoke('get-recents'),
   loadLibrary:         () => ipcRenderer.invoke('load-library'),
   saveLibrary:         (data) => ipcRenderer.invoke('save-library', data),
-  startLocalShare:     (args) => ipcRenderer.invoke('start-local-share', args),
-  stopLocalShare:      () => ipcRenderer.invoke('stop-local-share'),
-  updateLocalShare:    (json) => ipcRenderer.invoke('update-local-share', json),
-  onLocalShareReceived: (cb) => {
-    const handler = (_, payload) => cb(payload);
-    ipcRenderer.on('local-share-received', handler);
-    return () => ipcRenderer.removeListener('local-share-received', handler);
-  },
-  makeQr:              (url) => ipcRenderer.invoke('make-qr', url),
   // Bluetooth: gefundene Handys während der Suche, Auswahl zurück an Electron (leer = abbrechen)
   onBtGeraete: (cb) => {
     const handler = (_, liste) => cb(liste);

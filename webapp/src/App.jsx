@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import jsQR from 'jsqr';
-import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, MonitorUp, Check, TriangleAlert, QrCode, CircleCheck, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, Play, Power, Printer, PenLine, ImagePlus, Bluetooth, BluetoothOff } from 'lucide-react';
+import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, Check, TriangleAlert, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, Play, Power, Printer, PenLine, ImagePlus, Bluetooth, BluetoothOff } from 'lucide-react';
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from '@sync/sitzung.js';
 import { migrateOutlet } from '@shared/pruefprotokoll.js';
 import { protokollPdf, pdfTeilen, pdfDateiname, protokollDrucken } from './pdf.js';
@@ -31,7 +30,6 @@ const now  = () => new Date().toISOString().slice(0, 10);
 const LS_KEY     = 'sp_mobile_v1';
 const SERVER_KEY = 'sp_sync_server';
 const TOKEN_KEY  = 'sp_sync_token';
-const PC_URL_KEY = 'sp_pc_share_url';
 const LIB_KEY    = 'sp_mobile_lib';
 const LOGO_KEY   = 'sp_corp_logo';
 const SIGN_KEY   = 'sp_insp_sign';
@@ -166,7 +164,6 @@ export default function App() {
   const [aktivId, setAktivId] = useState(start.aktiv);
   const [server,  setServer]  = useState(() => localStorage.getItem(SERVER_KEY) || '');
   const [token,   setToken]   = useState(() => localStorage.getItem(TOKEN_KEY)  || '');
-  const [pcUrl,   setPcUrl]   = useState(() => localStorage.getItem(PC_URL_KEY) || '');
   const [toasts,  setToasts]  = useState([]);
   const [lib,     setLib]     = useState(ladeBibliothek);
   // Firmenlogo und Unterschrift bleiben wie am PC nur auf diesem Gerät (gleiche Schlüssel wie die Desktop-App)
@@ -223,7 +220,6 @@ export default function App() {
   /* persist config */
   useEffect(() => { localStorage.setItem(SERVER_KEY, server); }, [server]);
   useEffect(() => { localStorage.setItem(TOKEN_KEY,  token);  }, [token]);
-  useEffect(() => { localStorage.setItem(PC_URL_KEY, pcUrl);  }, [pcUrl]);
 
   /* Bibliothek: alles übernehmen, was in einem Plan auftaucht (geladen, beigetreten oder hier angelegt) */
   useEffect(() => {
@@ -320,7 +316,7 @@ export default function App() {
 
       <main className="app-main">
         {tab === 'pruefung' && (
-          <PruefungTab plan={plan} setPlan={setPlan} pcUrl={pcUrl} sitzungAktiv={sitzung.aktiv} notify={notify} bild={bild} bluetooth={bluetooth} />
+          <PruefungTab plan={plan} setPlan={setPlan} sitzungAktiv={sitzung.aktiv} notify={notify} bild={bild} bluetooth={bluetooth} />
         )}
         {tab === 'steckplan' && (
           <SteckplanTab plan={plan} setPlan={setPlan} typen={typen} verbraucher={verbraucher} />
@@ -329,7 +325,7 @@ export default function App() {
           <ProjektTab plan={plan} setPlan={setPlan} lib={lib} typen={typen} verbraucher={verbraucher} planliste={planliste} sitzungAktiv={sitzung.aktiv} notify={notify} bild={bild} />
         )}
         {tab === 'teilen' && (
-          <TeilenTab plan={plan} planUebernehmen={planUebernehmen} bluetooth={bluetooth} pcUrl={pcUrl} setPcUrl={setPcUrl} />
+          <TeilenTab plan={plan} bluetooth={bluetooth} />
         )}
         {tab === 'sitzung' && (
           <SitzungTab sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} projektName={plan.meta.production} planliste={planliste} />
@@ -1377,60 +1373,29 @@ function Segmented({ options, value, onChange }) {
   );
 }
 
-// bluetooth: optional – dann wird zusätzlich der Weg ohne Netzwerk angeboten (Tab Prüfung)
-function SendToPc({ plan, pcUrl, bluetooth }) {
-  const [busy, setBusy] = useState(false);
-  const [msg,  setMsg]  = useState(null);
-
-  const send = async () => {
-    setBusy(true);
-    setMsg({ text: 'Gesendet – bitte am PC bestätigen…', err: false });
-    try {
-      const r = await fetch(pcUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(plan),
-      });
-      const res = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(res.error || `HTTP ${r.status}`);
-      setMsg({ text: res.mode === 'insp' ? 'Prüfergebnisse am PC übernommen' : 'Plan am PC übernommen', err: false });
-    } catch (e) {
-      const offline = e instanceof TypeError;
-      setMsg({ text: offline ? 'PC nicht erreichbar. Läuft am PC noch „Teilen“ und ist das Handy im selben WLAN?' : e.message, err: true });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const bt = bluetooth?.verfuegbar ? bluetooth : null;
+// Prüfung: Ergebnisse per Bluetooth an den PC geben – das Handy wird sichtbar, der PC holt sie
+function BtAnPc({ bluetooth: bt }) {
+  if (!bt.verfuegbar) return null;
   return (
     <div className="section">
-      <div className="section-title">{bluetooth ? 'An PC senden' : 'Im WLAN: An PC zurücksenden'}</div>
-      {bt && (bt.zustand ? (
-        <div className="sync-msg" style={{ marginBottom: 12 }}>
+      <div className="section-title">An PC senden</div>
+      {bt.zustand ? (
+        <div className="sync-msg">
           <Bluetooth size={16} aria-hidden="true" />
           {bt.zustand.verbunden
             ? `Verbunden mit ${bt.zustand.verbunden} – am PC „Vom Handy holen“ wählen.`
-            : 'Per Bluetooth sichtbar – am PC unter Teilen → Bluetooth dieses Handy wählen.'}
+            : 'Per Bluetooth sichtbar – am PC unter Teilen dieses Handy wählen.'}
         </div>
       ) : (
-        <button className="btn btn--primary" style={{ width: '100%', marginBottom: 8 }} disabled={bt.busy} onClick={bt.starten}>
-          <Bluetooth size={18} aria-hidden="true" />{bt.busy ? 'Starte …' : 'Per Bluetooth (ohne Netzwerk)'}
+        <button className="btn btn--primary" style={{ width: '100%' }} disabled={bt.busy} onClick={bt.starten}>
+          <Bluetooth size={18} aria-hidden="true" />{bt.busy ? 'Starte …' : 'Per Bluetooth an PC senden'}
         </button>
-      ))}
-      {pcUrl ? (
-        <button className={'btn ' + (bt ? 'btn--secondary' : 'btn--primary')} style={{ width: '100%' }} disabled={busy} onClick={send}>
-          {busy ? 'Warte auf PC…' : <><MonitorUp size={18} aria-hidden="true" />{bt ? 'Im WLAN zurücksenden' : 'An PC zurücksenden'}</>}
-        </button>
-      ) : !bt && (
-        <div className="meas-hint">Erst den QR-Code vom PC scannen.</div>
       )}
-      {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')} style={{ margin: '10px 0 0', padding: 0, background: 'none' }}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
     </div>
   );
 }
 
-function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, notify, bild, bluetooth }) {
+function PruefungTab({ plan, setPlan, sitzungAktiv, notify, bild, bluetooth }) {
   const [openId,   setOpenId]   = useState(null);
   const [metaOpen, setMetaOpen] = useState(false);
   const [pdf,      setPdf]      = useState(null); // null | 'Seite 2/5' …
@@ -1570,7 +1535,7 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, notify, bild, bluetoo
           <div style={{ marginTop: 16 }}>
             {sitzungAktiv
               ? <div className="sync-msg"><Users size={16} aria-hidden="true" />Du bist in einer Sitzung – deine Werte erscheinen sofort am PC.</div>
-              : <SendToPc plan={plan} pcUrl={pcUrl} bluetooth={bluetooth} />}
+              : <BtAnPc bluetooth={bluetooth} />}
           </div>
         </>
       )}
@@ -1820,52 +1785,6 @@ function InspDetail({ plan, inst, res, setRes, pos, total, onBack, onPrev, onNex
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Sync Tab                                                                  */
 /* ── QR-Scanner (Kamera) ───────────────────────────────────────────────── */
-function QrScanner({ onResult, onClose }) {
-  const videoRef  = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const rafRef    = useRef(null);
-
-  useEffect(() => {
-    let active = true;
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then(stream => {
-        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        const scan = () => {
-          if (!active) return;
-          const v = videoRef.current, c = canvasRef.current;
-          if (v && c && v.readyState === v.HAVE_ENOUGH_DATA) {
-            c.width = v.videoWidth; c.height = v.videoHeight;
-            const ctx = c.getContext('2d');
-            ctx.drawImage(v, 0, 0);
-            const img = ctx.getImageData(0, 0, c.width, c.height);
-            const code = jsQR(img.data, img.width, img.height);
-            if (code?.data) { onResult(code.data); return; }
-          }
-          rafRef.current = requestAnimationFrame(scan);
-        };
-        rafRef.current = requestAnimationFrame(scan);
-      })
-      .catch(() => { alert('Kamera nicht verfügbar'); onClose(); });
-    return () => {
-      active = false;
-      cancelAnimationFrame(rafRef.current);
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    };
-  }, []);
-
-  return (
-    <div style={{ position:'fixed',inset:0,zIndex:1000,background:'#000',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16 }}>
-      <video ref={videoRef} playsInline muted style={{ width:'100%',maxWidth:400,borderRadius:8 }} />
-      <canvas ref={canvasRef} style={{ display:'none' }} />
-      <div style={{ color:'#aaa',fontSize:13 }}>QR-Code in den Rahmen halten</div>
-      <button onClick={onClose} style={{ padding:'10px 32px',background:'#2a3140',border:'none',borderRadius:8,color:'#fff',fontSize:15,cursor:'pointer' }}>Abbrechen</button>
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════════════════════════════════ */
 /*  Teilen Tab – Plan per QR-Code vom PC holen und zurücksenden (ohne Server)  */
@@ -1935,37 +1854,11 @@ function useBluetooth({ plan, notify, planUebernehmen }) {
   return { verfuegbar, zustand, busy, starten, stoppen };
 }
 
-function TeilenTab({ plan, planUebernehmen, bluetooth, pcUrl, setPcUrl }) {
-  const [loading,     setLoading]     = useState(false);
-  const [msg,         setMsg]         = useState(null);
-  const [showScanner, setShowScanner] = useState(false);
-  const status = (text, err = false) => setMsg({ text, err });
-
-  const handleQr = async (url) => {
-    setShowScanner(false);
-    setLoading(true);
-    try {
-      const r = await fetch(url);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const meldung = planUebernehmen(await r.json());
-      if (!meldung) { status('Import abgebrochen', true); return; }
-      status(meldung);
-      setPcUrl(url);
-    } catch (e) {
-      status(e instanceof TypeError
-        ? 'PC nicht erreichbar. Läuft am PC „Teilen“ und ist das Handy im selben WLAN (nicht über VPN)?'
-        : e.message, true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+function TeilenTab({ plan, bluetooth }) {
   return (
-    <>
-    {showScanner && <QrScanner onResult={handleQr} onClose={() => setShowScanner(false)} />}
     <div className="page">
       <div className="section">
-        <div className="section-title">Per Bluetooth – ohne Netzwerk</div>
+        <div className="section-title">Mit dem PC austauschen</div>
         {bluetooth.verfuegbar ? (
           <>
             {bluetooth.zustand && (
@@ -1986,15 +1879,6 @@ function TeilenTab({ plan, planUebernehmen, bluetooth, pcUrl, setPcUrl }) {
       </div>
 
       <div className="section">
-        <div className="section-title">Im WLAN: Plan vom PC holen</div>
-        <button className="btn btn--primary" style={{ width: '100%' }} disabled={loading} onClick={() => setShowScanner(true)}>
-          <QrCode size={18} aria-hidden="true" />{loading ? 'Lade …' : 'QR-Code scannen'}
-        </button>
-      </div>
-
-      {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
-
-      <div className="section">
         <div className="section-title">Aktueller Plan</div>
         <div className="stat-row">
           <span>Veranstaltung</span>
@@ -2005,10 +1889,7 @@ function TeilenTab({ plan, planUebernehmen, bluetooth, pcUrl, setPcUrl }) {
           <strong>{plan.instances.length}</strong>
         </div>
       </div>
-
-      <SendToPc plan={plan} pcUrl={pcUrl} />
     </div>
-    </>
   );
 }
 

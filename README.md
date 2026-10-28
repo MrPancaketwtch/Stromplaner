@@ -42,7 +42,7 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 - Android fragt beim ersten Mal, ob Apps aus dieser Quelle installiert werden dürfen → für Browser bzw. Dateimanager erlauben.
 - **Update:** Die neue APK einfach über die installierte App installieren – Pläne und Prüfergebnisse bleiben erhalten.
 - **Einmalig beim Umstieg von einer älteren Test-Version** (bis 1.3.0-beta.1): Ab 1.3.0 hat die App die Kennung `de.stromplaner.app` (vorher `dev.stromplaner`). Android installiert sie deshalb **neben** der alten App statt als Update. Offene Prüfergebnisse in der alten App an den PC senden, dann die alte App deinstallieren. Ganz alte Versionen bis 1.2.1 lassen sich ohnehin nicht aktualisieren („App nicht installiert“).
-- Alternativ läuft Stromplaner ohne Installation als Web-App unter **[mrpancaketwtch.github.io/Stromplaner](https://mrpancaketwtch.github.io/Stromplaner/)**. Der Datenaustausch im WLAN (Laden per QR-Code, An PC zurücksenden, Sitzung mit einem Server über `http://`) funktioniert dort nicht, weil der Browser von einer HTTPS-Seite keine unverschlüsselten Verbindungen ins lokale Netz zulässt – für die Prüfung vor Ort die APK verwenden.
+- Alternativ läuft Stromplaner ohne Installation als Web-App unter **[mrpancaketwtch.github.io/Stromplaner](https://mrpancaketwtch.github.io/Stromplaner/)**. Der Austausch per Bluetooth und Sitzungen mit einem Server über `http://` funktionieren dort nicht – Bluetooth gibt es nur in der App, und der Browser lässt von einer HTTPS-Seite keine unverschlüsselten Verbindungen ins lokale Netz zu – für die Prüfung vor Ort die APK verwenden.
 
 ### Tabs in der Handy-App
 | Tab | Inhalt |
@@ -50,7 +50,7 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 | **Projekt** | **Planliste** (mehrere Pläne anlegen, wechseln, löschen), Projektdaten, **Firmenlogo** fürs PDF, **Verteiler-Typen** und **Verbraucher** (anlegen und bearbeiten) |
 | **Steckplan** | Verteiler und Steckungen ansehen und anpassen. Am Steckplatz Verbraucher stecken (auch neu anlegen) und Unterverteiler anschließen oder dort neu anlegen; alternativ am Verteiler unter **Hängt an** |
 | **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **PDF speichern / drucken** öffnet den Android-Druckdialog („Als PDF speichern“ oder Drucker) – das PDF ist identisch mit dem vom PC, Text markierbar. **PDF direkt teilen** schickt eine Bild-Fassung sofort per Mail oder Messenger. Unter *Prüfungsdetails* lässt sich mit dem Finger unterschreiben. |
-| **Teilen** | Per **Bluetooth** ohne Netzwerk mit dem PC austauschen, oder im WLAN: Plan per QR-Code vom PC holen und an den PC zurücksenden – jeweils ohne Server |
+| **Teilen** | Per **Bluetooth** ohne Netzwerk und ohne Server mit dem PC austauschen |
 | **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten oder selbst eine starten: Prüfwerte erscheinen sofort bei allen (siehe „Sitzung“ weiter unten) |
 
 ### Spontane Prüfung nur mit dem Handy
@@ -59,35 +59,15 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 3. Unterverteiler im Tab **Steckplan** am Steckplatz anschließen (oder dort neu anlegen), Verbraucher stecken – fehlt einer, über **Neuer Verbraucher** anlegen.
 4. Prüfen wie gewohnt, danach **PDF speichern / drucken** oder **PDF direkt teilen**.
 
-Das Handy merkt sich die Verteiler-Typen und Verbraucher aller Pläne, die es je geladen hat oder in denen es in einer Sitzung war – ein neuer Plan startet mit dieser Bibliothek. Ein Plan per QR-Code und das Beitreten einer Sitzung legen jeweils einen eigenen Plan in der Liste an. Firmenlogo (Tab Projekt) und Unterschrift (Prüfungsdetails) bleiben wie am PC nur auf dem jeweiligen Gerät gespeichert.
+Das Handy merkt sich die Verteiler-Typen und Verbraucher aller Pläne, die es je geladen hat oder in denen es in einer Sitzung war – ein neuer Plan startet mit dieser Bibliothek. Ein Plan vom PC (Bluetooth) und das Beitreten einer Sitzung legen jeweils einen eigenen Plan in der Liste an. Firmenlogo (Tab Projekt) und Unterschrift (Prüfungsdetails) bleiben wie am PC nur auf dem jeweiligen Gerät gespeichert.
 
-### Plan zwischen PC und Handy per Bluetooth (ohne Netzwerk)
+### Plan zwischen PC und Handy austauschen (Bluetooth, ohne Netzwerk)
 1. **Handy:** Tab **Teilen** → **Für den PC sichtbar machen** (beim ersten Mal die Berechtigung „Geräte in der Nähe“ erlauben, Bluetooth muss an sein). Alternativ im Tab Prüfung unter „An PC senden“ → **Per Bluetooth**.
 2. **PC:** Header → **Teilen** → **Mit Handy verbinden** → das Handy in der Liste wählen. Eine Kopplung ist nicht nötig.
 3. **Vom Handy holen:** wahlweise **Nur Prüfergebnisse** (empfohlen) oder **Ganzen Plan** übernehmen.
 4. **Plan ans Handy senden:** Der Plan landet auf dem Handy als eigener Eintrag in der Planliste.
 
 Der PC braucht Bluetooth LE (Windows 10/11, macOS fragt beim ersten Mal nach der Bluetooth-Erlaubnis). Der Plan wird komprimiert übertragen und ist meist in wenigen Sekunden durch. Solange das Handy sichtbar ist, holt der PC immer den aktuellen Stand.
-
-### Plan vom PC aufs Handy und zurück (WLAN)
-1. **PC:** Header → **Teilen** → **QR-Code anzeigen**.
-2. **Netzwerk wählen:** Hat der PC mehrere Netzwerkadapter, erscheint eine Auswahl. Hier den **physischen Adapter (WLAN bzw. LAN) wählen, in dem auch das Handy ist – nicht das VPN-Interface.** Über die VPN-Adresse ist der PC vom Handy aus in der Regel nicht erreichbar, der Scan bzw. das Zurücksenden schlägt dann mit „Failed to fetch“ / „PC nicht erreichbar“ fehl. VPN- und virtuelle Adapter (ProtonVPN, WireGuard, Hyper-V, Docker …) werden grau und als letzte angeboten.
-3. **Handy:** Tab **Teilen** → **QR-Code scannen** → der Plan wird geladen.
-4. Prüfen.
-5. **Handy:** **An PC zurücksenden** (im Tab Prüfung ganz unten oder im Tab Teilen).
-6. **PC:** Es erscheint eine Abfrage:
-   - **Nur Prüfergebnisse übernehmen** – übernimmt Prüfungsdetails und Messwerte, die Planung am PC bleibt unverändert *(empfohlen)*
-   - **Ganzen Plan übernehmen** – ersetzt den kompletten Plan am PC
-   - **Abbrechen**
-7. **PC:** Prüfprotokoll wie gewohnt als PDF exportieren.
-
-Das Teilen muss am PC während des Zurücksendens noch aktiv sein. Solange geteilt wird, liefert der PC immer den aktuellen Stand aus – ein erneuter Scan holt also auch zwischenzeitliche Änderungen.
-
-**Wenn es nicht klappt:**
-- Handy und PC im selben WLAN? (Gäste-WLANs trennen Geräte oft voneinander.)
-- Richtigen Netzwerkadapter gewählt – nicht das VPN? (siehe Schritt 2)
-- Die Windows-Firewall muss eingehende Verbindungen auf **Port 4747** für Stromplaner zulassen. Beim ersten Teilen fragt Windows nach – dort **Private Netzwerke** erlauben.
-- Meldung „Port 4747 ist belegt“: Stromplaner läuft vermutlich ein zweites Mal.
 
 ### Planer-Server (für Sitzungen)
 Für Sitzungen – mehrere PCs und Handys arbeiten gleichzeitig am selben Plan – nutzt Stromplaner den **[Planer-Server](https://github.com/Nomisimo/Planer-Server)**, den gemeinsamen, selbst-hostbaren Server der Planer-Familie (Stromplaner, Netzwerkplaner).
@@ -287,7 +267,7 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 | **Öffnen** | Gespeicherten Stand (`.json`) öffnen – mit Rückfrage, ob dessen Verteiler-Typen und Verbraucher die Bibliothek ergänzen oder ersetzen |
 | **Zuletzt geöffnet** | Schnellzugriff auf die zuletzt geöffneten Planungsstände |
 | **Speichern** | Aktuellen Stand als `.json` exportieren |
-| **Teilen** | Plan mit dem Handy austauschen – per Bluetooth ohne Netzwerk oder im WLAN per QR-Code, jeweils ohne Server |
+| **Teilen** | Plan per Bluetooth mit dem Handy austauschen – ohne Netzwerk und ohne Server |
 | **Sitzung** / **2 online** | Mit anderen gleichzeitig am selben Plan arbeiten (siehe unten); in einer Sitzung zeigt der Knopf Status und Teilnehmerzahl |
 | **Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
 | **Updates** / **Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
@@ -355,7 +335,7 @@ Basiswerte H07RN-F (DIN VDE 0298-4, frei in Luft):
 | Diagramm | SVG (manuelles Layout, kein D3 o. ä.) |
 | CI/CD | GitHub Actions (baut Windows + macOS + Android bei Tag-Push) |
 | Handy-App | React 18 + Vite, Capacitor 8 (Android-APK), PWA via GitHub Pages; PDF über den Android-Druckdienst (eigenes Capacitor-Plugin `webapp/plugins/druck`) bzw. html2canvas + jsPDF |
-| QR / Datenaustausch | `qrcode` (PC), `jsQR` (Handy), lokaler HTTP-Server auf Port 4747 |
+| Datenaustausch PC ↔ Handy | Bluetooth LE: Web Bluetooth (PC), eigenes Capacitor-Plugin `webapp/plugins/bluetooth` (Handy) |
 | Sitzungen | WebSocket zum [Planer-Server](https://github.com/Nomisimo/Planer-Server); Client in `app/sync/` (`sync-client.js`, `ops.js` unverändert aus dem Planer-Server übernommen, Apache 2.0 – siehe `app/sync/LICENSE` und `NOTICE`; Änderungen dort pflegen und hierher kopieren) |
 
 ### Build & Release

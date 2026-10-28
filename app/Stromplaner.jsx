@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
-import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode, Share2, TriangleAlert, Plug, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info, Bluetooth, BluetoothOff } from "lucide-react";
+import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, Share2, TriangleAlert, Plug, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info, Bluetooth, BluetoothOff } from "lucide-react";
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 import { pruefprotokollHtml } from "./shared/pruefprotokoll.js";
 import { btVerfuegbar, btVerbinden, btInfo, btHolen, btSenden } from "./bluetooth.js";
@@ -80,9 +80,10 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
   "1.4.0": [
-    "Pläne zwischen PC und Handy per Bluetooth austauschen – ohne WLAN oder Netzwerk: Handy unter „Teilen“ sichtbar machen, am PC unter Teilen → Bluetooth verbinden, dann vom Handy holen (nur Prüfergebnisse oder ganzer Plan) oder ans Handy senden. Der Weg übers WLAN bleibt zusätzlich",
+    "Pläne zwischen PC und Handy per Bluetooth austauschen – ohne WLAN oder Netzwerk: Handy unter „Teilen“ sichtbar machen, am PC unter Teilen mit dem Handy verbinden, dann vom Handy holen (nur Prüfergebnisse oder ganzer Plan) oder ans Handy senden",
+    "Das Teilen im WLAN per QR-Code entfällt – Bluetooth ersetzt es, ganz ohne Netzwerk, Firewall-Freigabe oder Adapterwahl. Die Android-App braucht dadurch keinen Kamerazugriff mehr",
     "Android-App: Verteiler werden im Tab Steckplan angelegt – der Knopf in der Prüfung ist entfallen",
-    "Android-App: mehrere Pläne auf dem Handy – anlegen, wechseln und löschen im Tab Projekt. Ein Plan per QR-Code oder das Beitreten einer Sitzung landet als eigener Plan in der Liste, statt den aktuellen zu überschreiben",
+    "Android-App: mehrere Pläne auf dem Handy – anlegen, wechseln und löschen im Tab Projekt. Ein Plan vom PC oder das Beitreten einer Sitzung landet als eigener Plan in der Liste, statt den aktuellen zu überschreiben",
     "Android-App: Verbraucher anlegen und bearbeiten – im Tab Projekt oder direkt beim Stecken. Das Handy merkt sich alle Verbraucher wie die Verteiler-Typen, neue Pläne starten mit dieser Bibliothek",
     "Android-App: Unterverteiler direkt am Steckplatz anschließen oder dort neu anlegen, mit derselben Absicherungs-Warnung wie am PC",
     "Beim Laden eines Plans fragt Stromplaner, ob dessen Verteiler-Typen und Verbraucher deine Bibliothek ergänzen oder ersetzen sollen (gefragt wird nur, wenn sonst etwas verloren ginge)",
@@ -525,9 +526,6 @@ export default function App() {
   const [syncServer,      setSyncServer]      = useState(()=>localStorage.getItem("sp_sync_server")||"");
   const [syncToken,       setSyncToken]       = useState(()=>localStorage.getItem("sp_sync_token")||"");
   const [showSharePanel,   setShowSharePanel]   = useState(false);
-  const [localShare,      setLocalShare]      = useState(null);
-  const [shareStatus,      setShareStatus]      = useState({ msg:"", err:false });
-  const [shareBusy,        setShareBusy]        = useState(false);
   useEffect(()=>{ localStorage.setItem("sp_sync_server", syncServer); },[syncServer]);
   useEffect(()=>{ localStorage.setItem("sp_sync_token",  syncToken);  },[syncToken]);
 
@@ -882,24 +880,7 @@ export default function App() {
     catch(err){ uiAlert("Fehler: "+err.message); }
   };
 
-  /* ── Teilen per QR-Code im WLAN ──────────────────────────────────────────── */
-  const startLocalShare=async()=>{
-    const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,
-      instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout};
-    setShareBusy(true); setShareStatus({msg:"Starte lokalen Server…",err:false});
-    try{
-      const result=await window.electronAPI.startLocalShare({planJson:JSON.stringify(data,null,2),planName:meta.production||"plan"});
-      setLocalShare(result);
-      setShareStatus({msg:"",err:false});
-    } catch(e){ setShareStatus({msg:"Fehler: "+e.message,err:true}); }
-    setShareBusy(false);
-  };
-  const stopLocalShare=async()=>{
-    await window.electronAPI?.stopLocalShare?.();
-    setLocalShare(null);
-  };
-
-  // Vom Handy (WLAN oder Bluetooth): nur Prüfergebnisse oder den ganzen Plan übernehmen
+  // Vom Handy per Bluetooth: nur Prüfergebnisse oder den ganzen Plan übernehmen
   const vomHandyUebernehmen=async(data,mode)=>{
     if(mode==="insp"){
       if(data.inspMeta) setInspMeta(data.inspMeta);
@@ -909,7 +890,6 @@ export default function App() {
       notify("Plan vom Handy übernommen.","info");
     }
   };
-  useEffect(()=>window.electronAPI?.onLocalShareReceived?.(({data,mode})=>vomHandyUebernehmen(data,mode)),[]);
 
   /* ── Bluetooth (ohne Netzwerk): das Handy macht sich sichtbar, der PC verbindet sich ── */
   const planDaten=()=>({_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,
@@ -960,17 +940,6 @@ export default function App() {
     setBtBusy(false);
   };
   const btTrennen=()=>{ bt?.v.trennen(); setBt(null); setBtStatus({msg:"",err:false}); };
-
-  // Solange geteilt wird, liefert der Server immer den aktuellen Stand aus
-  useEffect(()=>{
-    if(!localShare||!window.electronAPI?.updateLocalShare) return;
-    const t=setTimeout(()=>{
-      const data={_format:"stromplaner",_version:4,meta,mainConns,boxTypes,loads,
-        instances:alphaSort(instances,"name"),placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout};
-      window.electronAPI.updateLocalShare(JSON.stringify(data,null,2));
-    },600);
-    return ()=>clearTimeout(t);
-  },[localShare,meta,mainConns,boxTypes,loads,instances,placements,inspMeta,inspResults,cableCalcs,voltCalcs,schaltbildLayout]);
 
   const fileInputRef=useRef(null);
   const loadJSON=(e)=>{
@@ -1295,7 +1264,7 @@ export default function App() {
         </div>}
         <button style={S.ghostBtn} onClick={saveJSON}><Save size={14} aria-hidden="true"/>Speichern</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
-          <button style={S.ghostBtn} title="Plan mit dem Handy austauschen – per Bluetooth oder im WLAN" onClick={()=>{setShowSharePanel(v=>!v);setShareStatus({msg:"",err:false});}}><Share2 size={14} aria-hidden="true"/>Teilen</button>
+          <button style={S.ghostBtn} title="Plan per Bluetooth mit dem Handy austauschen" onClick={()=>setShowSharePanel(v=>!v)}><Share2 size={14} aria-hidden="true"/>Teilen</button>
           {showSharePanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}}>
             <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Per Bluetooth – ohne Netzwerk</div>
             {!btVerfuegbar()
@@ -1312,29 +1281,6 @@ export default function App() {
                         <button disabled={btBusy} onClick={btTrennen} style={{...S.ghostBtn,fontSize:10,justifyContent:"center"}}><BluetoothOff size={12} aria-hidden="true"/>Trennen</button>
                       </div>}
                 </>}
-            <div style={{borderTop:"1px solid #2e3640",margin:"12px -12px 10px"}}/>
-            <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Lokal im WLAN teilen</div>
-            {shareStatus.msg&&<div style={{fontSize:10,color:shareStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{shareStatus.msg}</div>}
-            {!localShare
-              ? <button disabled={shareBusy} onClick={startLocalShare} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><QrCode size={12} aria-hidden="true"/>QR-Code anzeigen</button>
-              : <div style={{textAlign:"center"}}>
-                  {localShare.ips?.length>1&&<>
-                    <div style={{fontSize:9,color:"#7c8794",marginBottom:4,textAlign:"left"}}>Netzwerk wählen, in dem auch das Handy ist – nicht den VPN-Adapter:</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:3,marginBottom:8}}>
-                      {(localShare.ifaces||localShare.ips.map(ip=>({ip,name:""}))).map(({ip,name,virtual})=><button key={ip} onClick={async()=>{
-                        const url=`http://${ip}:${localShare.port}/plan.json`;
-                        const qr=await window.electronAPI.makeQr(url);
-                        setLocalShare(s=>({...s,activeIp:ip,url,qrDataUrl:qr}));
-                      }} style={{...S.ghostBtn,fontSize:9,padding:"3px 6px",justifyContent:"space-between",opacity:virtual?0.6:1,background:localShare.activeIp===ip?"#2a3a4a":"transparent"}}>
-                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}{virtual?" (VPN/virtuell)":""}</span><span>{ip}</span>
-                      </button>)}
-                    </div>
-                  </>}
-                  <img src={localShare.qrDataUrl} alt="QR" style={{width:140,height:140,borderRadius:6,display:"block",margin:"0 auto 6px"}}/>
-                  <div style={{fontSize:9,color:"#7c8794",wordBreak:"break-all",marginBottom:4}}>{localShare.url}</div>
-                  <button onClick={stopLocalShare} style={{...S.ghostBtn,fontSize:10,width:"100%",justifyContent:"center"}}><X size={12} aria-hidden="true"/>Teilen beenden</button>
-                </div>
-            }
             <button onClick={()=>setShowSharePanel(false)} style={{marginTop:8,width:"100%",background:"none",border:"none",color:"#7c8794",cursor:"pointer",fontSize:10}}>Schließen</button>
           </div>}
         </div>}

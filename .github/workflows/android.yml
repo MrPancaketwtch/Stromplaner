@@ -47,15 +47,12 @@ jobs:
         working-directory: webapp
         run: npx cap add android
 
-      - name: Patch AndroidManifest (camera + cleartext HTTP)
+      - name: Patch AndroidManifest (cleartext HTTP)
         working-directory: webapp
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Allow cleartext HTTP for sync server and local share (Android 9+ blocks it by default)
+          # Allow cleartext HTTP/WS for a Planer-Server in the local network (Android 9+ blocks it by default)
           sed -i 's|android:supportsRtl="true"|android:supportsRtl="true"\n        android:usesCleartextTraffic="true"|' "$MANIFEST"
-          # Add camera permission for QR scanner (getUserMedia requires it)
-          grep -q 'android.permission.CAMERA' "$MANIFEST" || \
-            sed -i 's|    <application|    <uses-permission android:name="android.permission.CAMERA" />\n    <application|' "$MANIFEST"
 
       - name: Generate app icon and splash screen
         working-directory: webapp
