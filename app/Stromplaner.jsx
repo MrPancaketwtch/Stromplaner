@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback, useContext } from "react";
 import * as XLSX from "xlsx";
-import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode, Share2, TriangleAlert, Plug, Lightbulb, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info, Bluetooth, BluetoothOff } from "lucide-react";
+import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, QrCode, Share2, TriangleAlert, Plug, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info, Bluetooth, BluetoothOff } from "lucide-react";
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 import { pruefprotokollHtml } from "./shared/pruefprotokoll.js";
 import { btVerfuegbar, btVerbinden, btInfo, btHolen, btSenden } from "./bluetooth.js";
@@ -1306,7 +1306,6 @@ export default function App() {
             {!btVerfuegbar()
               ? <div style={{fontSize:10,color:"#7c8794",marginBottom:8,lineHeight:1.5}}>Bluetooth ist auf diesem Rechner nicht verfügbar.</div>
               : <>
-                  <div style={{fontSize:10,color:"#7c8794",marginBottom:8,lineHeight:1.5}}>Am Handy in der Stromplaner-App unter „Teilen“ auf „Für den PC sichtbar machen“ tippen, dann hier verbinden. Keine Kopplung nötig.</div>
                   {btStatus.msg&&<div style={{fontSize:10,color:btStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{btStatus.msg}</div>}
                   {!bt
                     ? <button disabled={btGeraete!==null} onClick={btSuchen} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Bluetooth size={12} aria-hidden="true"/>{btGeraete!==null?"Suche …":"Mit Handy verbinden"}</button>
@@ -1320,7 +1319,6 @@ export default function App() {
                 </>}
             <div style={{borderTop:"1px solid #2e3640",margin:"12px -12px 10px"}}/>
             <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Lokal im WLAN teilen</div>
-            <div style={{fontSize:10,color:"#7c8794",marginBottom:8,lineHeight:1.5}}>QR-Code mit der Stromplaner-App auf dem Handy scannen (Tab „Teilen“). Funktioniert ohne Server, Handy und PC müssen im selben WLAN sein.</div>
             {shareStatus.msg&&<div style={{fontSize:10,color:shareStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{shareStatus.msg}</div>}
             {!localShare
               ? <button disabled={shareBusy} onClick={startLocalShare} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><QrCode size={12} aria-hidden="true"/>QR-Code anzeigen</button>
@@ -1339,7 +1337,6 @@ export default function App() {
                   </>}
                   <img src={localShare.qrDataUrl} alt="QR" style={{width:140,height:140,borderRadius:6,display:"block",margin:"0 auto 6px"}}/>
                   <div style={{fontSize:9,color:"#7c8794",wordBreak:"break-all",marginBottom:4}}>{localShare.url}</div>
-                  <div style={{fontSize:9,color:"#7c8794",marginBottom:6}}>Solange geteilt wird, kann das Handy seine Prüfergebnisse mit „An PC zurücksenden“ zurückschicken.</div>
                   <button onClick={stopLocalShare} style={{...S.ghostBtn,fontSize:10,width:"100%",justifyContent:"center"}}><X size={12} aria-hidden="true"/>Teilen beenden</button>
                 </div>
             }
@@ -1427,7 +1424,6 @@ export default function App() {
       {btGeraete!==null&&window.electronAPI?.btWaehlen&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div role="dialog" aria-modal="true" aria-label="Handy wählen" style={{background:"#1e2530",border:"1px solid #2e3a4a",borderRadius:10,padding:"20px 24px",width:360,color:"#e8eaf0"}}>
           <div style={{fontWeight:600,fontSize:14,marginBottom:6}}><Bluetooth size={14} aria-hidden="true" style={{verticalAlign:"-2px",marginRight:6}}/>Handy wählen</div>
-          <div style={{fontSize:11,color:"#9aa4af",marginBottom:12,lineHeight:1.5}}>Angezeigt werden nur Handys, auf denen Stromplaner gerade sichtbar ist (Teilen → „Für den PC sichtbar machen“).</div>
           {!btGeraete.length&&<div style={{fontSize:12,color:"#9aa4af",fontStyle:"italic",marginBottom:12}}>Suche …</div>}
           <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
             {btGeraete.map(g=><button key={g.id} onClick={()=>btGeraetWaehlen(g.id)} style={{...S.ghostBtn,justifyContent:"flex-start",fontSize:12}}><Bluetooth size={13} aria-hidden="true"/>{g.name||"Handy ohne Namen"}</button>)}
@@ -1573,7 +1569,6 @@ function SitzungVerbinden({ sitzung, server, setServer, token, setToken, projekt
   };
 
   return(<>
-    <p style={{...SZ.muted,fontSize:12,lineHeight:1.5,margin:"0 0 12px"}}>Alle Teilnehmer bearbeiten denselben Plan gleichzeitig, Änderungen erscheinen sofort bei allen. Dafür braucht es einen erreichbaren <strong>Planer-Server</strong> (siehe README, Abschnitt „Planer-Server“). Die Android-App kann ebenfalls beitreten. Alle brauchen dieselbe Stromplaner-Version.</p>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
       <Field label="Server-Adresse"><input style={S.inputSm} value={server} onChange={e=>setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" spellCheck={false}/></Field>
       <Field label="Server-Token (optional)"><input style={S.inputSm} type="password" value={token} onChange={e=>setToken(e.target.value)} spellCheck={false}/></Field>
@@ -1648,7 +1643,6 @@ function SitzungAktiv({ sitzung, onClose }){
           <button style={{...SZ.danger,...(z.status!=="online"?{opacity:.4,cursor:"not-allowed"}:{})}} disabled={z.status!=="online"} title={z.status!=="online"?"Nur mit Verbindung zum Server möglich":""} onClick={beenden}>Sitzung für alle beenden{andere?` (${andere} weitere online)`:""}</button>
         </>}
     </div>
-    {!z.veraltet&&<div style={{...SZ.muted,marginTop:8,lineHeight:1.5}}>Wer nur verlässt, kann später wieder beitreten; der Plan bleibt bei dir als lokaler Plan erhalten. „Für alle beenden“ löscht die Sitzung auf dem Server.</div>}
   </>);
 }
 
@@ -1727,9 +1721,9 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
         </div>
       </Section>
 
-      <Section title="Einspeisepunkte" subtitle="Definiere alle Einspeisepunkte dieser Produktion. Verteiler können optional einem Einspeisepunkt zugewiesen werden." helpKey="hauptanschluesse">
+      <Section title="Einspeisepunkte" helpKey="hauptanschluesse">
         <button style={S.primaryBtn} onClick={addMainConn}>+ Einspeisepunkt hinzufügen</button>
-        {mainConns.length===0 && <p style={S.hint}>Noch keine Einspeisepunkte definiert. Verteiler ohne Zuweisung erscheinen als freie Einspeisepunkte.</p>}
+        {mainConns.length===0 && <p style={S.hint}>Noch keine Einspeisepunkte.</p>}
         {mainConns.map(mc=>(
           <div key={mc.id} style={{display:"flex",gap:8,alignItems:"center",marginTop:8,flexWrap:"wrap"}}>
             <input style={{...S.inputSm,flex:2,minWidth:150}} placeholder="Bezeichnung z.B. NH03-Halle 1" value={mc.name} onChange={e=>updateMainConn(mc.id,{name:e.target.value})}/>
@@ -1740,7 +1734,7 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
         ))}
       </Section>
 
-      <Section title="Verteiler hinzufügen" subtitle="Jeder hinzugefügte Verteiler bekommt im Steckplan ein eigenes Datenblatt." helpKey="verteiler">
+      <Section title="Verteiler hinzufügen" helpKey="verteiler">
         <div style={S.row}>
           <select style={S.select} value={pick} onChange={e=>setPick(e.target.value)}>
             {boxTypes.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
@@ -1822,7 +1816,6 @@ function ConfigTab({ meta,setMeta,boxTypes,instances,instById,boxTypeById,addIns
         {instances.length>0&&<div style={{marginTop:8,display:"flex",justifyContent:"flex-end"}}>
           <button style={S.dangerBtn} onClick={clearAllInstances}>Alle Verteiler löschen</button>
         </div>}
-        <p style={{...S.hint,display:"flex",gap:6,alignItems:"flex-start"}}><Lightbulb size={14} color={ACCENT} style={{flexShrink:0,marginTop:1}} aria-hidden="true"/><span>Phasen bleiben beim Aufstecken erhalten (L1→L1). Beim Aufstecken auf kleineren Anschluss erscheint eine Warnung.</span></p>
       </Section>
     </div>
   );
@@ -2143,7 +2136,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
   };
 
   return (
-    <Section title="Verteiler-Typen" subtitle="Jeder physische Steckplatz = ein Anschluss. Bei Multicore: Steckplatzanzahl konfigurierbar, Phase rotiert automatisch (L1/L2/L3).">
+    <Section title="Verteiler-Typen">
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
         <button style={S.primaryBtn} onClick={addType}>+ Neuen Verteiler-Typ</button>
         <button style={S.ghostBtn} onClick={exportBoxTypes}><Download size={14} aria-hidden="true"/>Exportieren</button>
@@ -2195,7 +2188,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                 <table style={S.table}>
                   <thead><tr>
                     <th style={S.th}>Name / Steckplatz</th><th style={S.th}>Stecker</th><th style={S.th}>A</th>
-                    <th style={S.th}>Phase</th><th style={S.th}>Steckpl.*</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}>FI&nbsp;mA</th><th style={S.th}>RCCB-Gruppe</th><th style={S.th}></th>
+                    <th style={S.th}>Phase</th><th style={S.th} title="Nur für Multicore: Anzahl Steckplätze, Phase rotiert L1/L2/L3">Steckpl.</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}>FI&nbsp;mA</th><th style={S.th}>RCCB-Gruppe</th><th style={S.th}></th>
                   </tr></thead>
                   <tbody>
                     {b.outlets.map(o=>(
@@ -2237,7 +2230,6 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
                   </tbody>
                 </table>
                 </div>
-                <p style={{...S.hint,marginTop:6}}>* Steckplätze gilt nur für Multicore-Anschlüsse. Phase rotiert automatisch: Steckplatz 1=L1, 2=L2, 3=L3, 4=L1, …</p>
                 <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
                   <span style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginRight:2}}>Bulk:</span>
                   <input type="number" min={1} max={48} style={{...S.inputSm,width:46}} value={bulk.count} onChange={e=>updBulk({count:e.target.value})} onBlur={()=>updBulk({count:String(Math.max(1,Math.min(48,parseInt(bulk.count)||1)))})} title="Anzahl"/>
@@ -2323,7 +2315,7 @@ function LoadsTab({ loads,setLoads }) {
   };
 
   return (
-    <Section title="Verbraucher-Stammdaten" subtitle="3-phasige Verbraucher werden gleichmäßig auf L1/L2/L3 verteilt und können nur auf CEE-Rot / Powerlock Anschlüsse gesteckt werden.">
+    <Section title="Verbraucher-Stammdaten">
       <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:4}}>
         <button style={S.primaryBtn} onClick={add}>+ Verbraucher</button>
         <button style={S.ghostBtn} onClick={exportLoads}><Download size={14} aria-hidden="true"/>Exportieren</button>
@@ -2354,7 +2346,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
   if(instances.length===0) return <Section title="Übersicht"><p style={S.empty}>Noch keine Verteiler aktiviert.</p></Section>;
   return (
     <div>
-      <Section title="Einspeisepunkte" subtitle="Summenlast aller zugewiesenen Verteiler je Einspeisepunkt.">
+      <Section title="Einspeisepunkte">
         {mainConns.map(mc=>{
           const connInsts=rootInstances.filter(i=>i.mainConnectionId===mc.id);
           const tot={L1:0,L2:0,L3:0};
@@ -2443,7 +2435,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
         if(!rows.length) return null;
         const totalW=rows.reduce((s,r)=>s+(r.load.watt||0)*r.count,0);
         return (
-          <Section title="Verbraucher – Mengen nach Typ" subtitle="Alle platzierten Verbraucher, summiert nach Typ.">
+          <Section title="Verbraucher – Mengen nach Typ">
             <table style={S.table}>
               <thead><tr>
                 <th style={S.th}>Verbraucher</th>
@@ -2488,7 +2480,7 @@ function OverviewTab({ instances,instById,boxTypeById,totalLoad,rootInstances,ma
         }).filter(Boolean);
         if(!boxRows.length) return null;
         return (
-          <Section title="Verbraucher nach Verteiler" subtitle="Für jede Unterverteilung: platzierte Verbraucher mit Menge und Leistung.">
+          <Section title="Verbraucher nach Verteiler">
             {boxRows.map(({inst,rows,totalW})=>(
               <div key={inst.id} style={{marginBottom:16}}>
                 <div style={{fontWeight:700,fontSize:13,color:"#e8eaed",marginBottom:6}}>
@@ -3036,7 +3028,7 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
   const svgCursor = tool === "text" ? "text" : tool === "rect" || tool === "line" ? "crosshair" : "default";
 
   return (
-    <Section title="Blockschaltbild" subtitle="Topologie · IEC 60309 · ausführliche Anschlussbezeichnungen">
+    <Section title="Blockschaltbild">
       {/* ── Inline text input overlay ────────────────────────────────────── */}
       {pendingText && (
         <input autoFocus
@@ -4072,7 +4064,6 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
               {/* ── Schleifen am UV-Eingang ── */}
               <div style={{marginBottom:14}}>
                 <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 6px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Schleifenimpedanz Eingang</p>
-                <div style={{fontSize:10,color:"#555",marginBottom:6}}>Messung direkt am UV-Eingang – einzutragen wenn die Zuleitung höher abgesichert ist als alle Abgänge.</div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   <div>
                     <div style={{fontSize:10,color:"#7c8794",marginBottom:2}}>Z_s (Ω)</div>
