@@ -656,7 +656,6 @@ function UnterschriftPad({ onSave, onClose }) {
         <div className="sheet-body">
           <canvas ref={ref} className="sign-pad" aria-label="Unterschriftenfeld"
             onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} />
-          <p className="meas-hint" style={{ marginTop: 6 }}>Mit dem Finger unterschreiben. Erscheint im PDF über deinem Namen als Prüfer.</p>
         </div>
         <div className="sheet-footer">
           <button className="btn btn--secondary" disabled={leer} onClick={loeschen}>Leeren</button>
@@ -730,7 +729,6 @@ function TypEditor({ typ, inUse, onSave, onDelete, onClose }) {
           </select>
 
           <label className="field-label" style={{ marginTop: 16 }}>Abgänge ({outlets.length})</label>
-          {outlets.length === 0 && <p className="meas-hint">Noch keine Abgänge – unten antippen, was der Verteiler hat.</p>}
           {outlets.map(o => (
             <div key={o.id} className="typ-abgang">
               <input className="field-input" aria-label="Bezeichnung" value={o.label} onChange={e => upd(o.id, { label: e.target.value })} />
@@ -1146,7 +1144,6 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
 
       <div className="section">
         <div className="section-title">Bibliothek</div>
-        <p className="meas-hint" style={{ marginBottom: 4 }}>Verteiler-Typen und Verbraucher aller Pläne, die auf dem Handy waren. Neue Pläne starten damit; Verbraucher lassen sich auch direkt beim Stecken anlegen.</p>
 
         <div className="bib-head"><span>Verteiler-Typen ({typen.alle.length})</span></div>
         {typen.alle.map(bt => (
@@ -1173,7 +1170,6 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
 
       <div className="section">
         <div className="section-title">Firmenlogo fürs PDF</div>
-        <p className="meas-hint" style={{ marginBottom: 8 }}>Erscheint oben rechts auf jeder Seite des Prüfprotokolls. Bleibt nur auf diesem Handy.</p>
         <div className="bild-row">
           {bild.logo
             ? <img className="bild-vorschau" src={bild.logo} alt="Firmenlogo" />
@@ -1423,14 +1419,11 @@ function SendToPc({ plan, pcUrl, bluetooth }) {
         </button>
       ))}
       {pcUrl ? (
-        <>
-          <button className={'btn ' + (bt ? 'btn--secondary' : 'btn--primary')} style={{ width: '100%' }} disabled={busy} onClick={send}>
-            {busy ? 'Warte auf PC…' : <><MonitorUp size={18} aria-hidden="true" />{bt ? 'Im WLAN zurücksenden' : 'An PC zurücksenden'}</>}
-          </button>
-          <div className="meas-hint" style={{ marginTop: 6 }}>WLAN-Ziel: {pcUrl.replace(/^https?:\/\//, '').replace(/\/plan\.json$/, '')}</div>
-        </>
-      ) : (
-        <div className="meas-hint">{bt ? 'Im WLAN: ' : ''}Zuerst am PC „Teilen“ öffnen und im Tab „Teilen“ den QR-Code scannen.</div>
+        <button className={'btn ' + (bt ? 'btn--secondary' : 'btn--primary')} style={{ width: '100%' }} disabled={busy} onClick={send}>
+          {busy ? 'Warte auf PC…' : <><MonitorUp size={18} aria-hidden="true" />{bt ? 'Im WLAN zurücksenden' : 'An PC zurücksenden'}</>}
+        </button>
+      ) : !bt && (
+        <div className="meas-hint">Erst den QR-Code vom PC scannen.</div>
       )}
       {msg && <div className={'sync-msg' + (msg.err ? ' sync-msg--err' : '')} style={{ margin: '10px 0 0', padding: 0, background: 'none' }}>{msg.err ? <CircleAlert size={16} aria-hidden="true" /> : <CircleCheck size={16} aria-hidden="true" />}{msg.text}</div>}
     </div>
@@ -1574,7 +1567,6 @@ function PruefungTab({ plan, setPlan, pcUrl, sitzungAktiv, notify, bild, bluetoo
           <button className="btn btn--secondary" style={{ width: '100%', marginTop: 8 }} disabled={!!pdf} onClick={pdfErstellen}>
             <Share2 size={16} aria-hidden="true" />{pdf ? `PDF ${pdf}` : 'PDF direkt teilen'}
           </button>
-          <p className="meas-hint" style={{ margin: '6px 4px 0' }}>„Speichern / drucken“ erzeugt dasselbe PDF wie am PC (Text markierbar) – im Druckdialog „Als PDF speichern“ wählen. „Direkt teilen“ schickt eine Bild-Fassung sofort per Mail oder Messenger.</p>
           <div style={{ marginTop: 16 }}>
             {sitzungAktiv
               ? <div className="sync-msg"><Users size={16} aria-hidden="true" />Du bist in einer Sitzung – deine Werte erscheinen sofort am PC.</div>
@@ -1682,7 +1674,6 @@ function InspDetail({ plan, inst, res, setRes, pos, total, onBack, onPrev, onNex
             <NumInput value={ir.ik} onChange={v => updIR({ ik: v })} />
           </label>
         </div>
-        <div className="meas-hint">Nur nötig, wenn die Zuleitung höher abgesichert ist als alle Abgänge.</div>
       </div>
 
       {/* ── RCD ── */}
@@ -1977,7 +1968,6 @@ function TeilenTab({ plan, planUebernehmen, bluetooth, pcUrl, setPcUrl }) {
         <div className="section-title">Per Bluetooth – ohne Netzwerk</div>
         {bluetooth.verfuegbar ? (
           <>
-            <p className="meas-hint" style={{ marginBottom: 12 }}>Handy sichtbar machen, dann am PC unter <strong>Teilen → Bluetooth</strong> dieses Handy wählen. Der PC holt den aktuellen Plan (mit Prüfergebnissen) oder schickt einen Plan hierher – der landet in der Planliste.</p>
             {bluetooth.zustand && (
               <div className="sync-msg" style={{ marginBottom: 12 }}>
                 <Bluetooth size={16} aria-hidden="true" />
@@ -1997,7 +1987,6 @@ function TeilenTab({ plan, planUebernehmen, bluetooth, pcUrl, setPcUrl }) {
 
       <div className="section">
         <div className="section-title">Im WLAN: Plan vom PC holen</div>
-        <p className="meas-hint" style={{ marginBottom: 12 }}>Am PC „Teilen“ öffnen und den QR-Code scannen. Funktioniert ohne Server – Handy und PC müssen im selben WLAN sein.</p>
         <button className="btn btn--primary" style={{ width: '100%' }} disabled={loading} onClick={() => setShowScanner(true)}>
           <QrCode size={18} aria-hidden="true" />{loading ? 'Lade …' : 'QR-Code scannen'}
         </button>
@@ -2086,7 +2075,6 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken, projekt
     <>
       <div className="section">
         <div className="section-title">Sitzung</div>
-        <p className="meas-hint" style={{ marginBottom: 12 }}>In einer Sitzung arbeiten PCs und Handys gleichzeitig am selben Plan – Prüfwerte erscheinen sofort bei allen. Starten kannst du sie am PC oder hier unten.</p>
         <label className="field-label">Server-Adresse</label>
         <input className="field-input" value={server} onChange={e => setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
         <label className="field-label" style={{ marginTop: 12 }}>Server-Token (optional)</label>
@@ -2096,7 +2084,6 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken, projekt
         <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} disabled={busy || !basis || blockiert} onClick={laden}>
           <RefreshCw size={16} aria-hidden="true" />{busy ? 'Lade …' : 'Sitzungen laden'}
         </button>
-        <p className="meas-hint" style={{ marginTop: 8 }}>Deine App-Version: {APP_VERSION} – die Sitzung muss dieselbe Version haben.</p>
         {blockiert && <div className="sync-msg sync-msg--err" style={{ marginTop: 12 }}><CircleAlert size={16} aria-hidden="true" />Im Browser lässt sich ein Server mit http:// nicht erreichen. Bitte die Android-App nutzen oder den Server über https erreichbar machen.</div>}
         {fehler && <div className="sync-msg sync-msg--err" style={{ marginTop: 12 }}><CircleAlert size={16} aria-hidden="true" />{fehler}</div>}
       </div>
@@ -2136,7 +2123,6 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken, projekt
 
       <div className="section">
         <div className="section-title">Neue Sitzung mit dem Plan vom Handy</div>
-        <p className="meas-hint" style={{ marginBottom: 12 }}>Dein aktueller Plan wird zum Stand der Sitzung. PCs und andere Handys mit Version {APP_VERSION} können beitreten.</p>
         <label className="field-label">Name der Sitzung</label>
         <input className="field-input" value={neu.name} placeholder="z. B. Stadtfest Aufbau" onChange={e => setNeu({ ...neu, name: e.target.value })} />
         <label className="field-label" style={{ marginTop: 12 }}>Sitzungscode (optional)</label>
@@ -2178,7 +2164,6 @@ function SitzungAktiv({ sitzung }) {
           <Power size={16} aria-hidden="true" />Sitzung für alle beenden{andere ? ` (${andere} weitere online)` : ''}
         </button>
       )}
-      {!z.veraltet && <p className="meas-hint" style={{ marginTop: 8 }}>Nach dem Verlassen bleibt der Plan auf dem Handy; du kannst später wieder beitreten. „Für alle beenden“ löscht die Sitzung auf dem Server, alle behalten ihren Stand.</p>}
     </div>
   );
 }
