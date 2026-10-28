@@ -30126,14 +30126,19 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
   var changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v || "").split("-")[0]] || [];
   var CHANGELOG = {
     "1.4.0": [
-      "Gef\xFChrte Rundg\xE4nge statt Anleitungstexten \u2013 am PC im Tab \u201EAnleitung\u201C und \xFCber die \u201E?\u201C-Kn\xF6pfe, in der Android-App im neuen Tab \u201EHilfe\u201C. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen \xDCberblick m\xF6chtest",
+      "Gef\xFChrte Rundg\xE4nge statt Anleitungstexten \u2013 am PC im Tab \u201EAnleitung\u201C und \xFCber die \u201E?\u201C-Kn\xF6pfe, in der Android-App im neuen Tab \u201EHilfe\u201C. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen \xDCberblick m\xF6chtest. Ist dein Plan noch leer, zeigen sie einen Beispielplan \u2013 danach ist dein Stand wieder da",
       "Pl\xE4ne zwischen PC und Handy per Bluetooth austauschen \u2013 ohne WLAN oder Netzwerk: Handy unter \u201ETeilen\u201C sichtbar machen, am PC unter Teilen mit dem Handy verbinden, dann vom Handy holen (nur Pr\xFCfergebnisse oder ganzer Plan) oder ans Handy senden",
       "Das Teilen im WLAN per QR-Code entf\xE4llt \u2013 Bluetooth ersetzt es, ganz ohne Netzwerk, Firewall-Freigabe oder Adapterwahl. Die Android-App braucht dadurch keinen Kamerazugriff mehr",
       "Android-App: Verteiler werden im Tab Steckplan angelegt \u2013 der Knopf in der Pr\xFCfung ist entfallen",
       "Android-App: mehrere Pl\xE4ne auf dem Handy \u2013 anlegen, wechseln und l\xF6schen im Tab Projekt. Ein Plan vom PC oder das Beitreten einer Sitzung landet als eigener Plan in der Liste, statt den aktuellen zu \xFCberschreiben",
       "Android-App: Verbraucher anlegen und bearbeiten \u2013 im Tab Projekt oder direkt beim Stecken. Das Handy merkt sich alle Verbraucher wie die Verteiler-Typen, neue Pl\xE4ne starten mit dieser Bibliothek",
       "Android-App: Unterverteiler direkt am Steckplatz anschlie\xDFen oder dort neu anlegen, mit derselben Absicherungs-Warnung wie am PC",
-      "Beim Laden eines Plans fragt Stromplaner, ob dessen Verteiler-Typen und Verbraucher deine Bibliothek erg\xE4nzen oder ersetzen sollen (gefragt wird nur, wenn sonst etwas verloren ginge)"
+      "Beim Laden eines Plans fragt Stromplaner, ob dessen Verteiler-Typen und Verbraucher deine Bibliothek erg\xE4nzen oder ersetzen sollen (gefragt wird nur, wenn sonst etwas verloren ginge)",
+      "Aufger\xE4umte Oberfl\xE4che: erkl\xE4rende Hinweistexte entfernt, Kopfzeile neu sortiert (Neu, \xD6ffnen, Zuletzt ge\xF6ffnet, Speichern, Teilen, Sitzung \u2026), \u201ELaden\u201C hei\xDFt jetzt \u201E\xD6ffnen\u201C",
+      "Leitungsdimensionierung und Spannungsfall sind feste orange Tabs ganz rechts \u2013 kein Aufklappen \xFCber \u201EErweitert\u201C mehr",
+      "Android-App: Tabs in der Reihenfolge Projekt, Steckplan, Pr\xFCfung, Teilen, Sitzung, Hilfe",
+      "Android-App: nach einem Update erscheint sofort die neue Oberfl\xE4che (vorher manchmal erst nach einem zweiten Start)",
+      "Das Fenster \u201EWas ist neu\u201C scrollt bei langen Notizen und l\xE4sst sich immer schlie\xDFen, auch mit Escape"
     ],
     "1.3.0": [
       "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig \xFCber den Planer-Server \u2013 Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbr\xFCchen (Header \u2192 Sitzung); auch die Android-App kann beitreten",

@@ -83,7 +83,7 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
   "1.4.0": [
-    "Geführte Rundgänge statt Anleitungstexten – am PC im Tab „Anleitung“ und über die „?“-Knöpfe, in der Android-App im neuen Tab „Hilfe“. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen Überblick möchtest",
+    "Geführte Rundgänge statt Anleitungstexten – am PC im Tab „Anleitung“ und über die „?“-Knöpfe, in der Android-App im neuen Tab „Hilfe“. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen Überblick möchtest. Ist dein Plan noch leer, zeigen sie einen Beispielplan – danach ist dein Stand wieder da",
     "Pläne zwischen PC und Handy per Bluetooth austauschen – ohne WLAN oder Netzwerk: Handy unter „Teilen“ sichtbar machen, am PC unter Teilen mit dem Handy verbinden, dann vom Handy holen (nur Prüfergebnisse oder ganzer Plan) oder ans Handy senden",
     "Das Teilen im WLAN per QR-Code entfällt – Bluetooth ersetzt es, ganz ohne Netzwerk, Firewall-Freigabe oder Adapterwahl. Die Android-App braucht dadurch keinen Kamerazugriff mehr",
     "Android-App: Verteiler werden im Tab Steckplan angelegt – der Knopf in der Prüfung ist entfallen",
@@ -91,6 +91,11 @@ const CHANGELOG = {
     "Android-App: Verbraucher anlegen und bearbeiten – im Tab Projekt oder direkt beim Stecken. Das Handy merkt sich alle Verbraucher wie die Verteiler-Typen, neue Pläne starten mit dieser Bibliothek",
     "Android-App: Unterverteiler direkt am Steckplatz anschließen oder dort neu anlegen, mit derselben Absicherungs-Warnung wie am PC",
     "Beim Laden eines Plans fragt Stromplaner, ob dessen Verteiler-Typen und Verbraucher deine Bibliothek ergänzen oder ersetzen sollen (gefragt wird nur, wenn sonst etwas verloren ginge)",
+    "Aufgeräumte Oberfläche: erklärende Hinweistexte entfernt, Kopfzeile neu sortiert (Neu, Öffnen, Zuletzt geöffnet, Speichern, Teilen, Sitzung …), „Laden“ heißt jetzt „Öffnen“",
+    "Leitungsdimensionierung und Spannungsfall sind feste orange Tabs ganz rechts – kein Aufklappen über „Erweitert“ mehr",
+    "Android-App: Tabs in der Reihenfolge Projekt, Steckplan, Prüfung, Teilen, Sitzung, Hilfe",
+    "Android-App: nach einem Update erscheint sofort die neue Oberfläche (vorher manchmal erst nach einem zweiten Start)",
+    "Das Fenster „Was ist neu“ scrollt bei langen Notizen und lässt sich immer schließen, auch mit Escape",
   ],
   "1.3.0": [
     "Gemeinsam arbeiten: Mehrere Personen bearbeiten denselben Plan gleichzeitig über den Planer-Server – Sitzungen mit optionalem Code, Teilnehmeranzeige, Feldsperre beim Tippen und automatisches Nachschicken nach Verbindungsabbrüchen (Header → Sitzung); auch die Android-App kann beitreten",
