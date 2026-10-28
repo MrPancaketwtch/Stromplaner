@@ -4,6 +4,8 @@ import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2,
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 import { pruefprotokollHtml } from "./shared/pruefprotokoll.js";
 import { btVerfuegbar, btVerbinden, btInfo, btHolen, btSenden } from "./bluetooth.js";
+import { Tour, Willkommen, tutorialGefragt, tutorialMerken } from "./shared/tour.jsx";
+import { TOUREN_PC, HILFE_ZU_TOUR } from "./touren-pc.js";
 
 const PHASES = ["L1","L2","L3"];
 const VOLT   = 230;
@@ -80,6 +82,7 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
   "1.4.0": [
+    "Geführte Rundgänge statt Anleitungstexten – am PC im Tab „Anleitung“ und über die „?“-Knöpfe, in der Android-App im neuen Tab „Hilfe“. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen Überblick möchtest",
     "Pläne zwischen PC und Handy per Bluetooth austauschen – ohne WLAN oder Netzwerk: Handy unter „Teilen“ sichtbar machen, am PC unter Teilen mit dem Handy verbinden, dann vom Handy holen (nur Prüfergebnisse oder ganzer Plan) oder ans Handy senden",
     "Das Teilen im WLAN per QR-Code entfällt – Bluetooth ersetzt es, ganz ohne Netzwerk, Firewall-Freigabe oder Adapterwahl. Die Android-App braucht dadurch keinen Kamerazugriff mehr",
     "Android-App: Verteiler werden im Tab Steckplan angelegt – der Knopf in der Prüfung ist entfallen",
@@ -520,7 +523,9 @@ export default function App() {
   const [loaded,       setLoaded]       = useState(false); // prevent save before first load
   const libBasis     = useRef(null);                                      // zuletzt gelesene/gespeicherte AppData-Bibliothek
   const libGeloescht = useRef({ boxTypes:new Set(), loads:new Set() });   // in den Bibliotheks-Tabs gelöschte Ids
-  const [helpSection,  setHelpSection]  = useState(null);
+  const [tour,         setTour]         = useState(null);  // { id, start } des laufenden Rundgangs
+  const [willkommen,   setWillkommen]   = useState(false); // erste Frage beim Start ohne Plan
+  const tourOeffnete = useRef({ teilen:false, sitzung:false }); // was der Rundgang selbst geöffnet hat
 
   /* ── Sync ──────────────────────────────────────────────────────────────── */
   const [syncServer,      setSyncServer]      = useState(()=>localStorage.getItem("sp_sync_server")||"");
@@ -623,6 +628,8 @@ export default function App() {
   const setBoxTypesBib=useCallback(libLoeschenMerken("boxTypes",setBoxTypes),[]);
   const setLoadsBib=useCallback(libLoeschenMerken("loads",setLoads),[]);
   // Aktueller Stand für Abläufe, die nicht neu gerendert werden (z. B. Empfang vom Handy)
+  // Erster Start ohne Plan: vor allem anderen fragen, ob ein Rundgang gewünscht ist (bis einmal beantwortet)
+  useEffect(()=>{ if(loaded&&!tutorialGefragt()&&instances.length===0) setWillkommen(true); },[loaded]);
   const bibAktuell=useRef({boxTypes:[],loads:[]});
   bibAktuell.current={boxTypes,loads};
 
@@ -1231,11 +1238,33 @@ export default function App() {
     setTabDir(keys.indexOf(k)>=keys.indexOf(tab)?1:-1);
     setTab(k);
   };
+  /* ── Rundgänge (Anleitung, „?“ an Abschnitten, erster Start) ───────────── */
+  const tourStarten=(id,schritt)=>{
+    const t=TOUREN_PC.find(x=>x.id===id); if(!t) return;
+    const start=schritt?Math.max(0,t.schritte.findIndex(s=>s.id===schritt)):0;
+    setShowRecents(false); setShowSharePanel(false);
+    setTour({id,start});
+  };
+  const hilfeOeffnen=(key)=>{ const z=HILFE_ZU_TOUR[key]; if(z) tourStarten(z.tour,z.schritt); };
+  const tourAktion={
+    tab:(id)=>{ if(id==="dim"||id==="volt"){ setErweiterSubTab(id); goTab("erweitert"); } else goTab(id); },
+    teilen:(offen)=>{ tourOeffnete.current.teilen=offen; setShowSharePanel(offen); },
+    sitzung:(offen)=>{ tourOeffnete.current.sitzung=offen; setShowSitzung(offen); },
+  };
+  const tourEnde=()=>{
+    if(tourOeffnete.current.teilen) setShowSharePanel(false);
+    if(tourOeffnete.current.sitzung) setShowSitzung(false);
+    tourOeffnete.current={teilen:false,sitzung:false};
+    setTour(null);
+  };
+  // Changelog und Spendenhinweis warten, bis Willkommensfrage und Rundgang vorbei sind
+  const einfuehrung=willkommen||!!tour;
+
   const panelStyle=(k)=>({display:tab===k?"block":"none",...(tab===k?{animation:`tabSlide${tabDir>0?'R':'L'} 0.18s ease`}:{})});
   const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById };
 
   return (
-    <HelpContext.Provider value={setHelpSection}>
+    <HelpContext.Provider value={hilfeOeffnen}>
     <div style={S.app}>
       <style>{`@keyframes tabSlideR{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}@keyframes tabSlideL{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:translateX(0)}}`}</style>
       <header style={S.header}>
@@ -1247,10 +1276,10 @@ export default function App() {
         {corpLogo&&<button style={{...S.ghostBtn,padding:"3px 6px",fontSize:9}} onClick={removeLogo} title="Logo entfernen" aria-label="Logo entfernen"><X size={11}/></button>}
         <div style={S.headerMeta}>{meta.production} · v{meta.version} · {meta.date}</div>
         <input ref={fileInputRef} type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/>
-        <button style={S.ghostBtn} onClick={resetAll}><FilePlus2 size={14} aria-hidden="true"/>Neu</button>
-        <button style={S.ghostBtn} onClick={openPlan}><FolderOpen size={14} aria-hidden="true"/>Öffnen</button>
+        <button style={S.ghostBtn} data-tour="neu" onClick={resetAll}><FilePlus2 size={14} aria-hidden="true"/>Neu</button>
+        <button style={S.ghostBtn} data-tour="oeffnen" onClick={openPlan}><FolderOpen size={14} aria-hidden="true"/>Öffnen</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
-          <button style={S.ghostBtn} onClick={()=>setShowRecents(v=>!v)}><History size={14} aria-hidden="true"/>Zuletzt geöffnet</button>
+          <button style={S.ghostBtn} data-tour="zuletzt" onClick={()=>setShowRecents(v=>!v)}><History size={14} aria-hidden="true"/>Zuletzt geöffnet</button>
           {showRecents&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",minWidth:280,maxWidth:380,marginTop:4}} onMouseLeave={()=>setShowRecents(false)}>
             <div style={{padding:"6px 10px",fontSize:10,color:"#7c8794",borderBottom:"1px solid #2e3640",letterSpacing:.5,textTransform:"uppercase"}}>Zuletzt geöffnet</div>
             {recents.length===0
@@ -1262,9 +1291,9 @@ export default function App() {
             }
           </div>}
         </div>}
-        <button style={S.ghostBtn} onClick={saveJSON}><Save size={14} aria-hidden="true"/>Speichern</button>
+        <button style={S.ghostBtn} data-tour="speichern" onClick={saveJSON}><Save size={14} aria-hidden="true"/>Speichern</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
-          <button style={S.ghostBtn} title="Plan per Bluetooth mit dem Handy austauschen" onClick={()=>setShowSharePanel(v=>!v)}><Share2 size={14} aria-hidden="true"/>Teilen</button>
+          <button style={S.ghostBtn} data-tour="teilen" title="Plan per Bluetooth mit dem Handy austauschen" onClick={()=>setShowSharePanel(v=>!v)}><Share2 size={14} aria-hidden="true"/>Teilen</button>
           {showSharePanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}}>
             <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Per Bluetooth – ohne Netzwerk</div>
             {!btVerfuegbar()
@@ -1272,7 +1301,7 @@ export default function App() {
               : <>
                   {btStatus.msg&&<div style={{fontSize:10,color:btStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{btStatus.msg}</div>}
                   {!bt
-                    ? <button disabled={btGeraete!==null} onClick={btSuchen} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Bluetooth size={12} aria-hidden="true"/>{btGeraete!==null?"Suche …":"Mit Handy verbinden"}</button>
+                    ? <button data-tour="bt-verbinden" disabled={btGeraete!==null} onClick={btSuchen} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Bluetooth size={12} aria-hidden="true"/>{btGeraete!==null?"Suche …":"Mit Handy verbinden"}</button>
                     : <div style={{display:"flex",flexDirection:"column",gap:5}}>
                         <div style={{fontSize:11,color:"#c8d0da"}}><Bluetooth size={11} aria-hidden="true" style={{verticalAlign:"-1px",marginRight:4}}/>{bt.name}{bt.info?.name?` · „${bt.info.name}“`:""}{bt.info?.verteiler!=null?` · ${bt.info.verteiler} Verteiler`:""}</div>
                         {(()=>{ const pc=typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"; return bt.info?.version&&bt.info.version!==pc&&<div style={{fontSize:9,color:"#e67e22"}}>Handy hat Version {bt.info.version}, der PC {pc}.</div>; })()}
@@ -1287,7 +1316,7 @@ export default function App() {
         {(()=>{
           const z=sitzung.zustand;
           const farbe=!z?null:z.veraltet?"#e67e22":z.status==="online"?"#2ecc71":"#f5a623";
-          return <button style={{...S.ghostBtn,...(z?{borderColor:farbe}:{})}} title={z?`Sitzung „${z.info?.name||""}“ – ${z.veraltet?"beendet":z.status==="online"?"verbunden":"verbindet …"}`:"Mit anderen gleichzeitig am selben Plan arbeiten"} onClick={()=>setShowSitzung(true)}>
+          return <button data-tour="sitzung" style={{...S.ghostBtn,...(z?{borderColor:farbe}:{})}} title={z?`Sitzung „${z.info?.name||""}“ – ${z.veraltet?"beendet":z.status==="online"?"verbunden":"verbindet …"}`:"Mit anderen gleichzeitig am selben Plan arbeiten"} onClick={()=>setShowSitzung(true)}>
             {z?<><Users size={14} color={farbe} aria-hidden="true"/>{z.veraltet?"Sitzung beendet":`${z.users?.length||0} online`}</>:<><Users size={14} aria-hidden="true"/>Sitzung</>}
           </button>;
         })()}
@@ -1300,11 +1329,11 @@ export default function App() {
             :<><RefreshCw size={14} aria-hidden="true"/>Updates</>}
         </button>}
         <button style={{...S.ghostBtn,color:ACCENT,padding:"4px 6px"}} onClick={()=>setShowDonateModal(true)} title="Unterstützen" aria-label="Unterstützen"><Coffee size={14}/></button>
-        <button style={{...S.exportBtn,display:"inline-flex",alignItems:"center",gap:6}} onClick={exportPDF}><Printer size={15} aria-hidden="true"/>PDF</button>
+        <button data-tour="pdf" style={{...S.exportBtn,display:"inline-flex",alignItems:"center",gap:6}} onClick={exportPDF}><Printer size={15} aria-hidden="true"/>PDF</button>
       </header>
-      <nav style={S.nav}>
+      <nav style={S.nav} data-tour="tabs">
         {TABS.map(([k,label])=>(
-          <button key={k}
+          <button key={k} data-tour={"tab-"+k}
             style={{...S.navBtn,...(tab===k?S.navBtnActive:{})}}
             onClick={()=>goTab(k)}>
             <span style={{display:'block',height:0,fontWeight:600,overflow:'hidden',visibility:'hidden',pointerEvents:'none'}} aria-hidden="true">{label}</span>
@@ -1313,7 +1342,7 @@ export default function App() {
         {RECHNER.map(([k,lbl],i)=>{
           const aktiv=tab==="erweitert"&&erweiterSubTab===k;
           return(
-            <button key={k} style={{
+            <button key={k} data-tour={i===0?"rechner":"rechner-volt"} style={{
               ...S.navBtn,
               ...(i===0?{marginLeft:"auto"}:{}),
               ...(aktiv?{...S.navBtnActive,color:"#f5a623",borderColor:"#f5a623"}:{color:"#c08030"})
@@ -1357,11 +1386,11 @@ export default function App() {
             subTab={erweiterSubTab}/>
         </div>
         <div style={panelStyle("help")}>
-          <AnleitungTab/>
+          <AnleitungTab onStart={(id)=>tourStarten(id)}/>
         </div>
       </main>
-      {changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
-      {showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
+      {!einfuehrung&&changelogVersion&&<ChangelogModal version={changelogVersion} onClose={()=>setChangelogVersion(null)}/>}
+      {!einfuehrung&&showDonateModal&&<DonateModal onClose={()=>{ localStorage.setItem("stromplaner_donated","1"); setShowDonateModal(false); }}/>}
       {showUpdateModal&&<UpdateModal status={updateStatus} onClose={()=>setShowUpdateModal(false)} onCheck={()=>window.electronAPI.checkForUpdates()} onInstall={()=>window.electronAPI.installUpdate()} setStatus={setUpdateStatus} kanal={updateKanal} onKanal={kanalWaehlen}/>}
       {showSitzung&&<SitzungDialog sitzung={sitzung} server={syncServer} setServer={setSyncServer} token={syncToken} setToken={setSyncToken}
         projektName={meta.production} version={typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"} onClose={()=>setShowSitzung(false)}/>}
@@ -1377,7 +1406,8 @@ export default function App() {
           <div style={{display:"flex",justifyContent:"flex-end"}}><button onClick={()=>btGeraetWaehlen("")} style={{padding:"7px 18px",borderRadius:5,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:"#2a3547",color:"#aab"}}>Abbrechen</button></div>
         </div>
       </div>}
-      {helpSection&&<HelpModal section={helpSection} onClose={()=>setHelpSection(null)} goToGuide={()=>{setHelpSection(null);goTab("help");}}/>}
+      {tour&&<Tour key={tour.id+tour.start} schritte={TOUREN_PC.find(x=>x.id===tour.id).schritte} start={tour.start} aktion={tourAktion} onEnde={tourEnde}/>}
+      {willkommen&&<Willkommen onJa={()=>{ tutorialMerken(); setWillkommen(false); }} onNein={()=>{ tutorialMerken(); setWillkommen(false); tourStarten("ueberblick"); }}/>}
     </div>
     </HelpContext.Provider>
   );
@@ -1516,11 +1546,11 @@ function SitzungVerbinden({ sitzung, server, setServer, token, setToken, projekt
 
   return(<>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-      <Field label="Server-Adresse"><input style={S.inputSm} value={server} onChange={e=>setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" spellCheck={false}/></Field>
+      <Field label="Server-Adresse"><input data-tour="sitzung-server" style={S.inputSm} value={server} onChange={e=>setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" spellCheck={false}/></Field>
       <Field label="Server-Token (optional)"><input style={S.inputSm} type="password" value={token} onChange={e=>setToken(e.target.value)} spellCheck={false}/></Field>
       <Field label="Dein Name (sehen die anderen)"><input style={S.inputSm} value={name} onChange={e=>setName(e.target.value)} placeholder="z. B. Anna"/></Field>
       <div style={{display:"flex",alignItems:"flex-end"}}>
-        <button style={{...S.ghostBtn,width:"100%",justifyContent:"center",opacity:serverOk?1:.5}} disabled={busy||!serverOk} onClick={laden}><RefreshCw size={13} aria-hidden="true"/>{busy?"Lade …":"Sitzungen laden"}</button>
+        <button style={{...S.ghostBtn,width:"100%",justifyContent:"center",opacity:serverOk?1:.5}} disabled={busy||!serverOk} onClick={laden} data-tour="sitzung-laden"><RefreshCw size={13} aria-hidden="true"/>{busy?"Lade …":"Sitzungen laden"}</button>
       </div>
     </div>
     {fehler&&<div style={SZ.fehler}>{fehler}</div>}
@@ -1553,7 +1583,7 @@ function SitzungVerbinden({ sitzung, server, setServer, token, setToken, projekt
       })}
     </>}
 
-    <div style={SZ.label}>Neue Sitzung mit dem aktuellen Plan</div>
+    <div style={SZ.label} data-tour="sitzung-neu">Neue Sitzung mit dem aktuellen Plan</div>
     <div style={{display:"grid",gridTemplateColumns:"1fr 150px auto",gap:8,alignItems:"end"}}>
       <Field label="Name der Sitzung"><input style={S.inputSm} value={neu.name} onChange={e=>setNeu(n=>({...n,name:e.target.value}))}/></Field>
       <Field label="Sitzungscode (optional)"><input style={S.inputSm} value={neu.code} onChange={e=>setNeu(n=>({...n,code:e.target.value}))} placeholder="z. B. 4711"/></Field>
@@ -1868,7 +1898,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
       )}
 
       {/* Verteiler tabs */}
-      <div style={S.boxTabs}>
+      <div style={S.boxTabs} data-tour="steckplan-auswahl">
         {activeInstances.map(i=>{
           const ol=isOverloaded(i.id);
           const ud=isUnderdimensioned(i.id);
@@ -1884,7 +1914,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
         })}
       </div>
 
-      <Section title={inst.name} subtitle={`Eingang: ${connLabel} (${maxA}A)`}>
+      <Section title={inst.name} subtitle={`Eingang: ${connLabel} (${maxA}A)`} tour="steckplan-blatt">
         {/* Sticky phase bars */}
         <div style={S.stickyPhase}>
           <div style={S.phaseBar}>
@@ -2113,7 +2143,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
 
                 {/* RCCB-Gruppen */}
                 <div style={{marginTop:12,marginBottom:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><p style={{fontSize:11,color:"#9aa4af",margin:0,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCCB-Gruppen</p><button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:18,height:18,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp("rccb")} title="Hilfe">?</button></div>
+                  <div data-tour="rccb" style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><p style={{fontSize:11,color:"#9aa4af",margin:0,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCCB-Gruppen</p><button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:18,height:18,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp("rccb")} title="Hilfe">?</button></div>
                   {(b.rcds||[]).length===0
                     ? <p style={{...S.hint,margin:"0 0 6px"}}>Keine RCCB-Gruppen — Anschlüsse werden nur per LS / RCBO geschützt.</p>
                     : <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
@@ -3381,119 +3411,27 @@ function SchematicTab({ instances,instById,boxTypeById,rootInstances,mainConns,m
 
 const HelpContext = React.createContext(()=>{});
 
-const HELP_SECTIONS = {
-  ersteschritte: {
-    title: 'Erste Schritte',
-    text: 'Der empfohlene Arbeitsablauf: zuerst im Tab "Verteiler-Typen" alle Verteilermodelle anlegen, die du verwendest (einmalig, wiederverwendbar). Dann im Tab "Verbraucher" deine Geräte-Bibliothek aufbauen. Anschließend in "Konfiguration" die Einspeisepunkte und konkreten Verteiler für diese Produktion eintragen. Danach im "Steckplan" die Verbraucher auf die Abgänge stecken.',
-    extra: 'Die App speichert deinen Arbeitsstand automatisch im Browser (Autosave), sodass du jederzeit weitermachen kannst. Für eine dauerhafte Sicherung oder den Austausch mit Kollegen nutze "Speichern" im Header, um eine JSON-Datei zu exportieren.'
-  },
-  produktionsdaten: {
-    title: 'Produktionsdaten',
-    text: 'Ganz oben in der Konfiguration trägst du Produktionsname, Ersteller, Versionsnummer und Datum ein. Diese Metadaten erscheinen auf allen Exporten: im Stromplan-PDF als Kopfzeile, im Excel-Export als Tabellenblatt und im Errichtungsprüfungsprotokoll. Halte die Versionsnummer aktuell, damit ältere Ausdrucke eindeutig erkennbar bleiben.',
-    extra: ''
-  },
-  verteilertypen: {
-    title: 'Verteiler-Typen',
-    text: 'Ein Verteiler-Typ beschreibt den physischen Aufbau eines Verteilers: Eingangs-Steckertyp (z.B. CEE 63A) und alle Steckplätze. Für jeden Steckplatz legst du Steckertyp, Schutzcharakter (B/C/D/K), Nennstrom und Schutzart (LS, RCBO oder keine) fest. Bei Multicore-Steckplätzen konfigurierst du außerdem die Anzahl der Kanäle – die Phase rotiert dann automatisch von L1 bis L3.',
-    extra: 'Verteiler-Typen sind produktionsübergreifend gespeichert – du legst jeden Typ einmal an und verwendest ihn in beliebig vielen Produktionen. Über "Exportieren" und "Importieren" im Tab kannst du deine Bibliothek als JSON-Datei sichern und auf anderen Geräten einspielen.'
-  },
-  verbraucher: {
-    title: 'Verbraucher',
-    text: 'Die Verbraucher-Bibliothek enthält alle Geräte und Lastgruppen, die du in Produktionen einsetzt. Jeder Eintrag hat einen Namen, eine Leistung in Watt, einen Steckertyp und eine Phasigkeit (einphasig oder dreiphasig). Die eingegebene Leistung wird später im Steckplan automatisch auf Ampere umgerechnet und in der Phasenlastanzeige summiert.',
-    extra: 'Auch die Verbraucher-Bibliothek ist produktionsübergreifend gespeichert und lässt sich als JSON exportieren und importieren. So kannst du eine einmal aufgebaute Geräte-Liste auf alle deine Geräte übertragen.'
-  },
-  hauptanschluesse: {
-    title: 'Einspeisepunkte',
-    text: 'Hier definierst du die Einspeisepunkte deiner Anlage – also die Anschlüsse, aus denen deine Verteiler gespeist werden. Gib jedem Einspeisepunkt einen eindeutigen Namen (z.B. "HA 63A links" oder "Einspeisung Bühne") und trag ein, mit wieviel Ampere er abgesichert ist.',
-    extra: ''
-  },
-  verteiler: {
-    title: 'Verteiler hinzufügen',
-    text: 'Hier fügst du die Verteiler hinzu, die du in deiner Anlage betreibst. Bevor du Verteiler hinzufügen kannst, musst du mindestens einen Verteiler-Typ im Tab "Verteiler-Typen" angelegt haben – dort definierst du Eingangs-Steckertyp und alle Steckplätze.',
-    extra: 'Nach dem Hinzufügen kannst du für jeden Verteiler festlegen, wo er in der Topologie hängt: entweder direkt an einem Einspeisepunkt oder als Unterverteilung an einem Steckplatz eines anderen Verteilers. So entsteht die komplette Baumstruktur deiner Anlage, die im Schaltbild sichtbar wird.'
-  },
-  steckplan: {
-    title: 'Steckplan',
-    text: 'Im Steckplan belegst du die einzelnen Steckplätze deines Verteilers mit Verbrauchern. Wähle oben den Verteiler aus, den du bearbeiten möchtest. Über die Schnellerfassung kannst du gezielt einen Steckplatz und einen Verbraucher auswählen und mit dem "Menge"-Kästchen gleich mehrere identische Verbraucher auf einmal stecken.',
-    extra: 'Du kannst auch erst den Anschluss wählen und dann den Verbraucher – der Anschluss bleibt erhalten. Für jeden gesteckten Verbraucher werden Phase, Leistung und Ampere automatisch berechnet und in der Phasenlastanzeige summiert.'
-  },
-  rccb: {
-    title: 'RCCB-Gruppen',
-    text: 'RCCBs (Fehlerstromschutzschalter) schützen mehrere Abgänge gemeinsam. Wenn dein Verteiler einen oder mehrere RCCBs verbaut hat, trägst du diese hier ein – mit Bezeichnung und Auslösestrom in mA. Anschließend kannst du im Steckplan für jeden Abgang angeben, welcher RCCB-Gruppe er zugehört.',
-    extra: 'Hat ein Abgang stattdessen einen eigenen RCBO (kombinierten LS + FI), wird das direkt beim Anschluss im Verteiler-Typ konfiguriert, nicht hier.'
-  },
-  uebersicht: {
-    title: 'Übersicht',
-    text: 'Der Übersichts-Tab zeigt für jeden aktiven Verteiler eine kompakte Zusammenfassung: Gesamtlast in Watt und Ampere, Aufschlüsselung nach Phase (L1/L2/L3) sowie den aktuellen Auslastungsgrad. Verteiler, deren summierte Last die Eingangsabsicherung überschreitet, werden rot markiert.',
-    extra: 'Sind Verteiler einem Einspeisepunkt zugeordnet, erscheint darüber hinaus eine Summenzeile je Einspeisepunkt – so siehst du auf einen Blick, wie stark jede Einspeisung belastet ist.'
-  },
-  schaltbild: {
-    title: 'Schaltbild',
-    text: 'Das Schaltbild visualisiert die komplette Topologie deiner Anlage als Baumstruktur: von den Einspeisepunkten über die Verteiler bis zu den einzelnen Steckplätzen. Jeder Knoten zeigt den Steckertyp als Icon (CEE, Powerlock, Schuko), Nennstrom und aktuell gesteckte Last. Unterverteilungen sind als Verzweigungen dargestellt.',
-    extra: 'Das Schaltbild eignet sich gut als Übergabedokument: über "Stromplan drucken" im Header lässt es sich zusammen mit der Laststabelle als PDF ausgeben.'
-  },
-  erweitert: {
-    title: 'Leitungsdimensionierung & Spannungsfall',
-    text: 'Die beiden orangen Tabs ganz rechts sind zwei unabhängige Werkzeuge. Die Leitungsdimensionierung berechnet anhand von Strom, Leitungslänge und Verlegeart (frei in Luft, in Lagen, etc.) den erforderlichen Mindest-Querschnitt nach DIN VDE 0298-4 – inklusive Temperatur- und Häufelkorrekturfaktoren.',
-    extra: 'Der Spannungsfall-Rechner ermittelt für eine gegebene Leitung den prozentualen Spannungsabfall (Grenzwert nach DIN VDE 0100-520: 3 % für Stromversorgungsleitungen). Beide Rechner sind unabhängig vom Rest der Projektdaten und können jederzeit genutzt werden.'
-  },
-  errichtungspruefung: {
-    title: 'Errichtungsprüfung',
-    text: 'Hier dokumentierst du die Prüfung deiner Anlage nach DIN VDE 0100-600. Wähle einen Verteiler aus der Liste und fülle die Felder der Reihe nach aus: zuerst Stammdaten des Prüfers, Datum und Prüfort, dann die sechs Punkte der Sichtprüfung, anschließend die elektrischen Messwerte – Drehfeld, Spannungen (U L-N, U L-L, U N-PE, U L-PE), RCD-Auslösezeiten und Schleifenimpedanzen je Abgang. Werte außerhalb der Norm-Grenzwerte werden direkt rot markiert und im Abschlussprotokoll als Mängel aufgeführt.',
-    extra: 'Hast du kaskadierte Verteiler – also eine Unterverteilung die an einem Steckplatz eines übergeordneten Verteilers hängt – übernimmt das Tool die ungünstigsten Messwerte (Zs und Kurzschlussstrom) aus der Unterverteilung automatisch für den entsprechenden Steckplatz des Hauptverteilers. Wenn du die Werte dort zusätzlich separat gemessen hast, kannst du sie manuell überschreiben; sie werden dann mit einem ✎ gekennzeichnet.'
-  },
-  speichern: {
-    title: 'Speichern, Öffnen & Exportieren',
-    text: 'Im Header findest du zwei Schaltflächen: "Öffnen" lädt eine JSON-Datei, die du zuvor gespeichert hast, und stellt den kompletten Projektstand wieder her. "Speichern" exportiert den aktuellen Stand als JSON-Datei auf deinen Rechner – inklusive aller Verteiler, Steckungen, Messwerte und Einstellungen.',
-    extra: 'Verteiler-Typen und Verbraucher lassen sich separat im jeweiligen Tab im- und exportieren, um die Bibliotheken geräteübergreifend zu nutzen.'
-  },
-  logo: {
-    title: 'Firmenlogo',
-    text: 'Über den kleinen „Logo“-Button rechts neben dem App-Titel kannst du ein Unternehmens- oder Veranstaltungslogo hochladen (PNG, JPG oder SVG). Das Logo erscheint sofort im App-Header und wird automatisch in alle PDF-Exporte eingebunden: in die Kopfzeile des Errichtungsprüfdokuments sowie in den Stromplan-Ausdruck.',
-    extra: 'Das Logo wird lokal in der App gespeichert und bleibt auch nach einem Neustart erhalten. Mit dem kleinen "x"-Button neben dem Logo kannst du es jederzeit wieder entfernen. Es wird nicht mit der JSON-Projektdatei übertragen und ist daher gerätespezifisch.'
-  },
-  updates: {
-    title: 'Software-Updates',
-    text: 'Der Stromplaner sucht beim Start automatisch nach neuen Versionen. Ist ein Update verfügbar, ändert sich der "Updates"-Button im Header zu "Update verfügbar". Ein Klick darauf öffnet den Update-Dialog, der den Changelog der neuen Version zeigt und den Download startet.',
-    extra: 'Nach dem Herunterladen wechselt der Button zu "Update bereit". Mit einem weiteren Klick wird die neue Version installiert und die App automatisch neu gestartet. Der Updateprozess läuft im Hintergrund und unterbricht deine Arbeit nicht – du kannst bis zur Installation normal weiterarbeiten.'
-  },
-};
-function HelpModal({section,onClose,goToGuide}){
-  const s=HELP_SECTIONS[section];
-  if(!s) return null;
+// Anleitung: Rundgänge statt Fließtext (Inhalte in touren-pc.js)
+function AnleitungTab({ onStart }){
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
-      <div style={{background:"#1b2026",border:"1px solid #3a424c",borderRadius:10,padding:24,maxWidth:500,width:"90%",boxShadow:"0 8px 40px rgba(0,0,0,.8)"}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-          <h3 style={{margin:0,fontSize:15,color:"#f5a623",lineHeight:1.3}}>{s.title.replace(/^\d+\s*·\s*/,"")}</h3>
-          <button style={{background:"transparent",border:"none",color:"#9aa4af",fontSize:18,cursor:"pointer",padding:"0 0 0 14px",lineHeight:1}} onClick={onClose} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button>
-        </div>
-        <p style={{margin:s.extra?"0 0 10px":"0 0 16px",fontSize:13,color:"#c8ccd4",lineHeight:1.75}}>{s.text}</p>
-        {s.extra&&<p style={{margin:"0 0 16px",fontSize:13,color:"#c8ccd4",lineHeight:1.75}}>{s.extra}</p>}
-        <button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:6,padding:"6px 12px",color:"#f5a623",cursor:"pointer",fontSize:12}} onClick={goToGuide}>Vollständige Anleitung öffnen →</button>
+    <div style={{maxWidth:720}}>
+      <h1 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 20px"}}>Anleitung</h1>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
+        {TOUREN_PC.map(t=>(
+          <button key={t.id} onClick={()=>onStart(t.id)} style={{textAlign:"left",background:"#252b33",border:"1px solid #3a424c",borderRadius:10,padding:"16px 18px",cursor:"pointer",color:"#e8eaf0",fontFamily:"inherit",display:"flex",flexDirection:"column",gap:6}}>
+            <span style={{fontSize:15,fontWeight:700,color:ACCENT}}>{t.titel}</span>
+            <span style={{fontSize:13,color:"#9aa4af",lineHeight:1.4}}>{t.beschreibung}</span>
+            <span style={{fontSize:12,color:"#c8d0da",marginTop:4}}>Rundgang starten ›</span>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
-function AnleitungTab(){
-  return (
-    <div style={{maxWidth:680}}>
-      <h1 style={{fontSize:22,fontWeight:700,color:"#fff",margin:"0 0 20px"}}>Anleitung</h1>
-      {Object.values(HELP_SECTIONS).map(s=>(
-        <section key={s.title} style={{background:"#252b33",borderRadius:10,padding:20,marginBottom:16,border:"1px solid #3a424c"}}>
-          <h2 style={{margin:"0 0 10px",fontSize:16,color:"#f5a623",fontWeight:700}}>{s.title}</h2>
-          <p style={{margin:s.extra?"0 0 10px":"0",fontSize:14,color:"#c8ccd4",lineHeight:1.8}}>{s.text}</p>
-          {s.extra&&<p style={{margin:0,fontSize:14,color:"#c8ccd4",lineHeight:1.8}}>{s.extra}</p>}
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function Section({title,subtitle,helpKey,children}){
+function Section({title,subtitle,helpKey,tour,children}){
   const openHelp=useContext(HelpContext);
-  return <section style={S.section}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><h2 style={{...S.h2,margin:0}}>{title}</h2>{helpKey&&<button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:20,height:20,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp(helpKey)} title="Hilfe">?</button>}</div>{subtitle&&<p style={S.subtitle}>{subtitle}</p>}{children}</section>;
+  return <section style={S.section} data-abschnitt={typeof title==="string"?title:undefined} data-tour={tour}><div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}><h2 style={{...S.h2,margin:0}}>{title}</h2>{helpKey&&<button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:20,height:20,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp(helpKey)} title="Rundgang zu diesem Abschnitt" aria-label="Rundgang zu diesem Abschnitt">?</button>}</div>{subtitle&&<p style={S.subtitle}>{subtitle}</p>}{children}</section>;
 }
 function Field({label,children}){ return <label style={S.field}><span style={S.fieldLabel}>{label}</span>{children}</label>; }
 
@@ -3925,12 +3863,12 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
         </div>
         <div style={{marginTop:10,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
           {inspSign&&<img src={inspSign} alt="Unterschrift" style={{height:36,maxWidth:160,objectFit:"contain",border:"1px solid #3a424c",borderRadius:4,padding:"2px 6px",background:"#fff"}}/>}
-          <label style={{...S.ghostBtn,padding:"3px 9px",fontSize:11,cursor:"pointer"}} title={inspSign?"Unterschrift ersetzen":"Unterschrift hochladen"}>
+          <label data-tour="unterschrift" style={{...S.ghostBtn,padding:"3px 9px",fontSize:11,cursor:"pointer"}} title={inspSign?"Unterschrift ersetzen":"Unterschrift hochladen"}>
             {inspSign?<PenLine size={12} aria-hidden="true"/>:<ImagePlus size={12} aria-hidden="true"/>}Unterschrift<input type="file" accept="image/png,image/jpeg,image/svg+xml" style={{display:"none"}} onChange={uploadInspSign}/>
           </label>
           {inspSign&&<button style={{...S.ghostBtn,padding:"3px 7px",fontSize:11}} onClick={removeInspSign} title="Unterschrift entfernen" aria-label="Unterschrift entfernen"><X size={14} aria-hidden="true"/></button>}
           <div style={{flex:1}}/>
-          <button style={{...S.exportBtn,display:"inline-flex",alignItems:"center",gap:6}} onClick={exportInspectionPDF}><Printer size={15} aria-hidden="true"/>Prüfprotokoll PDF</button>
+          <button style={{...S.exportBtn,display:"inline-flex",alignItems:"center",gap:6}} onClick={exportInspectionPDF} data-tour="pruef-pdf"><Printer size={15} aria-hidden="true"/>Prüfprotokoll PDF</button>
           <button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:22,height:22,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",justifyContent:"center"}} onClick={()=>openHelp("errichtungspruefung")} title="Hilfe zur Errichtungsprüfung">?</button>
         </div>
       </Section>
@@ -3964,7 +3902,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
           const okNPE=chk(ir.voltNPE,undefined,1), okL1PE=chk(ir.voltL1PE,207,244), okL2PE=chk(ir.voltL2PE,207,244), okL3PE=chk(ir.voltL3PE,207,244);
 
           return (
-            <Section key={inst.id}
+            <Section key={inst.id} tour="pruef-verteiler"
               title={<span style={{display:"inline-flex",alignItems:"center",gap:8}}><Plug size={17} color={ACCENT} aria-hidden="true"/>{inst.name}</span>}
               subtitle={`${type?.name||"?"} · Einspeisung: ${CONN[type?.feedConnector]?.label||""} ${type?.feedAmp||""}A`}>
 

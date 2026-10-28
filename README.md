@@ -52,6 +52,7 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 | **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **PDF speichern / drucken** öffnet den Android-Druckdialog („Als PDF speichern“ oder Drucker) – das PDF ist identisch mit dem vom PC, Text markierbar. **PDF direkt teilen** schickt eine Bild-Fassung sofort per Mail oder Messenger. Unter *Prüfungsdetails* lässt sich mit dem Finger unterschreiben. |
 | **Teilen** | Per **Bluetooth** ohne Netzwerk und ohne Server mit dem PC austauschen |
 | **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten oder selbst eine starten: Prüfwerte erscheinen sofort bei allen (siehe „Sitzung“ weiter unten) |
+| **Hilfe** | Geführte Rundgänge durch die App – beim ersten Start ohne Plan wird gefragt, ob du den Überblick sehen möchtest |
 
 ### Spontane Prüfung nur mit dem Handy
 1. **Projekt** → **Neuer Plan**, Veranstaltung eintragen. Die bisherigen Pläne bleiben in der Planliste.
@@ -253,7 +254,9 @@ Ergebnis: ΔU in V und %, Mindestquerschnitt für ΔU ≤ 3 %, Farbampel (≤ 3 
 Beide Unter-Tabs erlauben beliebig viele benannte Einzel-Rechnungen (**+ Neue Rechnung**). Alle Rechnungen werden automatisch gespeichert.
 
 ### ℹ Anleitung
-Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich über den **ℹ Anleitung**-Tab in der Navigation. An mehreren Stellen in der App gibt es zusätzlich **?**-Buttons, die direkt zur passenden Hilfe-Seite springen.
+Geführte Rundgänge statt Handbuch: Der Bildschirm wird abgedunkelt, die jeweilige Stelle hervorgehoben, dazu ein kurzer Satz – bei Bedarf wechselt der Rundgang selbst den Tab. Themen: Überblick, Planung anlegen, Verbraucher stecken, Bibliothek, Übersicht und Schaltbild, Errichtungsprüfung, Austausch mit dem Handy, Sitzung und Rechner. Die **?**-Knöpfe an einzelnen Abschnitten starten den passenden Rundgang an dieser Stelle.
+
+Beim ersten Start ohne Plan fragt Stromplaner „Hast du Stromplaner schon mal verwendet?“ – mit **Nein, Tutorial ansehen** beginnt der Überblick. Die Frage erscheint nur, bis sie einmal beantwortet wurde. Die Handy-App hat dafür den Tab **Hilfe** mit eigenen Rundgängen.
 
 ---
 

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, Check, TriangleAlert, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, Play, Power, Printer, PenLine, ImagePlus, Bluetooth, BluetoothOff } from 'lucide-react';
+import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, Check, TriangleAlert, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, Play, Power, Printer, PenLine, ImagePlus, Bluetooth, BluetoothOff, CircleHelp, ChevronRight } from 'lucide-react';
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from '@sync/sitzung.js';
 import { migrateOutlet } from '@shared/pruefprotokoll.js';
 import { protokollPdf, pdfTeilen, pdfDateiname, protokollDrucken } from './pdf.js';
 import { packen, entpacken, zuBase64, ausBase64 } from '@shared/bt-protokoll.js';
 import { Capacitor } from '@capacitor/core';
+import { Tour, Willkommen, tutorialGefragt, tutorialMerken } from '@shared/tour.jsx';
+import { TOUREN } from './touren.js';
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
@@ -162,6 +164,9 @@ export default function App() {
   const [plan,    setPlan]    = useState(start.plan);
   const [plaene,  setPlaene]  = useState(start.index);
   const [aktivId, setAktivId] = useState(start.aktiv);
+  // Erster Start ohne Plan: erst fragen, ob ein Rundgang gewünscht ist
+  const [willkommen, setWillkommen] = useState(() => !tutorialGefragt() && !start.plan.instances.length);
+  const [tour,    setTour]    = useState(null); // null | { id, start }
   const [server,  setServer]  = useState(() => localStorage.getItem(SERVER_KEY) || '');
   const [token,   setToken]   = useState(() => localStorage.getItem(TOKEN_KEY)  || '');
   const [toasts,  setToasts]  = useState([]);
@@ -330,6 +335,9 @@ export default function App() {
         {tab === 'sitzung' && (
           <SitzungTab sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} projektName={plan.meta.production} planliste={planliste} />
         )}
+        {tab === 'hilfe' && (
+          <HilfeTab onStart={(id) => setTour({ id, start: 0 })} />
+        )}
       </main>
 
       {toasts.length > 0 && (
@@ -345,9 +353,11 @@ export default function App() {
           { id: 'pruefung',  Icon: ClipboardCheck, label: 'Prüfung'   },
           { id: 'teilen',    Icon: Share2,         label: 'Teilen'    },
           { id: 'sitzung',   Icon: Users,          label: 'Sitzung'   },
+          { id: 'hilfe',     Icon: CircleHelp,     label: 'Hilfe'     },
         ].map(t => (
           <button
             key={t.id}
+            data-tour={'tab-' + t.id}
             className={'tab-btn' + (tab === t.id ? ' active' : '')}
             onClick={() => setTab(t.id)}
           >
@@ -356,6 +366,36 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {tour && (
+        <Tour key={tour.id + tour.start} schritte={TOUREN.find(x => x.id === tour.id).schritte} start={tour.start}
+          aktion={{ tab: setTab }} onEnde={() => setTour(null)} />
+      )}
+      {willkommen && (
+        <Willkommen
+          onJa={() => { tutorialMerken(); setWillkommen(false); }}
+          onNein={() => { tutorialMerken(); setWillkommen(false); setTour({ id: 'ueberblick', start: 0 }); }} />
+      )}
+    </div>
+  );
+}
+
+/* ── Hilfe: Rundgänge statt Anleitungstexten ─────────────────────────────── */
+function HilfeTab({ onStart }) {
+  return (
+    <div className="page">
+      <div className="section">
+        <div className="section-title">Rundgänge</div>
+        {TOUREN.map(t => (
+          <button key={t.id} className="stat-row typ-row hilfe-row" onClick={() => onStart(t.id)}>
+            <span className="hilfe-text">
+              <span className="hilfe-titel">{t.titel}</span>
+              <span className="hilfe-beschreibung">{t.beschreibung}</span>
+            </span>
+            <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -423,7 +463,7 @@ function SteckplanTab({ plan, setPlan, typen, verbraucher }) {
         })}
       </div>
 
-      <button className="fab" aria-label="Verteiler hinzufügen" onClick={() => setModal({ kind: 'add' })}>+</button>
+      <button className="fab" data-tour="verteiler-neu" aria-label="Verteiler hinzufügen" onClick={() => setModal({ kind: 'add' })}>+</button>
 
       {/* ── Add instance modal ── */}
       {modal?.kind === 'add' && (
@@ -1102,7 +1142,7 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
         />
       )}
 
-      <div className="section">
+      <div className="section" data-tour="planliste">
         <div className="section-title">Pläne ({eintraege.length})</div>
         {sitzungAktiv && <p className="meas-hint" style={{ marginBottom: 8 }}>Während einer Sitzung lässt sich der Plan nicht wechseln – erst die Sitzung verlassen.</p>}
         {eintraege.map(e => {
@@ -1118,12 +1158,12 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
             </div>
           );
         })}
-        <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} disabled={sitzungAktiv} onClick={neuerPlan}>
+        <button className="btn btn--secondary" data-tour="neuer-plan" style={{ width: '100%', marginTop: 12 }} disabled={sitzungAktiv} onClick={neuerPlan}>
           <FilePlus2 size={16} aria-hidden="true" />Neuer Plan
         </button>
       </div>
 
-      <div className="section">
+      <div className="section" data-tour="projektdaten">
         <div className="section-title">Projektdaten</div>
         {fields.map(f => (
           <div key={f.key} className="field-row">
@@ -1138,7 +1178,7 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
         ))}
       </div>
 
-      <div className="section">
+      <div className="section" data-tour="bibliothek">
         <div className="section-title">Bibliothek</div>
 
         <div className="bib-head"><span>Verteiler-Typen ({typen.alle.length})</span></div>
@@ -1164,7 +1204,7 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
         </button>
       </div>
 
-      <div className="section">
+      <div className="section" data-tour="firmenlogo">
         <div className="section-title">Firmenlogo fürs PDF</div>
         <div className="bild-row">
           {bild.logo
@@ -1377,7 +1417,7 @@ function Segmented({ options, value, onChange }) {
 function BtAnPc({ bluetooth: bt }) {
   if (!bt.verfuegbar) return null;
   return (
-    <div className="section">
+    <div className="section" data-tour="an-pc">
       <div className="section-title">An PC senden</div>
       {bt.zustand ? (
         <div className="sync-msg">
@@ -1456,7 +1496,7 @@ function PruefungTab({ plan, setPlan, sitzungAktiv, notify, bild, bluetooth }) {
 
   return (
     <div className="page">
-      <div className="section">
+      <div className="section" data-tour="pruefdetails">
         <button className="collapse-head" onClick={() => setMetaOpen(o => !o)}>
           <span className="section-title" style={{ margin: 0 }}>Prüfungsdetails</span>
           <span className="collapse-sum">{meta.inspector || 'Prüfer fehlt'} · {meta.date}</span>
@@ -1526,10 +1566,10 @@ function PruefungTab({ plan, setPlan, sitzungAktiv, notify, bild, bluetooth }) {
             })}
           </div>
           <div className="section-title" style={{ margin: '20px 4px 8px' }}>Prüfprotokoll</div>
-          <button className="btn btn--primary" style={{ width: '100%' }} onClick={drucken}>
+          <button className="btn btn--primary" data-tour="pdf-drucken" style={{ width: '100%' }} onClick={drucken}>
             <Printer size={18} aria-hidden="true" />PDF speichern / drucken
           </button>
-          <button className="btn btn--secondary" style={{ width: '100%', marginTop: 8 }} disabled={!!pdf} onClick={pdfErstellen}>
+          <button className="btn btn--secondary" data-tour="pdf-teilen" style={{ width: '100%', marginTop: 8 }} disabled={!!pdf} onClick={pdfErstellen}>
             <Share2 size={16} aria-hidden="true" />{pdf ? `PDF ${pdf}` : 'PDF direkt teilen'}
           </button>
           <div style={{ marginTop: 16 }}>
@@ -1870,8 +1910,8 @@ function TeilenTab({ plan, bluetooth }) {
               </div>
             )}
             {bluetooth.zustand
-              ? <button className="btn btn--secondary" style={{ width: '100%' }} onClick={bluetooth.stoppen}><BluetoothOff size={18} aria-hidden="true" />Nicht mehr sichtbar</button>
-              : <button className="btn btn--primary" style={{ width: '100%' }} disabled={bluetooth.busy} onClick={bluetooth.starten}><Bluetooth size={18} aria-hidden="true" />{bluetooth.busy ? 'Starte …' : 'Für den PC sichtbar machen'}</button>}
+              ? <button className="btn btn--secondary" data-tour="bt-sichtbar" style={{ width: '100%' }} onClick={bluetooth.stoppen}><BluetoothOff size={18} aria-hidden="true" />Nicht mehr sichtbar</button>
+              : <button className="btn btn--primary" data-tour="bt-sichtbar" style={{ width: '100%' }} disabled={bluetooth.busy} onClick={bluetooth.starten}><Bluetooth size={18} aria-hidden="true" />{bluetooth.busy ? 'Starte …' : 'Für den PC sichtbar machen'}</button>}
           </>
         ) : (
           <p className="meas-hint">Nur in der Android-App verfügbar.</p>
@@ -1957,12 +1997,12 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken, projekt
       <div className="section">
         <div className="section-title">Sitzung</div>
         <label className="field-label">Server-Adresse</label>
-        <input className="field-input" value={server} onChange={e => setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+        <input data-tour="sitzung-server" className="field-input" value={server} onChange={e => setServer(e.target.value)} placeholder="192.168.1.10 oder http://server:3001" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
         <label className="field-label" style={{ marginTop: 12 }}>Server-Token (optional)</label>
         <input className="field-input" type="password" value={token} onChange={e => setToken(e.target.value)} />
         <label className="field-label" style={{ marginTop: 12 }}>Dein Name (sehen die anderen)</label>
-        <input ref={nameRef} className="field-input" value={name} onChange={e => { setName(e.target.value); setFehler(''); }} placeholder="z. B. Anna" />
-        <button className="btn btn--secondary" style={{ width: '100%', marginTop: 12 }} disabled={busy || !basis || blockiert} onClick={laden}>
+        <input ref={nameRef} data-tour="sitzung-name" className="field-input" value={name} onChange={e => { setName(e.target.value); setFehler(''); }} placeholder="z. B. Anna" />
+        <button className="btn btn--secondary" data-tour="sitzung-laden" style={{ width: '100%', marginTop: 12 }} disabled={busy || !basis || blockiert} onClick={laden}>
           <RefreshCw size={16} aria-hidden="true" />{busy ? 'Lade …' : 'Sitzungen laden'}
         </button>
         {blockiert && <div className="sync-msg sync-msg--err" style={{ marginTop: 12 }}><CircleAlert size={16} aria-hidden="true" />Im Browser lässt sich ein Server mit http:// nicht erreichen. Bitte die Android-App nutzen oder den Server über https erreichbar machen.</div>}
@@ -2002,7 +2042,7 @@ function SitzungBeitreten({ sitzung, server, setServer, token, setToken, projekt
         </div>
       )}
 
-      <div className="section">
+      <div className="section" data-tour="sitzung-starten">
         <div className="section-title">Neue Sitzung mit dem Plan vom Handy</div>
         <label className="field-label">Name der Sitzung</label>
         <input className="field-input" value={neu.name} placeholder="z. B. Stadtfest Aufbau" onChange={e => setNeu({ ...neu, name: e.target.value })} />
