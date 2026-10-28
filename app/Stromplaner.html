@@ -29675,7 +29675,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     return r.width > 0 && r.height > 0;
   };
   var findeZiel = (sel) => [...document.querySelectorAll(sel)].find(sichtbar) || null;
-  var warteAufZiel = (sel, ms = 1500) => new Promise((ok) => {
+  var warteAufZiel = (sel, ms = 700) => new Promise((ok) => {
     const start = Date.now();
     const schau = () => {
       const el = findeZiel(sel);
@@ -29690,7 +29690,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     return { top, left, width: Math.min(r.right, vw - 6) - left, height: Math.min(r.bottom, vh - 6) - top };
   };
   var gleich = (a, b) => a && b && ["top", "left", "width", "height"].every((k) => Math.abs(a[k] - b[k]) < 1);
-  function Tour({ schritte, aktion, onEnde, start = 0 }) {
+  function Tour({ schritte, aktion, onEnde, start = 0, hinweis = null }) {
     const [index, setIndex] = (0, import_react5.useState)(Math.min(Math.max(start, 0), schritte.length - 1));
     const [rahmen, setRahmen] = (0, import_react5.useState)(null);
     const [bereit, setBereit] = (0, import_react5.useState)(false);
@@ -29802,7 +29802,25 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       borderRadius: "50%",
       border: `3px solid ${F.akzent}`,
       animation: "tourTipp 1.6s ease-out infinite"
-    } })) : /* @__PURE__ */ import_react5.default.createElement("div", { style: { position: "fixed", inset: 0, background: SCHLEIER } }), bereit && /* @__PURE__ */ import_react5.default.createElement("div", { ref: karteRef, key: index, role: "dialog", "aria-modal": "true", "aria-labelledby": "tour-titel", style: {
+    } })) : /* @__PURE__ */ import_react5.default.createElement("div", { style: { position: "fixed", inset: 0, background: SCHLEIER } }), hinweis && /* @__PURE__ */ import_react5.default.createElement("div", { style: {
+      position: "fixed",
+      top: 10,
+      left: "50%",
+      transform: "translateX(-50%)",
+      maxWidth: "calc(100vw - 24px)",
+      background: F.akzent,
+      color: "#1c2127",
+      borderRadius: 999,
+      padding: "5px 14px",
+      fontSize: 12.5,
+      fontWeight: 700,
+      fontFamily: "inherit",
+      boxShadow: "0 4px 14px rgba(0,0,0,.4)",
+      whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      pointerEvents: "none"
+    } }, hinweis), bereit && /* @__PURE__ */ import_react5.default.createElement("div", { ref: karteRef, key: index, role: "dialog", "aria-modal": "true", "aria-labelledby": "tour-titel", style: {
       position: "fixed",
       top,
       left,
@@ -29847,6 +29865,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     },
     {
       id: "konfiguration",
+      beispiel: true,
+      // zeigt bei leerem Plan einen Beispielplan
       titel: "Planung anlegen",
       beschreibung: "Produktion, Einspeisepunkte und Verteiler",
       schritte: [
@@ -29857,6 +29877,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     },
     {
       id: "steckplan",
+      beispiel: true,
+      // zeigt bei leerem Plan einen Beispielplan
       titel: "Verbraucher stecken",
       beschreibung: "Steckplan und Phasenlast",
       schritte: [
@@ -29878,6 +29900,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     },
     {
       id: "uebersicht",
+      beispiel: true,
+      // zeigt bei leerem Plan einen Beispielplan
       titel: "\xDCbersicht und Schaltbild",
       beschreibung: "Zusammenfassung und Blockschaltbild",
       schritte: [
@@ -29888,6 +29912,8 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     },
     {
       id: "pruefung",
+      beispiel: true,
+      // zeigt bei leerem Plan einen Beispielplan
       titel: "Errichtungspr\xFCfung",
       beschreibung: "Messwerte, Unterschrift und Protokoll",
       schritte: [
@@ -29935,6 +29961,100 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     rccb: { tour: "bibliothek", schritt: "rccb" },
     errichtungspruefung: { tour: "pruefung" }
   };
+
+  // app/shared/beispielplan.js
+  var heute = () => (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  var abgang = (id, label, connector, amp, protection, phase, extra = {}) => ({ id, label, connector, amp, protection, breaker: "C", phase, rcdId: null, ...protection === "RCBO" ? { rcdMa: 30 } : {}, ...extra });
+  function beispielplan() {
+    const boxTypes = [
+      { id: "bsp-hv", name: "Verteiler 63 A", feedConnector: "CEE63", feedAmp: 63, rcds: [], outlets: [
+        abgang("o1", "32A-1", "CEE32", 32, "LS", "L1L2L3"),
+        abgang("o2", "32A-2", "CEE32", 32, "LS", "L1L2L3"),
+        abgang("o3", "16A-1", "CEE16", 16, "LS", "L1L2L3"),
+        abgang("o4", "Schuko 1", "SCHUKO", 16, "RCBO", "L1"),
+        abgang("o5", "Schuko 2", "SCHUKO", 16, "RCBO", "L2")
+      ] },
+      { id: "bsp-uv", name: "Verteiler 32 A", feedConnector: "CEE32", feedAmp: 32, rcds: [], outlets: [
+        abgang("o1", "16A-1", "CEE16", 16, "LS", "L1L2L3"),
+        abgang("o2", "Schuko 1", "SCHUKO", 16, "RCBO", "L1"),
+        abgang("o3", "Schuko 2", "SCHUKO", 16, "RCBO", "L2"),
+        abgang("o4", "Schuko 3", "SCHUKO", 16, "RCBO", "L3")
+      ] },
+      { id: "bsp-mc", name: "Multicore-Verteiler", feedConnector: "CEE32", feedAmp: 32, rcds: [], outlets: [
+        abgang("o1", "Multicore 1", "MC", 16, "RCBO", "L1", { mcSlots: 6 }),
+        abgang("o2", "Schuko 1", "SCHUKO", 16, "RCBO", "L2")
+      ] }
+    ];
+    const loads = [
+      { id: "bsp-mh", name: "Moving Head", watt: 600, threePhase: false },
+      { id: "bsp-led", name: "LED-Bar", watt: 150, threePhase: false },
+      { id: "bsp-pult", name: "Mischpult", watt: 300, threePhase: false },
+      { id: "bsp-amp", name: "Endstufe", watt: 1200, threePhase: false },
+      { id: "bsp-kuehl", name: "K\xFChlschrank", watt: 400, threePhase: false },
+      { id: "bsp-dimmer", name: "Dimmerrack", watt: 3600, threePhase: true }
+    ];
+    const instances = [
+      { id: "bsp-i1", typeId: "bsp-hv", name: "HV B\xFChne", parentId: null, parentOutletId: null, mainConnectionId: "bsp-e1" },
+      { id: "bsp-i2", typeId: "bsp-mc", name: "UV Licht", parentId: "bsp-i1", parentOutletId: "o1", mainConnectionId: null },
+      { id: "bsp-i3", typeId: "bsp-uv", name: "UV Ton", parentId: "bsp-i1", parentOutletId: "o2", mainConnectionId: null },
+      { id: "bsp-i4", typeId: "bsp-uv", name: "UV Bar", parentId: "bsp-i1", parentOutletId: "o3", mainConnectionId: null }
+    ];
+    let n = 0;
+    const steck = (instanceId, outletId, loadId, mcSlot = null) => ({ id: `bsp-p${++n}`, instanceId, outletId, mcSlot, loadId });
+    const placements = [
+      ...[1, 2, 3, 4, 5, 6].map((s) => steck("bsp-i2", "o1", s % 2 ? "bsp-mh" : "bsp-led", s)),
+      steck("bsp-i2", "o2", "bsp-led"),
+      steck("bsp-i3", "o2", "bsp-pult"),
+      steck("bsp-i3", "o3", "bsp-amp"),
+      steck("bsp-i3", "o4", "bsp-amp"),
+      steck("bsp-i4", "o2", "bsp-kuehl"),
+      steck("bsp-i4", "o3", "bsp-kuehl"),
+      steck("bsp-i1", "o4", "bsp-pult")
+    ];
+    const inspResults = {
+      "bsp-i1": {
+        voltL1N: "231",
+        voltL2N: "229",
+        voltL3N: "232",
+        voltL1L2: "399",
+        voltL2L3: "401",
+        voltL1L3: "400",
+        voltL1PE: "230",
+        voltL2PE: "229",
+        voltL3PE: "231",
+        voltNPE: "0.2",
+        phaseRot: "rechts",
+        sicht: [true, true, true, true, true, null],
+        bemerkung: "",
+        bemerkungSchwere: "bad",
+        outlets: { o4: { rcdIan: "21", rcdT1: "24", zs: "0.62", ik: "370" }, o5: { rcdIan: "19", rcdT1: "310", zs: "0.66", ik: "350" } }
+      },
+      "bsp-i4": {
+        voltL1N: "230",
+        voltL2N: "231",
+        voltL3N: "229",
+        sicht: [true, true, null, null, null, null],
+        bemerkung: "Kennzeichnung am Geh\xE4use fehlt",
+        bemerkungSchwere: "warn",
+        outlets: {}
+      }
+    };
+    return {
+      _format: "stromplaner",
+      _version: 4,
+      meta: { production: "Beispiel: Stadtfest Musterstadt", creator: "Stromplaner", version: "1", date: heute() },
+      mainConns: [{ id: "bsp-e1", name: "Hausanschluss B\xFChne", amp: 63 }],
+      boxTypes,
+      loads,
+      instances,
+      placements,
+      inspMeta: { inspector: "Max Muster", date: heute(), time: "", equipment: "Installationstester", address: "Marktplatz 1", location: "B\xFChne", netType: "TN-S" },
+      inspResults,
+      cableCalcs: [],
+      voltCalcs: [],
+      schaltbildLayout: { positions: {}, consumerPositions: {}, annotations: [] }
+    };
+  }
 
   // app/Stromplaner.jsx
   var PHASES2 = ["L1", "L2", "L3"];
@@ -30433,6 +30553,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     const [tour, setTour] = (0, import_react6.useState)(null);
     const [willkommen, setWillkommen] = (0, import_react6.useState)(false);
     const tourOeffnete = (0, import_react6.useRef)({ teilen: false, sitzung: false });
+    const beispielSicherung = (0, import_react6.useRef)(null);
     const [syncServer, setSyncServer] = (0, import_react6.useState)(() => localStorage.getItem("sp_sync_server") || "");
     const [syncToken, setSyncToken] = (0, import_react6.useState)(() => localStorage.getItem("sp_sync_token") || "");
     const [showSharePanel, setShowSharePanel] = (0, import_react6.useState)(false);
@@ -30508,7 +30629,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     }, []);
     const libSaveTimer = (0, import_react6.useRef)(null);
     (0, import_react6.useEffect)(() => {
-      if (!loaded || !window.electronAPI?.saveLibrary) return;
+      if (!loaded || !window.electronAPI?.saveLibrary || beispielSicherung.current) return;
       clearTimeout(libSaveTimer.current);
       libSaveTimer.current = setTimeout(() => {
         const merge = (basis, aktuell, weg) => {
@@ -30542,7 +30663,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     const saveTimer = (0, import_react6.useRef)(null);
     const schematicSvgRef = (0, import_react6.useRef)(null);
     (0, import_react6.useEffect)(() => {
-      if (!loaded) return;
+      if (!loaded || beispielSicherung.current) return;
       clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         try {
@@ -31290,12 +31411,31 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
       setTabDir(keys2.indexOf(k) >= keys2.indexOf(tab2) ? 1 : -1);
       setTab(k);
     };
+    const planSetzen = (d) => {
+      setMeta(d.meta);
+      setMainConns(d.mainConns);
+      setBoxTypes(alphaSort2(d.boxTypes.map(migrateBoxType), "name"));
+      setLoads(alphaSort2(d.loads, "name"));
+      setInstances(d.instances.map(migrateInstance));
+      setPlacements(d.placements);
+      setInspMeta(d.inspMeta);
+      setInspResults(d.inspResults);
+      setCableCalcs(d.cableCalcs);
+      setVoltCalcs(d.voltCalcs);
+      setSchaltbildLayout(d.schaltbildLayout);
+    };
     const tourStarten = (id, schritt) => {
       const t = TOUREN_PC.find((x) => x.id === id);
       if (!t) return;
       const start = schritt ? Math.max(0, t.schritte.findIndex((s) => s.id === schritt)) : 0;
       setShowRecents(false);
       setShowSharePanel(false);
+      const leer = !instances.some((i) => i.parentId || i.mainConnectionId);
+      if (t.beispiel && leer && !sitzung.aktiv && !beispielSicherung.current) {
+        beispielSicherung.current = { daten: planDaten(), activePlan };
+        planSetzen(beispielplan());
+        setActivePlan(null);
+      }
       setTour({ id, start });
     };
     const hilfeOeffnen = (key) => {
@@ -31322,6 +31462,12 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
       if (tourOeffnete.current.teilen) setShowSharePanel(false);
       if (tourOeffnete.current.sitzung) setShowSitzung(false);
       tourOeffnete.current = { teilen: false, sitzung: false };
+      const s = beispielSicherung.current;
+      if (s) {
+        beispielSicherung.current = null;
+        planSetzen(s.daten);
+        setActivePlan(s.activePlan);
+      }
       setTour(null);
     };
     const einfuehrung = willkommen || !!tour;
@@ -31411,7 +31557,7 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
         version: true ? "1.3.0" : "dev",
         onClose: () => setShowSitzung(false)
       }
-    ), /* @__PURE__ */ import_react6.default.createElement(ToastHost, { toasts }), /* @__PURE__ */ import_react6.default.createElement(DialogHost, null), btGeraete !== null && window.electronAPI?.btWaehlen && /* @__PURE__ */ import_react6.default.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 2e3, display: "flex", alignItems: "center", justifyContent: "center" } }, /* @__PURE__ */ import_react6.default.createElement("div", { role: "dialog", "aria-modal": "true", "aria-label": "Handy w\xE4hlen", style: { background: "#1e2530", border: "1px solid #2e3a4a", borderRadius: 10, padding: "20px 24px", width: 360, color: "#e8eaf0" } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontWeight: 600, fontSize: 14, marginBottom: 6 } }, /* @__PURE__ */ import_react6.default.createElement(Bluetooth, { size: 14, "aria-hidden": "true", style: { verticalAlign: "-2px", marginRight: 6 } }), "Handy w\xE4hlen"), !btGeraete.length && /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 12, color: "#9aa4af", fontStyle: "italic", marginBottom: 12 } }, "Suche \u2026"), /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 } }, btGeraete.map((g) => /* @__PURE__ */ import_react6.default.createElement("button", { key: g.id, onClick: () => btGeraetWaehlen(g.id), style: { ...S.ghostBtn, justifyContent: "flex-start", fontSize: 12 } }, /* @__PURE__ */ import_react6.default.createElement(Bluetooth, { size: 13, "aria-hidden": "true" }), g.name || "Handy ohne Namen"))), /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", justifyContent: "flex-end" } }, /* @__PURE__ */ import_react6.default.createElement("button", { onClick: () => btGeraetWaehlen(""), style: { padding: "7px 18px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "#2a3547", color: "#aab" } }, "Abbrechen")))), tour && /* @__PURE__ */ import_react6.default.createElement(Tour, { key: tour.id + tour.start, schritte: TOUREN_PC.find((x) => x.id === tour.id).schritte, start: tour.start, aktion: tourAktion, onEnde: tourEnde }), willkommen && /* @__PURE__ */ import_react6.default.createElement(Willkommen, { onJa: () => {
+    ), /* @__PURE__ */ import_react6.default.createElement(ToastHost, { toasts }), /* @__PURE__ */ import_react6.default.createElement(DialogHost, null), btGeraete !== null && window.electronAPI?.btWaehlen && /* @__PURE__ */ import_react6.default.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 2e3, display: "flex", alignItems: "center", justifyContent: "center" } }, /* @__PURE__ */ import_react6.default.createElement("div", { role: "dialog", "aria-modal": "true", "aria-label": "Handy w\xE4hlen", style: { background: "#1e2530", border: "1px solid #2e3a4a", borderRadius: 10, padding: "20px 24px", width: 360, color: "#e8eaf0" } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontWeight: 600, fontSize: 14, marginBottom: 6 } }, /* @__PURE__ */ import_react6.default.createElement(Bluetooth, { size: 14, "aria-hidden": "true", style: { verticalAlign: "-2px", marginRight: 6 } }), "Handy w\xE4hlen"), !btGeraete.length && /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 12, color: "#9aa4af", fontStyle: "italic", marginBottom: 12 } }, "Suche \u2026"), /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 } }, btGeraete.map((g) => /* @__PURE__ */ import_react6.default.createElement("button", { key: g.id, onClick: () => btGeraetWaehlen(g.id), style: { ...S.ghostBtn, justifyContent: "flex-start", fontSize: 12 } }, /* @__PURE__ */ import_react6.default.createElement(Bluetooth, { size: 13, "aria-hidden": "true" }), g.name || "Handy ohne Namen"))), /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", justifyContent: "flex-end" } }, /* @__PURE__ */ import_react6.default.createElement("button", { onClick: () => btGeraetWaehlen(""), style: { padding: "7px 18px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "#2a3547", color: "#aab" } }, "Abbrechen")))), tour && /* @__PURE__ */ import_react6.default.createElement(Tour, { key: tour.id + tour.start, schritte: TOUREN_PC.find((x) => x.id === tour.id).schritte, start: tour.start, aktion: tourAktion, onEnde: tourEnde, hinweis: beispielSicherung.current ? "Beispielplan \u2013 dein Plan ist nach dem Rundgang wieder da" : null }), willkommen && /* @__PURE__ */ import_react6.default.createElement(Willkommen, { onJa: () => {
       tutorialMerken();
       setWillkommen(false);
     }, onNein: () => {

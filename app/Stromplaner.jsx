@@ -6,6 +6,7 @@ import { pruefprotokollHtml } from "./shared/pruefprotokoll.js";
 import { btVerfuegbar, btVerbinden, btInfo, btHolen, btSenden } from "./bluetooth.js";
 import { Tour, Willkommen, tutorialGefragt, tutorialMerken } from "./shared/tour.jsx";
 import { TOUREN_PC, HILFE_ZU_TOUR } from "./touren-pc.js";
+import { beispielplan } from "./shared/beispielplan.js";
 
 const PHASES = ["L1","L2","L3"];
 const VOLT   = 230;
@@ -526,6 +527,7 @@ export default function App() {
   const [tour,         setTour]         = useState(null);  // { id, start } des laufenden Rundgangs
   const [willkommen,   setWillkommen]   = useState(false); // erste Frage beim Start ohne Plan
   const tourOeffnete = useRef({ teilen:false, sitzung:false }); // was der Rundgang selbst geöffnet hat
+  const beispielSicherung = useRef(null); // eigener Stand, solange ein Rundgang den Beispielplan zeigt
 
   /* ── Sync ──────────────────────────────────────────────────────────────── */
   const [syncServer,      setSyncServer]      = useState(()=>localStorage.getItem("sp_sync_server")||"");
@@ -607,7 +609,7 @@ export default function App() {
   // darf die Bibliothek nicht verkleinern – entfernt wird nur, was in den Bibliotheks-Tabs gelöscht wurde.
   const libSaveTimer = useRef(null);
   useEffect(()=>{
-    if(!loaded || !window.electronAPI?.saveLibrary) return;
+    if(!loaded || !window.electronAPI?.saveLibrary || beispielSicherung.current) return;  // Beispiel-Typen nie in die Bibliothek
     clearTimeout(libSaveTimer.current);
     libSaveTimer.current = setTimeout(()=>{
       const merge=(basis,aktuell,weg)=>{ const m=new Map((basis||[]).filter(x=>!weg.has(x.id)).map(x=>[x.id,x])); aktuell.forEach(x=>m.set(x.id,x)); return alphaSort([...m.values()],"name"); };
@@ -637,7 +639,7 @@ export default function App() {
   const saveTimer = useRef(null);
   const schematicSvgRef = useRef(null);
   useEffect(()=>{
-    if(!loaded) return;
+    if(!loaded || beispielSicherung.current) return;  // Beispielplan des Rundgangs nie speichern
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(()=>{
       try {
@@ -1239,10 +1241,25 @@ export default function App() {
     setTab(k);
   };
   /* ── Rundgänge (Anleitung, „?“ an Abschnitten, erster Start) ───────────── */
+  // Plan-Teile direkt setzen (ohne Rückfrage zur Bibliothek) – für Beispielplan und Wiederherstellen
+  const planSetzen=(d)=>{
+    setMeta(d.meta); setMainConns(d.mainConns);
+    setBoxTypes(alphaSort(d.boxTypes.map(migrateBoxType),"name")); setLoads(alphaSort(d.loads,"name"));
+    setInstances(d.instances.map(migrateInstance)); setPlacements(d.placements);
+    setInspMeta(d.inspMeta); setInspResults(d.inspResults);
+    setCableCalcs(d.cableCalcs); setVoltCalcs(d.voltCalcs); setSchaltbildLayout(d.schaltbildLayout);
+  };
   const tourStarten=(id,schritt)=>{
     const t=TOUREN_PC.find(x=>x.id===id); if(!t) return;
     const start=schritt?Math.max(0,t.schritte.findIndex(s=>s.id===schritt)):0;
     setShowRecents(false); setShowSharePanel(false);
+    // Ohne angeschlossene Verteiler bliebe der Rundgang leer: Beispielplan zeigen – nie in einer Sitzung (ginge an alle)
+    const leer=!instances.some(i=>i.parentId||i.mainConnectionId);
+    if(t.beispiel&&leer&&!sitzung.aktiv&&!beispielSicherung.current){
+      beispielSicherung.current={daten:planDaten(),activePlan};
+      planSetzen(beispielplan());
+      setActivePlan(null);
+    }
     setTour({id,start});
   };
   const hilfeOeffnen=(key)=>{ const z=HILFE_ZU_TOUR[key]; if(z) tourStarten(z.tour,z.schritt); };
@@ -1255,6 +1272,8 @@ export default function App() {
     if(tourOeffnete.current.teilen) setShowSharePanel(false);
     if(tourOeffnete.current.sitzung) setShowSitzung(false);
     tourOeffnete.current={teilen:false,sitzung:false};
+    const s=beispielSicherung.current;
+    if(s){ beispielSicherung.current=null; planSetzen(s.daten); setActivePlan(s.activePlan); }
     setTour(null);
   };
   // Changelog und Spendenhinweis warten, bis Willkommensfrage und Rundgang vorbei sind
@@ -1406,7 +1425,7 @@ export default function App() {
           <div style={{display:"flex",justifyContent:"flex-end"}}><button onClick={()=>btGeraetWaehlen("")} style={{padding:"7px 18px",borderRadius:5,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,background:"#2a3547",color:"#aab"}}>Abbrechen</button></div>
         </div>
       </div>}
-      {tour&&<Tour key={tour.id+tour.start} schritte={TOUREN_PC.find(x=>x.id===tour.id).schritte} start={tour.start} aktion={tourAktion} onEnde={tourEnde}/>}
+      {tour&&<Tour key={tour.id+tour.start} schritte={TOUREN_PC.find(x=>x.id===tour.id).schritte} start={tour.start} aktion={tourAktion} onEnde={tourEnde} hinweis={beispielSicherung.current?"Beispielplan – dein Plan ist nach dem Rundgang wieder da":null}/>}
       {willkommen&&<Willkommen onJa={()=>{ tutorialMerken(); setWillkommen(false); }} onNein={()=>{ tutorialMerken(); setWillkommen(false); tourStarten("ueberblick"); }}/>}
     </div>
     </HelpContext.Provider>

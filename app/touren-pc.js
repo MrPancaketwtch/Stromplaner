@@ -24,6 +24,7 @@ export const TOUREN_PC = [
   },
   {
     id: "konfiguration",
+    beispiel: true, // zeigt bei leerem Plan einen Beispielplan
     titel: "Planung anlegen",
     beschreibung: "Produktion, Einspeisepunkte und Verteiler",
     schritte: [
@@ -34,6 +35,7 @@ export const TOUREN_PC = [
   },
   {
     id: "steckplan",
+    beispiel: true, // zeigt bei leerem Plan einen Beispielplan
     titel: "Verbraucher stecken",
     beschreibung: "Steckplan und Phasenlast",
     schritte: [
@@ -55,6 +57,7 @@ export const TOUREN_PC = [
   },
   {
     id: "uebersicht",
+    beispiel: true, // zeigt bei leerem Plan einen Beispielplan
     titel: "Übersicht und Schaltbild",
     beschreibung: "Zusammenfassung und Blockschaltbild",
     schritte: [
@@ -65,6 +68,7 @@ export const TOUREN_PC = [
   },
   {
     id: "pruefung",
+    beispiel: true, // zeigt bei leerem Plan einen Beispielplan
     titel: "Errichtungsprüfung",
     beschreibung: "Messwerte, Unterschrift und Protokoll",
     schritte: [

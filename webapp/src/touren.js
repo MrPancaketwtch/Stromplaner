@@ -30,6 +30,7 @@ export const TOUREN = [
   },
   {
     id: 'stecken',
+    beispiel: true, // zeigt bei leerem Plan einen Beispielplan
     titel: 'Verteiler stecken',
     beschreibung: 'Verteiler, Verbraucher und Unterverteiler',
     schritte: [
@@ -40,6 +41,7 @@ export const TOUREN = [
   },
   {
     id: 'pruefen',
+    beispiel: true, // zeigt bei leerem Plan einen Beispielplan
     titel: 'Prüfen und Protokoll',
     beschreibung: 'Messwerte, Unterschrift und PDF',
     schritte: [

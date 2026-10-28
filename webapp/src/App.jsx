@@ -7,6 +7,7 @@ import { packen, entpacken, zuBase64, ausBase64 } from '@shared/bt-protokoll.js'
 import { Capacitor } from '@capacitor/core';
 import { Tour, Willkommen, tutorialGefragt, tutorialMerken } from '@shared/tour.jsx';
 import { TOUREN } from './touren.js';
+import { beispielplan } from '@shared/beispielplan.js';
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 
@@ -167,6 +168,7 @@ export default function App() {
   // Erster Start ohne Plan: erst fragen, ob ein Rundgang gewünscht ist
   const [willkommen, setWillkommen] = useState(() => !tutorialGefragt() && !start.plan.instances.length);
   const [tour,    setTour]    = useState(null); // null | { id, start }
+  const [sicherung, setSicherung] = useState(null); // eigener Plan, solange ein Rundgang den Beispielplan zeigt
   const [server,  setServer]  = useState(() => localStorage.getItem(SERVER_KEY) || '');
   const [token,   setToken]   = useState(() => localStorage.getItem(TOKEN_KEY)  || '');
   const [toasts,  setToasts]  = useState([]);
@@ -177,6 +179,7 @@ export default function App() {
 
   /* autosave: aktiven Plan speichern und seinen Eintrag in der Planliste aktualisieren */
   useEffect(() => {
+    if (sicherung) return;   // Beispielplan des Rundgangs nie speichern
     const json = JSON.stringify(plan);
     try {
       localStorage.setItem(AKTIV_KEY, aktivId);
@@ -228,7 +231,7 @@ export default function App() {
 
   /* Bibliothek: alles übernehmen, was in einem Plan auftaucht (geladen, beigetreten oder hier angelegt) */
   useEffect(() => {
-    if (!plan) return;
+    if (!plan || sicherung) return;   // Beispiel-Typen und -Verbraucher nicht in die Bibliothek
     setLib(l => ({ boxTypes: mergeById(l.boxTypes, plan.boxTypes), loads: mergeById(l.loads, plan.loads) }));
   }, [plan?.boxTypes, plan?.loads]);
   useEffect(() => { try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); } catch { /* Speicher voll – Bibliothek ist nur ein Komfort */ } }, [lib]);
@@ -296,7 +299,22 @@ export default function App() {
     if (!planliste.neu(neu)) return null;
     return `Plan geladen: ${name} – als neuer Plan, „${plan.meta.production || 'bisheriger Plan'}“ bleibt in der Planliste (Tab Projekt).`;
   };
-  const bluetooth = useBluetooth({ plan, notify, planUebernehmen });
+  const bluetooth = useBluetooth({ plan: sicherung || plan, notify, planUebernehmen });
+
+  // Rundgänge: bei leerem Plan einen Beispielplan zeigen und danach den eigenen Stand zurückholen.
+  // Nie in einer Sitzung – der Beispielplan ginge sonst an alle Teilnehmer.
+  const tourStarten = (id) => {
+    const t = TOUREN.find(x => x.id === id);
+    if (t?.beispiel && !plan.instances.length && !sitzung.aktiv && !sicherung) {
+      setSicherung(plan);
+      setPlan(migratePlan(beispielplan()));
+    }
+    setTour({ id, start: 0 });
+  };
+  const tourEnde = () => {
+    if (sicherung) { setPlan(sicherung); setSicherung(null); }
+    setTour(null);
+  };
 
   if (!plan) return <div className="loading">Laden…</div>;
 
@@ -336,7 +354,7 @@ export default function App() {
           <SitzungTab sitzung={sitzung} server={server} setServer={setServer} token={token} setToken={setToken} projektName={plan.meta.production} planliste={planliste} />
         )}
         {tab === 'hilfe' && (
-          <HilfeTab onStart={(id) => setTour({ id, start: 0 })} />
+          <HilfeTab onStart={tourStarten} />
         )}
       </main>
 
@@ -369,12 +387,13 @@ export default function App() {
 
       {tour && (
         <Tour key={tour.id + tour.start} schritte={TOUREN.find(x => x.id === tour.id).schritte} start={tour.start}
-          aktion={{ tab: setTab }} onEnde={() => setTour(null)} />
+          aktion={{ tab: setTab }} onEnde={tourEnde}
+          hinweis={sicherung ? 'Beispielplan – deiner ist danach wieder da' : null} />
       )}
       {willkommen && (
         <Willkommen
           onJa={() => { tutorialMerken(); setWillkommen(false); }}
-          onNein={() => { tutorialMerken(); setWillkommen(false); setTour({ id: 'ueberblick', start: 0 }); }} />
+          onNein={() => { tutorialMerken(); setWillkommen(false); tourStarten('ueberblick'); }} />
       )}
     </div>
   );

@@ -23,7 +23,7 @@ const findeZiel = (sel) => [...document.querySelectorAll(sel)].find(sichtbar) ||
 
 // Nach einem Tab-Wechsel erscheint das Ziel erst mit dem nächsten Rendern.
 // Timer statt requestAnimationFrame: der ruht, solange das Fenster verdeckt ist.
-const warteAufZiel = (sel, ms = 1500) => new Promise((ok) => {
+const warteAufZiel = (sel, ms = 700) => new Promise((ok) => {
   const start = Date.now();
   const schau = () => { const el = findeZiel(sel); if (el || Date.now() - start > ms) ok(el); else setTimeout(schau, 40); };
   schau();
@@ -37,7 +37,8 @@ const begrenzt = (r) => {
 };
 const gleich = (a, b) => a && b && ["top", "left", "width", "height"].every(k => Math.abs(a[k] - b[k]) < 1);
 
-export function Tour({ schritte, aktion, onEnde, start = 0 }) {
+// hinweis: kurzer Text oben am Rand, z. B. wenn gerade ein Beispielplan gezeigt wird
+export function Tour({ schritte, aktion, onEnde, start = 0, hinweis = null }) {
   const [index, setIndex] = useState(Math.min(Math.max(start, 0), schritte.length - 1));
   const [rahmen, setRahmen] = useState(null);   // Rahmen des Ziels, null = Karte mittig
   const [bereit, setBereit] = useState(false);
@@ -138,6 +139,14 @@ export function Tour({ schritte, aktion, onEnde, start = 0 }) {
         </div>
       ) : (
         <div style={{ position: "fixed", inset: 0, background: SCHLEIER }} />
+      )}
+      {hinweis && (
+        <div style={{
+          position: "fixed", top: 10, left: "50%", transform: "translateX(-50%)", maxWidth: "calc(100vw - 24px)",
+          background: F.akzent, color: "#1c2127", borderRadius: 999, padding: "5px 14px",
+          fontSize: 12.5, fontWeight: 700, fontFamily: "inherit", boxShadow: "0 4px 14px rgba(0,0,0,.4)",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", pointerEvents: "none",
+        }}>{hinweis}</div>
       )}
       {bereit && (
         <div ref={karteRef} key={index} role="dialog" aria-modal="true" aria-labelledby="tour-titel" style={{
