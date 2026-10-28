@@ -516,7 +516,6 @@ export default function App() {
   const [cableCalcs,   setCableCalcs]   = useState([]);
   const [voltCalcs,    setVoltCalcs]    = useState([]);
   const [erweiterSubTab, setErweiterSubTab] = useState("dim");
-  const [erweitertOpen,  setErweitertOpen]  = useState(false);
   const [loaded,       setLoaded]       = useState(false); // prevent save before first load
   const libBasis     = useRef(null);                                      // zuletzt gelesene/gespeicherte AppData-Bibliothek
   const libGeloescht = useRef({ boxTypes:new Set(), loads:new Set() });   // in den Bibliotheks-Tabs gelöschte Ids
@@ -1254,10 +1253,12 @@ export default function App() {
   const TABS=[
     ["config","1 · Konfiguration"],["plan","2 · Steckplan"],
     ["overview","3 · Übersicht"],["schematic","Schaltbild"],["inspection","Errichtungsprüfung"],
-    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["help",<span style={{display:"inline-flex",alignItems:"center",gap:5}}><Info size={13} aria-hidden="true"/>Anleitung</span>],["erweitert","Erweitert"],
+    ["boxtypes","Verteiler-Typen"],["loads","Verbraucher"],["help",<span style={{display:"inline-flex",alignItems:"center",gap:5}}><Info size={13} aria-hidden="true"/>Anleitung</span>],
   ];
+  // Rechner ganz rechts in Orange (beide im Panel „erweitert“)
+  const RECHNER=[["dim","Leitungsdimensionierung"],["volt","Spannungsfall"]];
   const goTab=(k)=>{
-    const keys=TABS.map(([id])=>id);
+    const keys=[...TABS.map(([id])=>id),"erweitert"];
     setTabDir(keys.indexOf(k)>=keys.indexOf(tab)?1:-1);
     setTab(k);
   };
@@ -1276,8 +1277,8 @@ export default function App() {
         </label>
         {corpLogo&&<button style={{...S.ghostBtn,padding:"3px 6px",fontSize:9}} onClick={removeLogo} title="Logo entfernen" aria-label="Logo entfernen"><X size={11}/></button>}
         <div style={S.headerMeta}>{meta.production} · v{meta.version} · {meta.date}</div>
-        <span style={{fontSize:10,color:"#555",marginLeft:4,display:"inline-flex",alignItems:"center",gap:3}} title="Automatisch gespeichert"><Save size={11} aria-hidden="true"/>auto</span>
         <input ref={fileInputRef} type="file" accept=".json" onChange={loadJSON} style={{display:"none"}}/>
+        <button style={S.ghostBtn} onClick={resetAll}><FilePlus2 size={14} aria-hidden="true"/>Neu</button>
         <button style={S.ghostBtn} onClick={openPlan}><FolderOpen size={14} aria-hidden="true"/>Laden</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
           <button style={S.ghostBtn} onClick={()=>setShowRecents(v=>!v)}><History size={14} aria-hidden="true"/>Zuletzt geöffnet</button>
@@ -1292,13 +1293,7 @@ export default function App() {
             }
           </div>}
         </div>}
-        {(()=>{
-          const z=sitzung.zustand;
-          const farbe=!z?null:z.veraltet?"#e67e22":z.status==="online"?"#2ecc71":"#f5a623";
-          return <button style={{...S.ghostBtn,padding:"4px 7px",...(z?{borderColor:farbe}:{})}} title={z?`Sitzung „${z.info?.name||""}“ – ${z.veraltet?"beendet":z.status==="online"?"verbunden":"verbindet …"}`:"Mit anderen gleichzeitig am selben Plan arbeiten"} onClick={()=>setShowSitzung(true)}>
-            {z?<><Users size={14} color={farbe} aria-hidden="true"/>{z.veraltet?"Sitzung beendet":`${z.users?.length||0} online`}</>:<><Users size={14} aria-hidden="true"/>Sitzung</>}
-          </button>;
-        })()}
+        <button style={S.ghostBtn} onClick={saveJSON}><Save size={14} aria-hidden="true"/>Speichern</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
           <button style={S.ghostBtn} title="Plan mit dem Handy austauschen – per Bluetooth oder im WLAN" onClick={()=>{setShowSharePanel(v=>!v);setShareStatus({msg:"",err:false});}}><Share2 size={14} aria-hidden="true"/>Teilen</button>
           {showSharePanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}}>
@@ -1343,8 +1338,13 @@ export default function App() {
             <button onClick={()=>setShowSharePanel(false)} style={{marginTop:8,width:"100%",background:"none",border:"none",color:"#7c8794",cursor:"pointer",fontSize:10}}>Schließen</button>
           </div>}
         </div>}
-        <button style={S.ghostBtn} onClick={saveJSON}><Save size={14} aria-hidden="true"/>Speichern</button>
-        <button style={S.ghostBtn} onClick={resetAll}><FilePlus2 size={14} aria-hidden="true"/>Neu</button>
+        {(()=>{
+          const z=sitzung.zustand;
+          const farbe=!z?null:z.veraltet?"#e67e22":z.status==="online"?"#2ecc71":"#f5a623";
+          return <button style={{...S.ghostBtn,...(z?{borderColor:farbe}:{})}} title={z?`Sitzung „${z.info?.name||""}“ – ${z.veraltet?"beendet":z.status==="online"?"verbunden":"verbindet …"}`:"Mit anderen gleichzeitig am selben Plan arbeiten"} onClick={()=>setShowSitzung(true)}>
+            {z?<><Users size={14} color={farbe} aria-hidden="true"/>{z.veraltet?"Sitzung beendet":`${z.users?.length||0} online`}</>:<><Users size={14} aria-hidden="true"/>Sitzung</>}
+          </button>;
+        })()}
         <button style={S.ghostBtn} onClick={()=>setChangelogVersion(Object.keys(CHANGELOG)[0])} title="Was ist neu?"><ScrollText size={14} aria-hidden="true"/>Changelog</button>
         {window.electronAPI&&<button style={{...S.ghostBtn,...(updateStatus.type==='downloaded'||updateStatus.type==='available'?{color:ACCENT,borderColor:ACCENT}:{})}} onClick={()=>setShowUpdateModal(true)}>
           {updateStatus.type==='downloaded'
@@ -1359,23 +1359,23 @@ export default function App() {
       <nav style={S.nav}>
         {TABS.map(([k,label])=>(
           <button key={k}
-            style={{...S.navBtn,...(tab===k?S.navBtnActive:{}),...(k==="erweitert"?{color:tab===k?"#f5a623":"#c08030",borderColor:tab===k?"#f5a623":"transparent"}:{})}}
-            onClick={()=>{ if(k==="erweitert"){ setErweitertOpen(o=>!o); goTab("erweitert"); } else { goTab(k); } }}>
+            style={{...S.navBtn,...(tab===k?S.navBtnActive:{})}}
+            onClick={()=>goTab(k)}>
             <span style={{display:'block',height:0,fontWeight:600,overflow:'hidden',visibility:'hidden',pointerEvents:'none'}} aria-hidden="true">{label}</span>
             {label}</button>
         ))}
-        {erweitertOpen && <>
-          <span style={{color:"#3a424c",alignSelf:"center",margin:"0 2px",fontSize:16}}>&rsaquo;</span>
-          {[["dim","Leitungsdimensionierung"],["volt","Spannungsfall"]].map(([k,lbl])=>(
+        {RECHNER.map(([k,lbl],i)=>{
+          const aktiv=tab==="erweitert"&&erweiterSubTab===k;
+          return(
             <button key={k} style={{
               ...S.navBtn,
-              ...(erweiterSubTab===k && tab==="erweitert" ? S.navBtnActive : {}),
-              ...(erweiterSubTab===k && tab==="erweitert" ? {color:"#f5a623",borderColor:"#f5a623"} : {color:"#c08030"})
+              ...(i===0?{marginLeft:"auto"}:{}),
+              ...(aktiv?{...S.navBtnActive,color:"#f5a623",borderColor:"#f5a623"}:{color:"#c08030"})
             }} onClick={()=>{ setErweiterSubTab(k); goTab("erweitert"); }}>
             <span style={{display:'block',height:0,fontWeight:600,overflow:'hidden',visibility:'hidden',pointerEvents:'none'}} aria-hidden="true">{lbl}</span>
             {lbl}</button>
-          ))}
-        </>}
+          );
+        })}
       </nav>
       <main style={S.main}>
         {/* Alle Tabs bleiben gemountet – nur CSS display:none beim Verstecken */}
@@ -3488,7 +3488,7 @@ const HELP_SECTIONS = {
   },
   erweitert: {
     title: 'Leitungsdimensionierung & Spannungsfall',
-    text: 'Der Tab "Erweitert" enthält zwei unabhängige Werkzeuge. Die Leitungsdimensionierung berechnet anhand von Strom, Leitungslänge und Verlegeart (frei in Luft, in Lagen, etc.) den erforderlichen Mindest-Querschnitt nach DIN VDE 0298-4 – inklusive Temperatur- und Häufelkorrekturfaktoren.',
+    text: 'Die beiden orangen Tabs ganz rechts sind zwei unabhängige Werkzeuge. Die Leitungsdimensionierung berechnet anhand von Strom, Leitungslänge und Verlegeart (frei in Luft, in Lagen, etc.) den erforderlichen Mindest-Querschnitt nach DIN VDE 0298-4 – inklusive Temperatur- und Häufelkorrekturfaktoren.',
     extra: 'Der Spannungsfall-Rechner ermittelt für eine gegebene Leitung den prozentualen Spannungsabfall (Grenzwert nach DIN VDE 0100-520: 3 % für Stromversorgungsleitungen). Beide Rechner sind unabhängig vom Rest der Projektdaten und können jederzeit genutzt werden.'
   },
   errichtungspruefung: {

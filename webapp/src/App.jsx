@@ -159,7 +159,7 @@ const loadSummary = (plan, pls) => {
 /*  Root                                                                      */
 /* ══════════════════════════════════════════════════════════════════════════ */
 export default function App() {
-  const [tab,     setTab]     = useState('pruefung');
+  const [tab,     setTab]     = useState('projekt');
   const [start]               = useState(ladePlanliste);
   const [plan,    setPlan]    = useState(start.plan);
   const [plaene,  setPlaene]  = useState(start.index);
@@ -344,9 +344,9 @@ export default function App() {
 
       <nav className="tab-bar">
         {[
-          { id: 'pruefung',  Icon: ClipboardCheck, label: 'Prüfung'   },
-          { id: 'steckplan', Icon: Plug,           label: 'Steckplan' },
           { id: 'projekt',   Icon: ClipboardList,  label: 'Projekt'   },
+          { id: 'steckplan', Icon: Plug,           label: 'Steckplan' },
+          { id: 'pruefung',  Icon: ClipboardCheck, label: 'Prüfung'   },
           { id: 'teilen',    Icon: Share2,         label: 'Teilen'    },
           { id: 'sitzung',   Icon: Users,          label: 'Sitzung'   },
         ].map(t => (

@@ -47,9 +47,9 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 ### Tabs in der Handy-App
 | Tab | Inhalt |
 |-----|--------|
-| **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **Verteiler hinzufügen** legt direkt hier einen Verteiler an. **PDF speichern / drucken** öffnet den Android-Druckdialog („Als PDF speichern“ oder Drucker) – das PDF ist identisch mit dem vom PC, Text markierbar. **PDF direkt teilen** schickt eine Bild-Fassung sofort per Mail oder Messenger. Unter *Prüfungsdetails* lässt sich mit dem Finger unterschreiben. |
-| **Steckplan** | Verteiler und Steckungen ansehen und anpassen. Am Steckplatz Verbraucher stecken (auch neu anlegen) und Unterverteiler anschließen oder dort neu anlegen; alternativ am Verteiler unter **Hängt an** |
 | **Projekt** | **Planliste** (mehrere Pläne anlegen, wechseln, löschen), Projektdaten, **Firmenlogo** fürs PDF, **Verteiler-Typen** und **Verbraucher** (anlegen und bearbeiten) |
+| **Steckplan** | Verteiler und Steckungen ansehen und anpassen. Am Steckplatz Verbraucher stecken (auch neu anlegen) und Unterverteiler anschließen oder dort neu anlegen; alternativ am Verteiler unter **Hängt an** |
+| **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **PDF speichern / drucken** öffnet den Android-Druckdialog („Als PDF speichern“ oder Drucker) – das PDF ist identisch mit dem vom PC, Text markierbar. **PDF direkt teilen** schickt eine Bild-Fassung sofort per Mail oder Messenger. Unter *Prüfungsdetails* lässt sich mit dem Finger unterschreiben. |
 | **Teilen** | Per **Bluetooth** ohne Netzwerk mit dem PC austauschen, oder im WLAN: Plan per QR-Code vom PC holen und an den PC zurücksenden – jeweils ohne Server |
 | **Sitzung** | Einer Sitzung auf dem Planer-Server beitreten oder selbst eine starten: Prüfwerte erscheinen sofort bei allen (siehe „Sitzung“ weiter unten) |
 
@@ -233,8 +233,8 @@ Verwaltung aller Verteiler-Typen.
 - **1-phasig:** Strom = W ÷ 230 auf eine Phase
 - Import / Export als JSON
 
-### Erweitert
-Berechnungshelfer. Nach Klick auf „Erweitert" in der Navigation erscheinen zwei Unter-Tabs.
+### Leitungsdimensionierung & Spannungsfall
+Berechnungshelfer – die beiden orangen Tabs ganz rechts in der Navigation.
 
 #### Leitungsdimensionierung
 Prüfkette für H07RN-F-Leitungen nach DIN VDE 0298-4: **I_B ≤ I_n ≤ I_z**
@@ -283,15 +283,15 @@ Integriertes Handbuch mit Erklärungen zu allen Bereichen der App. Öffnet sich 
 |--------|----------|
 | **Logo** | Firmenlogo hochladen oder ersetzen (PNG, JPG, SVG) — erscheint in der App und im PDF |
 | **✕** *(neben Logo, nur wenn eins gesetzt ist)* | Hochgeladenes Logo entfernen |
-| **Laden** | Gespeicherten Stand (`.json`) laden – mit Rückfrage, ob dessen Verteiler-Typen und Verbraucher die Bibliothek ergänzen oder ersetzen |
-| **Speichern** | Aktuellen Stand als `.json` exportieren |
 | **Neu** | Planung zurücksetzen (Verteiler-Typen und Verbraucher bleiben erhalten) |
-| **Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
-| **PDF** | Druckbaren Stromplan als PDF öffnen |
-| **Updates** / **Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
+| **Laden** | Gespeicherten Stand (`.json`) laden – mit Rückfrage, ob dessen Verteiler-Typen und Verbraucher die Bibliothek ergänzen oder ersetzen |
 | **Zuletzt geöffnet** | Schnellzugriff auf die zuletzt geöffneten Planungsstände |
+| **Speichern** | Aktuellen Stand als `.json` exportieren |
+| **Teilen** | Plan mit dem Handy austauschen – per Bluetooth ohne Netzwerk oder im WLAN per QR-Code, jeweils ohne Server |
 | **Sitzung** / **2 online** | Mit anderen gleichzeitig am selben Plan arbeiten (siehe unten); in einer Sitzung zeigt der Knopf Status und Teilnehmerzahl |
-| **Teilen** | Plan per QR-Code im WLAN aufs Handy holen – ohne Server |
+| **Changelog** | Versionsverlauf mit allen Änderungen anzeigen |
+| **Updates** / **Update bereit** | Erscheint automatisch wenn ein Update heruntergeladen wurde |
+| **PDF** | Druckbaren Stromplan als PDF öffnen |
 
 ---
 
