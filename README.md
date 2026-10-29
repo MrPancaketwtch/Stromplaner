@@ -10,7 +10,7 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Vertei
 
 ## Schnellstart
 
-1. Neueste Version von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** herunterladen und installieren (einmalig):
+1. Neueste Version von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** herunterladen und installieren:
    - **Windows:** `Stromplaner Setup x.x.x.exe`
    - **macOS (Apple Silicon / M-Series):** `Stromplaner-x.x.x-arm64.dmg`
    - **macOS (Intel):** `Stromplaner-x.x.x.dmg`
@@ -21,13 +21,13 @@ Stromplaner bildet die vollständige Stromverteilung einer Produktion ab: Vertei
 4. Mit **Speichern** regelmäßig als `.json` sichern → Datei in `Speicherstände/` ablegen
 5. **PDF** für den fertigen Stromplan oder das Prüfprotokoll → **Achtung** zwei verschiedene Exports: Einer für den Plan, einer für die Errichtungsprüfung
 
-Der Zustand wird automatisch gespeichert (localStorage). Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen, um zu archivieren, oder um in einem anderem Projekt zu arbeiten und vorher den aktuellen Stand zu sichern.
+Der Zustand wird automatisch gespeichert. Ein explizites Speichern ist nur nötig, um den Stand auf einen anderen Rechner zu übertragen, um zu archivieren, oder um in einem anderem Projekt zu arbeiten und vorher den aktuellen Stand zu sichern.
 
 **Verteiler-Typen und Verbraucher** werden zusätzlich automatisch als Bibliothek in AppData gespeichert (`AppData\Stromplaner\Speicherstände\Bibliothek.json` auf Windows, `~/Library/Application Support/Stromplaner/Speicherstände/Bibliothek.json` auf macOS) und beim Start von dort geladen – sie bleiben also erhalten, auch wenn ein anderer Planungsstand geöffnet wird. Bringt ein geladener Plan andere Typen oder Verbraucher mit, fragt Stromplaner, ob sie die Bibliothek **ergänzen** oder **ersetzen** sollen.
 
 **Updates** werden unter Windows automatisch im Hintergrund geladen. Sobald ein Update bereit ist, erscheint im Header ein **Update bereit**-Button, der einen Neustart-Dialog öffnet.
 
-**Beta-Versionen:** Im Dialog **Updates** lässt sich der Update-Kanal wählen. **Stabil** (Standard) liefert nur fertige Versionen, **Beta** zusätzlich Vorabversionen zum Testen. Wer auf Stabil zurückschaltet, bleibt auf der installierten Beta, bis eine neuere fertige Version erscheint – es wird nie auf eine ältere Version zurückgestuft. Die Wahl wird gespeichert.
+**Beta-Versionen:** Im Dialog **Updates** lässt sich der Update-Kanal wählen. **Stabil** (Standard) liefert nur fertige Versionen, **Beta** zusätzlich Vorabversionen zum Testen. Wer auf Stabil zurückschaltet, bleibt auf der installierten Beta, bis eine neuere fertige Version erscheint.
 
 Auf **macOS** ist die App nicht mit einem Apple-Entwicklerzertifikat signiert, deshalb kann sie sich nicht selbst austauschen. Stromplaner zeigt eine neue Version mit **↑ Update verfügbar** an. **Download-Seite öffnen** führt zum Release: dort die passende `.dmg` laden, öffnen und Stromplaner in den Programme-Ordner ziehen. Pläne, Bibliothek und Einstellungen bleiben erhalten.
 
@@ -35,7 +35,8 @@ Auf **macOS** ist die App nicht mit einem Apple-Entwicklerzertifikat signiert, d
 
 ## 📱 Handy-App (Android)
 
-Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am PC, geprüft wird mit dem Handy am Verteiler. Das Prüfprotokoll entsteht am PC – oder direkt am Handy als PDF. Für eine spontane Prüfung ohne PC lässt sich auch am Handy ein Plan anlegen.
+Die Handy-App ist für die Arbeit direkt an der Anlage gedacht, weil ein Laptop draußen im Feld unhandlicher ist. Zum Planen empfehle ich weiterhin die PC Anwendung, auch wenn natürlich beides geht. 
+Aktuell befindet sich aufgrund einer Einschränkung des Google Play Stores die App nur im Early Access. Wenn du mir helfen willst, Feedback zu bekommen und die App öffentlich zu machen, kannst du sie unter folgendem Link runterladen: [Play Store](https://play.google.com/store/apps/details?id=de.stromplaner.app). Danke wenn du dir die Zeit nimmst. Alternativ kannst du natürlich die APK wie unten beschrieben installieren.
 
 ### Installation
 - Die Datei `Stromplaner-x.x.x.apk` von der **[Releases-Seite](https://github.com/MrPancaketwtch/Stromplaner/releases)** aufs Handy laden und öffnen.
