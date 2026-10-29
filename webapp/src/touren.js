@@ -24,6 +24,7 @@ export const TOUREN = [
       { ziel: '[data-tour="neuer-plan"]', titel: 'Neuer Plan', text: 'Legt einen leeren Plan an – deine bisherigen bleiben in der Liste.', vorher: tab('projekt') },
       { ziel: '[data-tour="planliste"]', titel: 'Deine Pläne', text: 'Antippen öffnet einen Plan, der Papierkorb löscht ihn.' },
       { ziel: '[data-tour="projektdaten"]', titel: 'Projektdaten', text: 'Trag die Veranstaltung ein – der Name steht oben und im Prüfprotokoll.' },
+      { ziel: '[data-tour="stromplan-pdf"]', titel: 'Stromplan als PDF', text: 'Der ganze Plan mit Verteilern, Steckungen und Phasenlast – speichern, teilen oder drucken.' },
       { ziel: '[data-tour="bibliothek"]', titel: 'Bibliothek', text: 'Verteiler-Typen und Verbraucher, die das Handy kennt. Neue legst du hier an.' },
       { ziel: '[data-tour="firmenlogo"]', titel: 'Firmenlogo', text: 'Erscheint oben rechts auf jeder Seite des Prüfprotokolls.' },
     ],

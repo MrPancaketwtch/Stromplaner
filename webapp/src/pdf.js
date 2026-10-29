@@ -1,15 +1,18 @@
-// Prüfprotokoll als PDF direkt am Handy – gleiches Layout wie am PC (app/shared/pruefprotokoll.js).
-// Die A4-Seiten werden in einem unsichtbaren iframe gerendert, als Bild erfasst und zu einem PDF zusammengesetzt.
+// Prüfprotokoll und Stromplan als PDF direkt am Handy – gleiches Layout wie am PC (app/shared/).
+// Bild-PDF: die A4-Seiten des Protokolls werden in einem unsichtbaren iframe gerendert und als Bild erfasst.
 import { Capacitor } from '@capacitor/core';
 import { pruefprotokollHtml } from '@shared/pruefprotokoll.js';
+import { stromplanHtml } from '@shared/stromplan.js';
 
 const SEITE_PX = 794; // Seitenbreite im Protokoll-HTML (A4 bei 96 dpi)
 
-export const pdfDateiname = (plan) => {
+const dateiTeil = (plan) => {
   const umlaut = { ä: 'ae', ö: 'oe', ü: 'ue', Ä: 'Ae', Ö: 'Oe', Ü: 'Ue', ß: 'ss' };
-  const name = (plan.meta?.production || 'Plan').replace(/[äöüÄÖÜß]/g, c => umlaut[c]).replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'Plan';
-  return `Errichtungspruefung_${name}_${plan.inspMeta?.date || ''}.pdf`.replace('_.pdf', '.pdf');
+  return (plan.meta?.production || 'Plan').replace(/[äöüÄÖÜß]/g, c => umlaut[c]).replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'Plan';
 };
+
+export const pdfDateiname = (plan) =>
+  `Errichtungspruefung_${dateiTeil(plan)}_${plan.inspMeta?.date || ''}.pdf`.replace('_.pdf', '.pdf');
 
 export async function protokollPdf(plan, { logo = '', signatur = '', fortschritt } = {}) {
   // Große Bibliotheken erst laden, wenn wirklich ein PDF entsteht
@@ -45,13 +48,17 @@ export async function protokollPdf(plan, { logo = '', signatur = '', fortschritt
 }
 
 // Druckansicht: Hintergründe (dunkle Balken, Mängel-Zeilen) mitdrucken wie am PC (printBackground)
-const druckHtml = (plan, opts) => pruefprotokollHtml(plan, opts)
-  .replace('</style>', '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>');
+const mitFarben = (html) => html.replace('</style>', '*{-webkit-print-color-adjust:exact;print-color-adjust:exact}</style>');
 
 // Vektor-PDF mit markierbarem Text über den Druckdialog („Als PDF speichern“ oder Drucker)
-export async function protokollDrucken(plan, { logo = '', signatur = '' } = {}) {
-  const html = druckHtml(plan, { logo, signatur });
-  const name = pdfDateiname(plan).replace(/\.pdf$/, '');
+export const protokollDrucken = (plan, { logo = '', signatur = '' } = {}) =>
+  htmlDrucken(mitFarben(pruefprotokollHtml(plan, { logo, signatur })), pdfDateiname(plan).replace(/\.pdf$/, ''));
+
+// Der ganze Stromplan wie am PC – ohne Blockschaltbild, das gibt es nur in der Desktop-App
+export const stromplanDrucken = (plan, { logo = '' } = {}) =>
+  htmlDrucken(mitFarben(stromplanHtml(plan, { logo })), `Stromplan_${dateiTeil(plan)}`);
+
+async function htmlDrucken(html, name) {
   if (Capacitor.isNativePlatform()) {
     const { Druck } = await import('stromplaner-druck');
     await Druck.html({ html, name });
@@ -77,7 +84,10 @@ const alsBase64 = (blob) => new Promise((ok, fehler) => {
 });
 
 // Android: über das Teilen-Menü (Mail, Messenger, Drive …); Browser: teilen oder herunterladen
-export async function pdfTeilen(blob, dateiname) {
+export const pdfTeilen = (blob, dateiname) => dateiTeilen(blob, dateiname, 'application/pdf');
+
+// Datei über das Teilen-Menü weitergeben (Android) bzw. teilen oder herunterladen (Browser)
+export async function dateiTeilen(blob, dateiname, typ) {
   if (Capacitor.isNativePlatform()) {
     const [{ Filesystem, Directory }, { Share }] = await Promise.all([import('@capacitor/filesystem'), import('@capacitor/share')]);
     const { uri } = await Filesystem.writeFile({ path: dateiname, data: await alsBase64(blob), directory: Directory.Cache });
@@ -88,7 +98,7 @@ export async function pdfTeilen(blob, dateiname) {
     }
     return;
   }
-  const datei = new File([blob], dateiname, { type: 'application/pdf' });
+  const datei = new File([blob], dateiname, { type: typ });
   if (navigator.canShare?.({ files: [datei] })) {
     try { await navigator.share({ files: [datei], title: dateiname }); return; }
     catch (e) { if (e?.name === 'AbortError') return; }

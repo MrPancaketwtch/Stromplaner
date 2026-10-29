@@ -29525,6 +29525,265 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     return fullHtml;
   }
 
+  // app/shared/stromplan.js
+  var PHASES2 = ["L1", "L2", "L3"];
+  var VOLT = 230;
+  var CONN2 = {
+    CEE16: { label: "16A 3LNPE 400V", amp: 16, phases: 3 },
+    CEE32: { label: "32A 3LNPE 400V", amp: 32, phases: 3 },
+    CEE63: { label: "63A 3LNPE 400V", amp: 63, phases: 3 },
+    CEE125: { label: "125A 3LNPE 400V", amp: 125, phases: 3 },
+    CEE16_1: { label: "16A 1LNPE 230V", amp: 16, phases: 1 },
+    CEE32_1: { label: "32A 1LNPE 230V", amp: 32, phases: 1 },
+    PL200: { label: "200A Powerlock", amp: 200, phases: 3 },
+    PL400: { label: "400A Powerlock", amp: 400, phases: 3 },
+    PL660: { label: "660A Powerlock", amp: 660, phases: 3 },
+    PL1000: { label: "1000A Powerlock", amp: 1e3, phases: 3 },
+    MC: { label: "Multicore", amp: 16, phases: 1, isMulticore: true },
+    SCHUKO: { label: "Schuko", amp: 16, phases: 1 }
+  };
+  var KAPPA_CU2 = 56;
+  var I_CAP_H07 = { 1.5: 23, 2.5: 30, 4: 38, 6: 48, 10: 64, 16: 84, 25: 109, 35: 135, 50: 162, 70: 202, 95: 245 };
+  var F_TEMP = { 10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71 };
+  var F_ADERN = { 2: 1, 3: 0.7, 4: 0.65, 5: 0.6, 6: 0.57 };
+  var F_LAGEN = { 1: 0.85, 2: 0.65, 3: 0.45 };
+  var F_HAE_EINL = { 1: 1, 2: 0.85, 3: 0.79, 4: 0.75, 5: 0.73, 6: 0.72, 7: 0.72, 8: 0.71, 9: 0.7, 10: 0.7 };
+  var F_HAE_GEBUND = { 1: 1, 2: 0.8, 3: 0.75, 4: 0.7, 5: 0.68, 6: 0.65, 7: 0.65, 8: 0.62, 9: 0.62, 10: 0.6 };
+  var isMulticore2 = (c) => !!CONN2[c]?.isMulticore;
+  var round22 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  var calcDim = (cableA, fTemp, fAdern, fLagen, fArt, fN) => {
+    const base = I_CAP_H07[+cableA];
+    if (!base) return null;
+    let f = 1;
+    if (fTemp && F_TEMP[+fTemp]) f *= F_TEMP[+fTemp];
+    if (fAdern && F_ADERN[+fAdern]) f *= F_ADERN[+fAdern];
+    if (fLagen && F_LAGEN[+fLagen]) f *= F_LAGEN[+fLagen];
+    if (fArt && fN) {
+      const tbl = fArt === "einl" ? F_HAE_EINL : F_HAE_GEBUND;
+      if (tbl[Math.min(+fN, 10)]) f *= tbl[Math.min(+fN, 10)];
+    }
+    return { base, fTotal: round22(f), izul: round22(base * f) };
+  };
+  var calcVoltDrop2 = (I, l, A, cosPhi, threePhase) => {
+    if (!+l || !+A || !+cosPhi) return null;
+    const fac = threePhase ? Math.sqrt(3) : 2;
+    const duV = fac * +I * +l * +cosPhi / (KAPPA_CU2 * +A);
+    return { V: round22(duV), pct: round22(duV / 230 * 100) };
+  };
+  var minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct = 3) => {
+    if (!+l || !+cosPhi || !+I) return null;
+    const fac = threePhase ? Math.sqrt(3) : 2;
+    return round22(fac * +I * +l * +cosPhi / (KAPPA_CU2 * (maxPct / 100) * 230));
+  };
+  function stromplanHtml(plan, { logo = "", schaltbildSvg = "" } = {}) {
+    const meta = plan.meta || {};
+    const mainConns = plan.mainConns || [];
+    const instances = plan.instances || [];
+    const placements = plan.placements || [];
+    const cableCalcs = plan.cableCalcs || [];
+    const voltCalcs = plan.voltCalcs || [];
+    const corpLogo = logo;
+    const byId = (arr) => {
+      const m = {};
+      arr.forEach((x) => m[x.id] = x);
+      return m;
+    };
+    const boxTypeById = byId(plan.boxTypes || []);
+    const loadById = byId(plan.loads || []);
+    const instById = byId(instances);
+    const mainConnById = byId(mainConns);
+    const placementAmps = (p) => {
+      const load = loadById[p.loadId];
+      if (!load) return { L1: 0, L2: 0, L3: 0 };
+      const inst = instById[p.instanceId];
+      const type = inst ? boxTypeById[inst.typeId] : null;
+      const outlet = type?.outlets.find((o) => o.id === p.outletId);
+      if (!outlet) return { L1: 0, L2: 0, L3: 0 };
+      const totalAmp = (load.watt || 0) / VOLT;
+      const r = { L1: 0, L2: 0, L3: 0 };
+      if (load.threePhase) {
+        r.L1 = totalAmp;
+        r.L2 = totalAmp;
+        r.L3 = totalAmp;
+      } else if (isMulticore2(outlet.connector)) {
+        const slot = p.mcSlot || 1;
+        const ph = PHASES2[(slot - 1) % 3];
+        r[ph] = totalAmp;
+      } else {
+        const ph = outlet.phase || "L1";
+        if (ph === "L1L2L3") r.L1 = totalAmp;
+        else r[ph] = totalAmp;
+      }
+      return r;
+    };
+    const ownLoad = (instanceId) => {
+      const r = { L1: 0, L2: 0, L3: 0 };
+      placements.filter((p) => p.instanceId === instanceId && p.loadId).forEach((p) => {
+        const a = placementAmps(p);
+        r.L1 += a.L1;
+        r.L2 += a.L2;
+        r.L3 += a.L3;
+      });
+      return r;
+    };
+    const totalLoad = (instanceId, visited = /* @__PURE__ */ new Set()) => {
+      if (visited.has(instanceId)) return { L1: 0, L2: 0, L3: 0 };
+      visited.add(instanceId);
+      const r = ownLoad(instanceId);
+      instances.filter((c) => c.parentId === instanceId).forEach((child) => {
+        const ch = totalLoad(child.id, visited);
+        r.L1 += ch.L1;
+        r.L2 += ch.L2;
+        r.L3 += ch.L3;
+      });
+      return r;
+    };
+    const rootInstances = instances.filter((i) => !i.parentId);
+    const phBar = (vals, maxA) => PHASES2.map((ph) => {
+      const a = round22(vals[ph]);
+      const pct = maxA ? Math.round(a / maxA * 100) : 0;
+      const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
+      return `<div style="flex:1;text-align:center;padding:4px 8px;background:#f8f8f8;border:1px solid #ddd;border-radius:4px">
+        <div style="font-weight:700;font-size:11px">${ph}</div>
+        <div style="font-size:16px;font-weight:800;color:${col}">${a} A</div>
+        <div style="height:5px;background:#eee;border-radius:3px;margin:3px 0"><div style="height:100%;width:${Math.min(pct, 100)}%;background:${col};border-radius:3px"></div></div>
+        <div style="font-size:9px;color:#666">${maxA ? pct + "% von " + maxA + "A" : ""}</div></div>`;
+    }).join("");
+    let body = `${corpLogo ? `<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g, "&quot;")}" style="max-height:40px;max-width:140px;object-fit:contain"></div>` : ""}<h1 style="font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 24 24" fill="#f5a623" stroke="#b05a00" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>STROMPLAN</h1>
+      <div style="font-size:12px;color:#555;margin-bottom:16px">${meta.production} \xB7 ${meta.creator} \xB7 v${meta.version} \xB7 ${meta.date}</div>`;
+    if (mainConns.length) {
+      body += `<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Einspeisepunkte</h2>`;
+      mainConns.forEach((mc) => {
+        const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
+        const tot = { L1: 0, L2: 0, L3: 0 };
+        connInsts.forEach((i) => {
+          const t = totalLoad(i.id);
+          tot.L1 += t.L1;
+          tot.L2 += t.L2;
+          tot.L3 += t.L3;
+        });
+        body += `<div style="margin-bottom:10px"><b>${mc.name}</b>${mc.amp ? ` (max ${mc.amp}A)` : ""}<div style="display:flex;gap:6px;margin-top:4px">${phBar(tot, mc.amp || 0)}</div></div>`;
+      });
+    }
+    instances.forEach((inst) => {
+      const type = boxTypeById[inst.typeId];
+      const own = ownLoad(inst.id);
+      const tot = totalLoad(inst.id);
+      const maxA = type?.feedAmp || 0;
+      const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
+      const rows2 = placements.filter((p) => p.instanceId === inst.id).map((p) => {
+        const l = loadById[p.loadId];
+        const out = type?.outlets.find((o) => o.id === p.outletId);
+        if (!l) return null;
+        const amp = l.watt ? round22(l.watt / VOLT) : 0;
+        let ph = "", slot = "";
+        if (l.threePhase) {
+          ph = "L1+L2+L3";
+        } else if (out && isMulticore2(out.connector)) {
+          const s = p.mcSlot || 1;
+          ph = PHASES2[(s - 1) % 3];
+          slot = `Steckplatz ${s}`;
+        } else {
+          ph = out?.phase || "";
+        }
+        return { name: l.name, outlet: out?.label || "", slot, ph, watt: l.watt, amp, breaker: out?.breaker || "", prot: out?.protection || "" };
+      }).filter(Boolean);
+      body += `<div style="page-break-inside:avoid;margin-top:18px">
+        <h2 style="font-size:13px;background:#2e75b6;color:#fff;padding:6px 10px;margin:0 0 6px;border-radius:4px">${inst.name} <span style="font-weight:400;font-size:11px">(${type?.name || ""} \xB7 ${conn} \xB7 max ${maxA}A)</span></h2>
+        <div style="font-size:11px;color:#555;margin-bottom:6px">h\xE4ngt an: ${inst.parentId ? instById[inst.parentId]?.name : inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name || "\u2014 Einspeisung \u2014" : "\u2014 Einspeisung \u2014"}</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">${phBar(tot, maxA)}</div>`;
+      if (rows2.length) {
+        body += `<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:#eee">
+          ${["Verbraucher", "Anschluss", "Steckplatz", "Phase", "W", "A", "Sich.", "Schutz"].map((h) => `<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
+        rows2.forEach((r) => {
+          body += `<tr>${[r.name, r.outlet, r.slot, r.ph, r.watt, r.amp, r.breaker, r.prot].map((v) => `<td style="padding:2px 5px;border:1px solid #ddd">${v}</td>`).join("")}</tr>`;
+        });
+        body += `</tbody></table>`;
+      } else body += `<p style="font-size:11px;color:#999;font-style:italic">Keine Verbraucher gesteckt.</p>`;
+      body += `</div>`;
+    });
+    if (cableCalcs.length > 0) {
+      body += `<div style="page-break-inside:avoid;margin-top:28px">
+        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Leitungsdimensionierung (H07RN-F)</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:10px">
+          <thead><tr style="background:#eee">
+            <th style="padding:3px 6px;border:1px solid #ddd;text-align:left">Bezeichnung</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2B;(A)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2099;(A)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">Querschnitt</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">Faktor</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x1D467;(A)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2B;&le;I&#x2099;</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2099;&le;I&#x1D467;</th>
+          </tr></thead><tbody>`;
+      cableCalcs.forEach((c) => {
+        const dim = calcDim(c.cableA, c.fTemp, c.fAdern, c.fLagen, c.fArt, c.fN);
+        const ready = c.I_B !== "" && c.I_n !== "" && c.cableA !== "";
+        const chk1 = ready && +c.I_B <= +c.I_n;
+        const chk2 = ready && dim != null && +c.I_n <= dim.izul;
+        const ok1 = ready ? chk1 ? "&#10003;" : "&#10007;" : "\u2013";
+        const ok2 = ready && dim ? chk2 ? "&#10003;" : "&#10007;" : "\u2013";
+        const col1 = !ready ? "#666" : chk1 ? "#1a7a3a" : "#c0392b";
+        const col2 = !ready || !dim ? "#666" : chk2 ? "#1a7a3a" : "#c0392b";
+        body += `<tr>
+          <td style="padding:2px 6px;border:1px solid #ddd">${c.label || "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I_B || "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I_n || "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cableA ? c.cableA + " mm\xB2" : "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${dim ? dim.fTotal : "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${dim ? dim.izul : "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col1};font-weight:700">${ok1}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col2};font-weight:700">${ok2}</td>
+        </tr>`;
+      });
+      body += `</tbody></table></div>`;
+    }
+    if (voltCalcs.length > 0) {
+      body += `<div style="page-break-inside:avoid;margin-top:18px">
+        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Spannungsfall (DIN VDE 0100-520)</h2>
+        <table style="width:100%;border-collapse:collapse;font-size:10px">
+          <thead><tr style="background:#eee">
+            <th style="padding:3px 6px;border:1px solid #ddd;text-align:left">Bezeichnung</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">I(A)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">l(m)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">cos&phi;</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">A(mm\xB2)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">Phasigkeit</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">&Delta;U(V)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">&Delta;U(%)</th>
+            <th style="padding:3px 6px;border:1px solid #ddd">A&le;3%</th>
+          </tr></thead><tbody>`;
+      voltCalcs.forEach((c) => {
+        const is3 = c.threePhase === "3ph";
+        const ready = c.I !== "" && c.l !== "" && c.cosPhi !== "" && c.cableA !== "" && c.threePhase !== "";
+        const du = ready ? calcVoltDrop2(+c.I, +c.l, +c.cableA, +c.cosPhi, is3) : null;
+        const minA = ready ? minCsVoltDrop(+c.I, +c.l, +c.cosPhi, is3, 3) : null;
+        const pct = du ? du.pct : null;
+        const col = pct === null ? "#666" : pct <= 3 ? "#1a7a3a" : pct <= 5 ? "#b05a00" : "#c0392b";
+        body += `<tr>
+          <td style="padding:2px 6px;border:1px solid #ddd">${c.label || "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I || "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.l || "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cosPhi || "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cableA || "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.threePhase === "3ph" ? "3-phasig" : "1-phasig"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col}">${du ? du.V + " V" : "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col};font-weight:700">${du ? du.pct + " %" : "\u2013"}</td>
+          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${minA !== null ? minA + " mm\xB2" : "\u2013"}</td>
+        </tr>`;
+      });
+      body += `</tbody></table></div>`;
+    }
+    if (schaltbildSvg) {
+      body += `<div style="page-break-before:always">
+        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 12px;border-radius:4px">Blockschaltbild</h2>
+        ${schaltbildSvg}</div>`;
+    }
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Stromplan \u2013 ${meta.production}</title>
+      <style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}</style>
+      </head><body>${body}</body></html>`;
+  }
+
   // app/shared/bt-protokoll.js
   var BT_SERVICE = "6e4c0001-7a3b-4f2e-9b1d-5374726f6d70";
   var BT_INFO = "6e4c0002-7a3b-4f2e-9b1d-5374726f6d70";
@@ -30057,10 +30316,10 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
   }
 
   // app/Stromplaner.jsx
-  var PHASES2 = ["L1", "L2", "L3"];
-  var VOLT = 230;
+  var PHASES3 = ["L1", "L2", "L3"];
+  var VOLT2 = 230;
   var LS_KEY = "stromplaner_autosave";
-  var CONN2 = {
+  var CONN3 = {
     CEE16: { label: "16A 3LNPE 400V", amp: 16, phases: 3 },
     CEE32: { label: "32A 3LNPE 400V", amp: 32, phases: 3 },
     CEE63: { label: "63A 3LNPE 400V", amp: 63, phases: 3 },
@@ -30090,41 +30349,44 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
   };
   var BREAKER_TYPES = ["B", "C", "D", "K"];
   var PROTECTION_TYPES = ["LS", "RCBO", "Keine"];
-  var KAPPA_CU2 = 56;
+  var KAPPA_CU3 = 56;
   var CABLE_CS_H07 = [1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95];
-  var I_CAP_H07 = { 1.5: 23, 2.5: 30, 4: 38, 6: 48, 10: 64, 16: 84, 25: 109, 35: 135, 50: 162, 70: 202, 95: 245 };
-  var F_TEMP = { 10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71 };
-  var F_ADERN = { 2: 1, 3: 0.7, 4: 0.65, 5: 0.6, 6: 0.57 };
-  var F_LAGEN = { 1: 0.85, 2: 0.65, 3: 0.45 };
-  var F_HAE_EINL = { 1: 1, 2: 0.85, 3: 0.79, 4: 0.75, 5: 0.73, 6: 0.72, 7: 0.72, 8: 0.71, 9: 0.7, 10: 0.7 };
-  var F_HAE_GEBUND = { 1: 1, 2: 0.8, 3: 0.75, 4: 0.7, 5: 0.68, 6: 0.65, 7: 0.65, 8: 0.62, 9: 0.62, 10: 0.6 };
-  var calcDim = (cableA, fTemp, fAdern, fLagen, fArt, fN) => {
-    const base = I_CAP_H07[+cableA];
+  var I_CAP_H072 = { 1.5: 23, 2.5: 30, 4: 38, 6: 48, 10: 64, 16: 84, 25: 109, 35: 135, 50: 162, 70: 202, 95: 245 };
+  var F_TEMP2 = { 10: 1.22, 15: 1.17, 20: 1.12, 25: 1.06, 30: 1, 35: 0.94, 40: 0.87, 45: 0.79, 50: 0.71 };
+  var F_ADERN2 = { 2: 1, 3: 0.7, 4: 0.65, 5: 0.6, 6: 0.57 };
+  var F_LAGEN2 = { 1: 0.85, 2: 0.65, 3: 0.45 };
+  var F_HAE_EINL2 = { 1: 1, 2: 0.85, 3: 0.79, 4: 0.75, 5: 0.73, 6: 0.72, 7: 0.72, 8: 0.71, 9: 0.7, 10: 0.7 };
+  var F_HAE_GEBUND2 = { 1: 1, 2: 0.8, 3: 0.75, 4: 0.7, 5: 0.68, 6: 0.65, 7: 0.65, 8: 0.62, 9: 0.62, 10: 0.6 };
+  var calcDim2 = (cableA, fTemp, fAdern, fLagen, fArt, fN) => {
+    const base = I_CAP_H072[+cableA];
     if (!base) return null;
     let f = 1;
-    if (fTemp && F_TEMP[+fTemp]) f *= F_TEMP[+fTemp];
-    if (fAdern && F_ADERN[+fAdern]) f *= F_ADERN[+fAdern];
-    if (fLagen && F_LAGEN[+fLagen]) f *= F_LAGEN[+fLagen];
+    if (fTemp && F_TEMP2[+fTemp]) f *= F_TEMP2[+fTemp];
+    if (fAdern && F_ADERN2[+fAdern]) f *= F_ADERN2[+fAdern];
+    if (fLagen && F_LAGEN2[+fLagen]) f *= F_LAGEN2[+fLagen];
     if (fArt && fN) {
-      const tbl = fArt === "einl" ? F_HAE_EINL : F_HAE_GEBUND;
+      const tbl = fArt === "einl" ? F_HAE_EINL2 : F_HAE_GEBUND2;
       if (tbl[Math.min(+fN, 10)]) f *= tbl[Math.min(+fN, 10)];
     }
-    return { base, fTotal: round22(f), izul: round22(base * f) };
+    return { base, fTotal: round23(f), izul: round23(base * f) };
   };
-  var calcVoltDrop2 = (I, l, A, cosPhi, threePhase) => {
+  var calcVoltDrop3 = (I, l, A, cosPhi, threePhase) => {
     if (!+l || !+A || !+cosPhi) return null;
     const fac = threePhase ? Math.sqrt(3) : 2;
-    const duV = fac * +I * +l * +cosPhi / (KAPPA_CU2 * +A);
-    return { V: round22(duV), pct: round22(duV / 230 * 100) };
+    const duV = fac * +I * +l * +cosPhi / (KAPPA_CU3 * +A);
+    return { V: round23(duV), pct: round23(duV / 230 * 100) };
   };
-  var minCsVoltDrop = (I, l, cosPhi, threePhase, maxPct = 3) => {
+  var minCsVoltDrop2 = (I, l, cosPhi, threePhase, maxPct = 3) => {
     if (!+l || !+cosPhi || !+I) return null;
     const fac = threePhase ? Math.sqrt(3) : 2;
-    return round22(fac * +I * +l * +cosPhi / (KAPPA_CU2 * (maxPct / 100) * 230));
+    return round23(fac * +I * +l * +cosPhi / (KAPPA_CU3 * (maxPct / 100) * 230));
   };
-  var CONN_SORTED_ENTRIES = Object.entries(CONN2).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
+  var CONN_SORTED_ENTRIES = Object.entries(CONN3).sort((a, b) => a[1].label.localeCompare(b[1].label, "de"));
   var changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v || "").split("-")[0]] || [];
   var CHANGELOG = {
+    "1.5.0": [
+      "Android-App: den ganzen Stromplan als PDF \u2013 Verteiler, Steckungen und Phasenlast wie am PC (ohne Blockschaltbild), im Tab Projekt \xFCber \u201EStromplan als PDF\u201C"
+    ],
     "1.4.0": [
       "Gef\xFChrte Rundg\xE4nge statt Anleitungstexten \u2013 am PC im Tab \u201EAnleitung\u201C und \xFCber die \u201E?\u201C-Kn\xF6pfe, in der Android-App im neuen Tab \u201EHilfe\u201C. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen \xDCberblick m\xF6chtest. Ist dein Plan noch leer, zeigen sie einen Beispielplan \u2013 danach ist dein Stand wieder da",
       "Pl\xE4ne zwischen PC und Handy per Bluetooth austauschen \u2013 ohne WLAN oder Netzwerk: Handy unter \u201ETeilen\u201C sichtbar machen, am PC unter Teilen mit dem Handy verbinden, dann vom Handy holen (nur Pr\xFCfergebnisse oder ganzer Plan) oder ans Handy senden",
@@ -30232,11 +30494,11 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     a.click();
     URL.revokeObjectURL(url);
   };
-  var is3ph2 = (c) => (CONN2[c]?.phases || 1) === 3;
-  var isMulticore2 = (c) => !!CONN2[c]?.isMulticore;
+  var is3ph2 = (c) => (CONN3[c]?.phases || 1) === 3;
+  var isMulticore3 = (c) => !!CONN3[c]?.isMulticore;
   var uid = () => Math.random().toString(36).slice(2, 9);
   var clone3 = (x) => JSON.parse(JSON.stringify(x));
-  var round22 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  var round23 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
   var alphaSort2 = (arr, key) => [...arr].sort((a, b) => (a[key] || "").localeCompare(b[key] || "", "de", { numeric: true, sensitivity: "base" }));
   var sortOutlets2 = (outlets) => [...outlets].sort((a, b) => {
     const as = a.connector === "SCHUKO" ? 0 : 1, bs = b.connector === "SCHUKO" ? 0 : 1;
@@ -30247,13 +30509,13 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     const prot = o.protection === "RCD" ? "Keine" : o.protection || (o.connector === "SCHUKO" || o.connector === "MC" ? "RCBO" : "LS");
     return {
       ...o,
-      phase: o.phase || (is3ph2(o.connector) ? "L1L2L3" : PHASES2[idx % 3]),
+      phase: o.phase || (is3ph2(o.connector) ? "L1L2L3" : PHASES3[idx % 3]),
       breaker: o.breaker || "C",
       protection: prot,
       rcdId: o.rcdId ?? null,
       rcdMa: prot === "RCBO" ? o.rcdMa ?? 30 : void 0,
       // Multicore: number of slots (default 6 if not set)
-      mcSlots: isMulticore2(o.connector) ? o.mcSlots || 6 : void 0
+      mcSlots: isMulticore3(o.connector) ? o.mcSlots || 6 : void 0
     };
   };
   var migrateBoxType = (bt) => {
@@ -30287,7 +30549,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
     return Array.from({ length: n }, (_, i) => ({
       slotNum: i + 1,
       label: `Steckplatz ${i + 1}`,
-      phase: PHASES2[i % 3]
+      phase: PHASES3[i % 3]
     }));
   };
   function InlineSelect({ options, value, onChange, placeholder, style }) {
@@ -30752,15 +31014,15 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const type = inst ? boxTypeById[inst.typeId] : null;
       const outlet = type?.outlets.find((o) => o.id === p.outletId);
       if (!outlet) return { L1: 0, L2: 0, L3: 0 };
-      const totalAmp = (load.watt || 0) / VOLT;
+      const totalAmp = (load.watt || 0) / VOLT2;
       const r = { L1: 0, L2: 0, L3: 0 };
       if (load.threePhase) {
         r.L1 = totalAmp;
         r.L2 = totalAmp;
         r.L3 = totalAmp;
-      } else if (isMulticore2(outlet.connector)) {
+      } else if (isMulticore3(outlet.connector)) {
         const slot = p.mcSlot || 1;
-        const ph = PHASES2[(slot - 1) % 3];
+        const ph = PHASES3[(slot - 1) % 3];
         r[ph] = totalAmp;
       } else {
         const ph = outlet.phase || "L1";
@@ -31094,12 +31356,12 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
         const type = boxTypeById[inst.typeId];
         const pOut = inst.parentId ? boxTypeById[instById[inst.parentId]?.typeId]?.outlets?.find((o) => o.id === inst.parentOutletId) : null;
         const maxA = pOut ? Math.min(type?.feedAmp || 0, pOut.amp) : type?.feedAmp || 0;
-        const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
+        const conn = type ? CONN3[type.feedConnector]?.label || "" : "";
         const peak = Math.max(t.L1, t.L2, t.L3);
         const pct = maxA ? Math.round(peak / maxA * 100) : 0;
         const note = maxA && peak > maxA ? "\xDCBERLAST!" : pct > 80 ? ">80%" : "";
         const mainC = inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name : "\u2014";
-        ovRows.push([inst.name, type?.name, conn, inst.parentId ? instById[inst.parentId]?.name : "Einspeisung", mainC, round22(t.L1), round22(t.L2), round22(t.L3), maxA, note]);
+        ovRows.push([inst.name, type?.name, conn, inst.parentId ? instById[inst.parentId]?.name : "Einspeisung", mainC, round23(t.L1), round23(t.L2), round23(t.L3), maxA, note]);
       });
       const ovWs = utils.aoa_to_sheet(ovRows);
       utils.book_append_sheet(wb, ovWs, "\xDCbersicht");
@@ -31115,7 +31377,7 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
         });
         const peak = Math.max(tot.L1, tot.L2, tot.L3);
         const pct = mc.amp ? Math.round(peak / mc.amp * 100) : 0;
-        haRows.push([mc.name, mc.amp || "\u2013", round22(tot.L1), round22(tot.L2), round22(tot.L3), mc.amp ? `${pct}%` : "\u2013"]);
+        haRows.push([mc.name, mc.amp || "\u2013", round23(tot.L1), round23(tot.L2), round23(tot.L3), mc.amp ? `${pct}%` : "\u2013"]);
       });
       const haWs = utils.aoa_to_sheet(haRows);
       utils.book_append_sheet(wb, haWs, "Einspeisepunkte");
@@ -31123,7 +31385,7 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
         const type = boxTypeById[inst.typeId];
         const own = ownLoad(inst.id);
         const tot = totalLoad(inst.id);
-        const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
+        const conn = type ? CONN3[type.feedConnector]?.label || "" : "";
         const rows = [
           [inst.name],
           ["Typ", type?.name],
@@ -31135,28 +31397,28 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
         placements.filter((p) => p.instanceId === inst.id).forEach((p) => {
           const l = loadById[p.loadId];
           const out = type?.outlets.find((o) => o.id === p.outletId);
-          const amp = l && l.watt ? round22(l.watt / VOLT) : "";
+          const amp = l && l.watt ? round23(l.watt / VOLT2) : "";
           let ph = "";
           let slot = "";
           if (l?.threePhase) {
             ph = "L1+L2+L3";
-          } else if (out && isMulticore2(out.connector)) {
+          } else if (out && isMulticore3(out.connector)) {
             const s = p.mcSlot || 1;
-            ph = PHASES2[(s - 1) % 3];
+            ph = PHASES3[(s - 1) % 3];
             slot = `Steckplatz ${s}`;
           } else {
             ph = out?.phase || "";
           }
           rows.push([l?.name || "", out?.label || "", slot, ph, l?.watt || "", amp, out?.breaker || "", out?.protection || ""]);
         });
-        rows.push([], ["EIGENLAST", "", "", "L1", round22(own.L1), "L2", round22(own.L2), "L3", round22(own.L3)]);
-        rows.push(["GESAMTLAST", "", "", "L1", round22(tot.L1), "L2", round22(tot.L2), "L3", round22(tot.L3)]);
+        rows.push([], ["EIGENLAST", "", "", "L1", round23(own.L1), "L2", round23(own.L2), "L3", round23(own.L3)]);
+        rows.push(["GESAMTLAST", "", "", "L1", round23(tot.L1), "L2", round23(tot.L2), "L3", round23(tot.L3)]);
         const ws = utils.aoa_to_sheet(rows);
         const safeName = (inst.name || inst.id).slice(0, 28).replace(/[\\/?*[\]:]/g, "");
         utils.book_append_sheet(wb, ws, safeName || inst.id);
       });
       const lRows = [["VERBRAUCHER"], [], ["Name", "W", "A", "3-phasig"]];
-      loads.forEach((l) => lRows.push([l.name, l.watt || "", l.watt ? round22(l.watt / VOLT) : "", l.threePhase ? "Ja" : "Nein"]));
+      loads.forEach((l) => lRows.push([l.name, l.watt || "", l.watt ? round23(l.watt / VOLT2) : "", l.threePhase ? "Ja" : "Nein"]));
       utils.book_append_sheet(wb, utils.aoa_to_sheet(lRows), "Verbraucher");
       writeFileSync(wb, `Stromplan_${meta.production.replace(/\s+/g, "_")}.xlsx`);
     };
@@ -31166,141 +31428,7 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
         uiAlert("Popup-Blocker aktiv \u2013 bitte erlauben.");
         return;
       }
-      const phBar = (vals, maxA) => PHASES2.map((ph) => {
-        const a = round22(vals[ph]);
-        const pct = maxA ? Math.round(a / maxA * 100) : 0;
-        const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-        return `<div style="flex:1;text-align:center;padding:4px 8px;background:#f8f8f8;border:1px solid #ddd;border-radius:4px">
-        <div style="font-weight:700;font-size:11px">${ph}</div>
-        <div style="font-size:16px;font-weight:800;color:${col}">${a} A</div>
-        <div style="height:5px;background:#eee;border-radius:3px;margin:3px 0"><div style="height:100%;width:${Math.min(pct, 100)}%;background:${col};border-radius:3px"></div></div>
-        <div style="font-size:9px;color:#666">${maxA ? pct + "% von " + maxA + "A" : ""}</div></div>`;
-      }).join("");
-      let body = `${corpLogo ? `<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g, "&quot;")}" style="max-height:40px;max-width:140px;object-fit:contain"></div>` : ""}<h1 style="font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 24 24" fill="#f5a623" stroke="#b05a00" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>STROMPLAN</h1>
-      <div style="font-size:12px;color:#555;margin-bottom:16px">${meta.production} \xB7 ${meta.creator} \xB7 v${meta.version} \xB7 ${meta.date}</div>`;
-      if (mainConns.length) {
-        body += `<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Einspeisepunkte</h2>`;
-        mainConns.forEach((mc) => {
-          const connInsts = rootInstances.filter((i) => i.mainConnectionId === mc.id);
-          const tot = { L1: 0, L2: 0, L3: 0 };
-          connInsts.forEach((i) => {
-            const t = totalLoad(i.id);
-            tot.L1 += t.L1;
-            tot.L2 += t.L2;
-            tot.L3 += t.L3;
-          });
-          body += `<div style="margin-bottom:10px"><b>${mc.name}</b>${mc.amp ? ` (max ${mc.amp}A)` : ""}<div style="display:flex;gap:6px;margin-top:4px">${phBar(tot, mc.amp || 0)}</div></div>`;
-        });
-      }
-      instances.forEach((inst) => {
-        const type = boxTypeById[inst.typeId];
-        const own = ownLoad(inst.id);
-        const tot = totalLoad(inst.id);
-        const maxA = type?.feedAmp || 0;
-        const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
-        const rows2 = placements.filter((p) => p.instanceId === inst.id).map((p) => {
-          const l = loadById[p.loadId];
-          const out = type?.outlets.find((o) => o.id === p.outletId);
-          if (!l) return null;
-          const amp = l.watt ? round22(l.watt / VOLT) : 0;
-          let ph = "", slot = "";
-          if (l.threePhase) {
-            ph = "L1+L2+L3";
-          } else if (out && isMulticore2(out.connector)) {
-            const s = p.mcSlot || 1;
-            ph = PHASES2[(s - 1) % 3];
-            slot = `Steckplatz ${s}`;
-          } else {
-            ph = out?.phase || "";
-          }
-          return { name: l.name, outlet: out?.label || "", slot, ph, watt: l.watt, amp, breaker: out?.breaker || "", prot: out?.protection || "" };
-        }).filter(Boolean);
-        body += `<div style="page-break-inside:avoid;margin-top:18px">
-        <h2 style="font-size:13px;background:#2e75b6;color:#fff;padding:6px 10px;margin:0 0 6px;border-radius:4px">${inst.name} <span style="font-weight:400;font-size:11px">(${type?.name || ""} \xB7 ${conn} \xB7 max ${maxA}A)</span></h2>
-        <div style="font-size:11px;color:#555;margin-bottom:6px">h\xE4ngt an: ${inst.parentId ? instById[inst.parentId]?.name : inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name || "\u2014 Einspeisung \u2014" : "\u2014 Einspeisung \u2014"}</div>
-        <div style="display:flex;gap:6px;margin-bottom:8px">${phBar(tot, maxA)}</div>`;
-        if (rows2.length) {
-          body += `<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:#eee">
-          ${["Verbraucher", "Anschluss", "Steckplatz", "Phase", "W", "A", "Sich.", "Schutz"].map((h) => `<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
-          rows2.forEach((r) => {
-            body += `<tr>${[r.name, r.outlet, r.slot, r.ph, r.watt, r.amp, r.breaker, r.prot].map((v) => `<td style="padding:2px 5px;border:1px solid #ddd">${v}</td>`).join("")}</tr>`;
-          });
-          body += `</tbody></table>`;
-        } else body += `<p style="font-size:11px;color:#999;font-style:italic">Keine Verbraucher gesteckt.</p>`;
-        body += `</div>`;
-      });
-      if (cableCalcs.length > 0) {
-        body += `<div style="page-break-inside:avoid;margin-top:28px">
-        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Leitungsdimensionierung (H07RN-F)</h2>
-        <table style="width:100%;border-collapse:collapse;font-size:10px">
-          <thead><tr style="background:#eee">
-            <th style="padding:3px 6px;border:1px solid #ddd;text-align:left">Bezeichnung</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2B;(A)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2099;(A)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">Querschnitt</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">Faktor</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x1D467;(A)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2B;&le;I&#x2099;</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2099;&le;I&#x1D467;</th>
-          </tr></thead><tbody>`;
-        cableCalcs.forEach((c) => {
-          const dim = calcDim(c.cableA, c.fTemp, c.fAdern, c.fLagen, c.fArt, c.fN);
-          const ready = c.I_B !== "" && c.I_n !== "" && c.cableA !== "";
-          const chk1 = ready && +c.I_B <= +c.I_n;
-          const chk2 = ready && dim != null && +c.I_n <= dim.izul;
-          const ok1 = ready ? chk1 ? "&#10003;" : "&#10007;" : "\u2013";
-          const ok2 = ready && dim ? chk2 ? "&#10003;" : "&#10007;" : "\u2013";
-          const col1 = !ready ? "#666" : chk1 ? "#1a7a3a" : "#c0392b";
-          const col2 = !ready || !dim ? "#666" : chk2 ? "#1a7a3a" : "#c0392b";
-          body += `<tr>
-          <td style="padding:2px 6px;border:1px solid #ddd">${c.label || "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I_B || "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I_n || "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cableA ? c.cableA + " mm\xB2" : "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${dim ? dim.fTotal : "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${dim ? dim.izul : "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col1};font-weight:700">${ok1}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col2};font-weight:700">${ok2}</td>
-        </tr>`;
-        });
-        body += `</tbody></table></div>`;
-      }
-      if (voltCalcs.length > 0) {
-        body += `<div style="page-break-inside:avoid;margin-top:18px">
-        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Spannungsfall (DIN VDE 0100-520)</h2>
-        <table style="width:100%;border-collapse:collapse;font-size:10px">
-          <thead><tr style="background:#eee">
-            <th style="padding:3px 6px;border:1px solid #ddd;text-align:left">Bezeichnung</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I(A)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">l(m)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">cos&phi;</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">A(mm\xB2)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">Phasigkeit</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">&Delta;U(V)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">&Delta;U(%)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">A&le;3%</th>
-          </tr></thead><tbody>`;
-        voltCalcs.forEach((c) => {
-          const is3 = c.threePhase === "3ph";
-          const ready = c.I !== "" && c.l !== "" && c.cosPhi !== "" && c.cableA !== "" && c.threePhase !== "";
-          const du = ready ? calcVoltDrop2(+c.I, +c.l, +c.cableA, +c.cosPhi, is3) : null;
-          const minA = ready ? minCsVoltDrop(+c.I, +c.l, +c.cosPhi, is3, 3) : null;
-          const pct = du ? du.pct : null;
-          const col = pct === null ? "#666" : pct <= 3 ? "#1a7a3a" : pct <= 5 ? "#b05a00" : "#c0392b";
-          body += `<tr>
-          <td style="padding:2px 6px;border:1px solid #ddd">${c.label || "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I || "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.l || "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cosPhi || "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cableA || "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.threePhase === "3ph" ? "3-phasig" : "1-phasig"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col}">${du ? du.V + " V" : "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col};font-weight:700">${du ? du.pct + " %" : "\u2013"}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${minA !== null ? minA + " mm\xB2" : "\u2013"}</td>
-        </tr>`;
-        });
-        body += `</tbody></table></div>`;
-      }
+      let schaltbildSvg = "";
       const svgEl = schematicSvgRef.current;
       if (svgEl && instances.length > 0) {
         const svgClone = svgEl.cloneNode(true);
@@ -31387,13 +31515,9 @@ Ganzen Plan: ersetzt den kompletten Plan am PC.`,
           else if (s === "#3a6070" || s === "#3a5060") el.setAttribute("stroke", "#7aaabe");
           else if (s === "#4a5568") el.setAttribute("stroke", "#888");
         });
-        body += `<div style="page-break-before:always">
-        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 12px;border-radius:4px">Blockschaltbild</h2>
-        ${svgClone.outerHTML}</div>`;
+        schaltbildSvg = svgClone.outerHTML;
       }
-      pw.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Stromplan \u2013 ${meta.production}</title>
-      <style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}</style>
-      </head><body>${body}</body></html>`);
+      pw.document.write(stromplanHtml(planDaten(), { logo: corpLogo, schaltbildSvg }));
       pw.document.close();
       setTimeout(() => {
         pw.focus();
@@ -31775,7 +31899,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
         return a.label.localeCompare(b.label, "de", { numeric: true });
       });
       const isRoot = !inst.parentId;
-      return /* @__PURE__ */ import_react6.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, ol && /* @__PURE__ */ import_react6.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(TriangleAlert, { size: 16, "aria-label": "\xDCberlastet" })), ud && /* @__PURE__ */ import_react6.default.createElement("span", { title: `Unterdimensioniert: Verteiler-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) gr\xF6\xDFer als Anschluss`, style: { color: "#f5a623", display: "inline-flex", marginLeft: ol ? 4 : 0 } }, /* @__PURE__ */ import_react6.default.createElement(Zap, { size: 15, "aria-label": "Unterdimensioniert" })), isAdapted(inst.id) && /* @__PURE__ */ import_react6.default.createElement("span", { title: "Adapter: Steckertyp des Verteilers stimmt nicht mit Anschluss \xFCberein", style: { color: "#a78bfa", display: "inline-flex", marginLeft: ol || ud ? 4 : 0 } }, /* @__PURE__ */ import_react6.default.createElement(Plug, { size: 15, "aria-label": "Adapter" }))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { style: S.inputSm, value: inst.name, onChange: (e) => updateInstance(inst.id, { name: e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, type?.name), /* @__PURE__ */ import_react6.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, type ? CONN2[type.feedConnector]?.label : ""), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("select", { style: S.selectSm, value: inst.parentId || "", onChange: (e) => setParentWithValidation(inst.id, e.target.value, null) }, /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014 Einspeisung \u2014"), sortedOther.map((o) => /* @__PURE__ */ import_react6.default.createElement("option", { key: o.id, value: o.id }, o.name)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement(
+      return /* @__PURE__ */ import_react6.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, ol && /* @__PURE__ */ import_react6.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(TriangleAlert, { size: 16, "aria-label": "\xDCberlastet" })), ud && /* @__PURE__ */ import_react6.default.createElement("span", { title: `Unterdimensioniert: Verteiler-Eingang (${boxTypeById[inst.typeId]?.feedAmp}A) gr\xF6\xDFer als Anschluss`, style: { color: "#f5a623", display: "inline-flex", marginLeft: ol ? 4 : 0 } }, /* @__PURE__ */ import_react6.default.createElement(Zap, { size: 15, "aria-label": "Unterdimensioniert" })), isAdapted(inst.id) && /* @__PURE__ */ import_react6.default.createElement("span", { title: "Adapter: Steckertyp des Verteilers stimmt nicht mit Anschluss \xFCberein", style: { color: "#a78bfa", display: "inline-flex", marginLeft: ol || ud ? 4 : 0 } }, /* @__PURE__ */ import_react6.default.createElement(Plug, { size: 15, "aria-label": "Adapter" }))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { style: S.inputSm, value: inst.name, onChange: (e) => updateInstance(inst.id, { name: e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, type?.name), /* @__PURE__ */ import_react6.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, type ? CONN3[type.feedConnector]?.label : ""), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("select", { style: S.selectSm, value: inst.parentId || "", onChange: (e) => setParentWithValidation(inst.id, e.target.value, null) }, /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014 Einspeisung \u2014"), sortedOther.map((o) => /* @__PURE__ */ import_react6.default.createElement("option", { key: o.id, value: o.id }, o.name)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement(
         "select",
         {
           style: S.selectSm,
@@ -31813,7 +31937,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
     const own = ownLoad(inst.id);
     const tot = totalLoad(inst.id);
     const maxA = type?.feedAmp || 0;
-    const connLabel = type ? CONN2[type.feedConnector]?.label || "" : "";
+    const connLabel = type ? CONN3[type.feedConnector]?.label || "" : "";
     const sortedOutlets = type ? sortOutlets2(type.outlets) : [];
     const getAvailableOutlets = (loadId) => {
       const load = loadById[loadId];
@@ -31833,39 +31957,39 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       });
       return { mc, tot: tot2 };
     });
-    return /* @__PURE__ */ import_react6.default.createElement("div", null, (mainConns.length > 0 || rootInstances.length > 0) && /* @__PURE__ */ import_react6.default.createElement(Section, { title: "Einspeisepunkte \u2013 Gesamtlast" }, mainConnTotals.map(({ mc, tot: t }) => /* @__PURE__ */ import_react6.default.createElement("div", { key: mc.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6 } }, mc.name, mc.amp ? /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontWeight: 400, color: "#9aa4af", fontSize: 12 } }, " (max ", mc.amp, "A)") : ""), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
+    return /* @__PURE__ */ import_react6.default.createElement("div", null, (mainConns.length > 0 || rootInstances.length > 0) && /* @__PURE__ */ import_react6.default.createElement(Section, { title: "Einspeisepunkte \u2013 Gesamtlast" }, mainConnTotals.map(({ mc, tot: t }) => /* @__PURE__ */ import_react6.default.createElement("div", { key: mc.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6 } }, mc.name, mc.amp ? /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontWeight: 400, color: "#9aa4af", fontSize: 12 } }, " (max ", mc.amp, "A)") : ""), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES3.map((ph) => {
       const a = t[ph];
       const pct = mc.amp ? a / mc.amp * 100 : 0;
       const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-      return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round22(a), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phasePct }, mc.amp ? `${Math.round(pct)}% von ${mc.amp}A` : ""));
+      return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round23(a), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phasePct }, mc.amp ? `${Math.round(pct)}% von ${mc.amp}A` : ""));
     })))), rootInstances.filter((i) => !i.mainConnectionId).map((ri) => {
       const rt = totalLoad(ri.id);
       const rType = boxTypeById[ri.typeId];
       const rMax = rType?.feedAmp || 0;
-      return /* @__PURE__ */ import_react6.default.createElement("div", { key: ri.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontWeight: 400, fontSize: 11 } }, "(kein Einspeisepunkt zugewiesen)")), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
+      return /* @__PURE__ */ import_react6.default.createElement("div", { key: ri.id, style: { marginBottom: 12 } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontWeight: 700, fontSize: 14, marginBottom: 6, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontWeight: 400, fontSize: 11 } }, "(kein Einspeisepunkt zugewiesen)")), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES3.map((ph) => {
         const a = rt[ph];
         const pct = rMax ? a / rMax * 100 : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-        return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col, fontSize: 16 } }, round22(a), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phasePct }, rMax ? `${Math.round(pct)}% von ${rMax}A` : ""));
+        return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col, fontSize: 16 } }, round23(a), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phasePct }, rMax ? `${Math.round(pct)}% von ${rMax}A` : ""));
       })));
     })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.boxTabs, "data-tour": "steckplan-auswahl" }, activeInstances.map((i) => {
       const ol = isOverloaded(i.id);
       const ud = isUnderdimensioned(i.id);
       const ad = isAdapted(i.id);
       return /* @__PURE__ */ import_react6.default.createElement("button", { key: i.id, style: { ...S.boxTab, ...i.id === inst.id ? S.boxTabActive : {}, ...ol ? { borderColor: "#e74c3c" } : ud ? { borderColor: "#f5a623" } : ad ? { borderColor: "#a78bfa" } : {} }, onClick: () => setActivePlan(i.id) }, ol && /* @__PURE__ */ import_react6.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", marginRight: 4, display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(TriangleAlert, { size: 13, "aria-label": "\xDCberlastet" })), !ol && ud && /* @__PURE__ */ import_react6.default.createElement("span", { title: "Unterdimensioniert!", style: { color: "#f5a623", marginRight: 4, display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(Zap, { size: 13, "aria-label": "Unterdimensioniert" })), !ol && !ud && ad && /* @__PURE__ */ import_react6.default.createElement("span", { title: "Adapter!", style: { color: "#a78bfa", marginRight: 4, display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(Plug, { size: 13, "aria-label": "Adapter" })), i.name);
-    })), /* @__PURE__ */ import_react6.default.createElement(Section, { title: inst.name, subtitle: `Eingang: ${connLabel} (${maxA}A)`, tour: "steckplan-blatt" }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.stickyPhase }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
+    })), /* @__PURE__ */ import_react6.default.createElement(Section, { title: inst.name, subtitle: `Eingang: ${connLabel} (${maxA}A)`, tour: "steckplan-blatt" }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.stickyPhase }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES3.map((ph) => {
       const a = own[ph];
       const tA = tot[ph];
       const pct = maxA ? tA / maxA * 100 : 0;
       const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-      return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round22(tA), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phasePct }, maxA ? `${Math.round(pct)}% von ${maxA}A` : ""), a !== tA && /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 10, color: "#555", marginTop: 2 } }, "Eigen: ", round22(a), "A"));
+      return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round23(tA), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phasePct }, maxA ? `${Math.round(pct)}% von ${maxA}A` : ""), a !== tA && /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 10, color: "#555", marginTop: 2 } }, "Eigen: ", round23(a), "A"));
     }))), (() => {
       const bulkLoad = bulkLoadId ? loadById[bulkLoadId] : null;
       const bulkAvail = bulkLoad ? getAvailableOutlets(bulkLoadId) : sortedOutlets;
-      const bulkOutletOpts = bulkAvail.map((o) => ({ value: o.id, label: `${o.label} (${CONN2[o.connector]?.label || o.connector} \xB7 ${o.breaker || ""}${o.amp}A \xB7 ${o.protection})` }));
+      const bulkOutletOpts = bulkAvail.map((o) => ({ value: o.id, label: `${o.label} (${CONN3[o.connector]?.label || o.connector} \xB7 ${o.breaker || ""}${o.amp}A \xB7 ${o.protection})` }));
       const canAdd = !!bulkLoadId;
       const bulkOutletObj = bulkOutletId ? type?.outlets.find((o) => o.id === bulkOutletId) : null;
-      const isBulkMC = bulkOutletObj && isMulticore2(bulkOutletObj.connector);
+      const isBulkMC = bulkOutletObj && isMulticore3(bulkOutletObj.connector);
       const getNextMcSlot = (outletId) => {
         const obj = type?.outlets.find((o) => o.id === outletId);
         const maxSlots = obj?.mcSlots || 6;
@@ -31898,14 +32022,14 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       const avail = getAvailableOutlets(p.loadId);
       const outletOptions = avail.map((o) => ({
         value: o.id,
-        label: `${o.label} (${CONN2[o.connector]?.label || o.connector} \xB7 ${o.breaker}${o.amp}A \xB7 ${o.protection})`
+        label: `${o.label} (${CONN3[o.connector]?.label || o.connector} \xB7 ${o.breaker}${o.amp}A \xB7 ${o.protection})`
       }));
       let phDisplay = "\u2014";
       if (l?.threePhase) phDisplay = "L1+L2+L3";
-      else if (outlet && isMulticore2(outlet.connector) && p.mcSlot) phDisplay = PHASES2[(p.mcSlot - 1) % 3];
+      else if (outlet && isMulticore3(outlet.connector) && p.mcSlot) phDisplay = PHASES3[(p.mcSlot - 1) % 3];
       else if (outlet) phDisplay = outlet.phase || "\u2014";
-      const amp = l && l.watt ? round22(l.watt / VOLT) : "";
-      const showMcSlot = outlet && isMulticore2(outlet.connector);
+      const amp = l && l.watt ? round23(l.watt / VOLT2) : "";
+      const showMcSlot = outlet && isMulticore3(outlet.connector);
       const mcOptions = showMcSlot ? mcSlotOptions(outlet) : [];
       return /* @__PURE__ */ import_react6.default.createElement("tr", { key: p.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement(FilterSelect, { options: outletOptions, value: p.outletId, onChange: (v) => updatePlacement(p.id, { outletId: v, mcSlot: null }), placeholder: "Anschluss\u2026", style: { minWidth: 200 } })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, showMcSlot ? /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 120 }, value: p.mcSlot || "", onChange: (e) => updatePlacement(p.id, { mcSlot: e.target.value ? Number(e.target.value) : null }) }, /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014 w\xE4hlen \u2014"), mcOptions.map((s) => /* @__PURE__ */ import_react6.default.createElement("option", { key: s.slotNum, value: s.slotNum }, "Steckplatz ", s.slotNum, " (", s.phase, ")"))) : /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement(InlineSelect, { options: loadOptions, value: p.loadId, onChange: (v) => updatePlacement(p.id, { loadId: v }), placeholder: "Verbraucher\u2026", style: { minWidth: 180 } })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontSize: 12, color: phDisplay === "\u2014" ? "#555" : "#fff" } }, phDisplay)), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, l ? l.watt : "-"), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, amp ? l?.threePhase ? `${amp}/Ph` : amp : "-"), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: () => removePlacement(p.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react6.default.createElement(X, { size: 14, "aria-hidden": "true" }))));
     }))))));
@@ -31916,8 +32040,8 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
     const updBulk = (patch) => setBulk((s) => {
       const n = { ...s, ...patch };
       if (patch.connector) {
-        n.amp = CONN2[patch.connector]?.amp || n.amp;
-        n.phase = is3ph2(patch.connector) ? "L1L2L3" : isMulticore2(patch.connector) ? "L1" : n.phase === "L1L2L3" ? "L1" : n.phase;
+        n.amp = CONN3[patch.connector]?.amp || n.amp;
+        n.phase = is3ph2(patch.connector) ? "L1L2L3" : isMulticore3(patch.connector) ? "L1" : n.phase === "L1L2L3" ? "L1" : n.phase;
       }
       return n;
     });
@@ -31938,9 +32062,9 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
           if (box && upd.amp > box.feedAmp) return o;
           if (patch.connector) {
             upd.phase = is3ph2(patch.connector) ? "L1L2L3" : o.phase === "L1L2L3" ? "L1" : o.phase;
-            upd.amp = CONN2[patch.connector]?.amp || upd.amp;
-            if (isMulticore2(patch.connector) && !upd.mcSlots) upd.mcSlots = 6;
-            if (!isMulticore2(patch.connector)) upd.mcSlots = void 0;
+            upd.amp = CONN3[patch.connector]?.amp || upd.amp;
+            if (isMulticore3(patch.connector) && !upd.mcSlots) upd.mcSlots = 6;
+            if (!isMulticore3(patch.connector)) upd.mcSlots = void 0;
           }
           return upd;
         }) };
@@ -32009,12 +32133,12 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       r.readAsText(file);
       e.target.value = "";
     };
-    return /* @__PURE__ */ import_react6.default.createElement(Section, { title: "Verteiler-Typen" }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.primaryBtn, onClick: addType }, "+ Neuen Verteiler-Typ"), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.ghostBtn, onClick: exportBoxTypes }, /* @__PURE__ */ import_react6.default.createElement(Download, { size: 14, "aria-hidden": "true" }), "Exportieren"), /* @__PURE__ */ import_react6.default.createElement("label", { style: S.ghostBtn }, /* @__PURE__ */ import_react6.default.createElement(Upload, { size: 14, "aria-hidden": "true" }), "Importieren", /* @__PURE__ */ import_react6.default.createElement("input", { type: "file", accept: ".json", onChange: importBoxTypes, style: { display: "none" } })), boxTypes.length > 0 && /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: removeAllTypes }, "Alle l\xF6schen")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { marginTop: 16 } }, boxTypes.map((b) => /* @__PURE__ */ import_react6.default.createElement("div", { key: b.id, style: S.card }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.cardHead, onClick: () => setOpenId(openId === b.id ? null : b.id) }, /* @__PURE__ */ import_react6.default.createElement("span", { style: S.cardTitle }, openId === b.id ? "\u25BE" : "\u25B8", " ", b.name), /* @__PURE__ */ import_react6.default.createElement("span", { style: S.cardSub }, CONN2[b.feedConnector]?.label || b.feedConnector, " \xB7 ", b.outlets.length, " Anschl\xFCsse")), openId === b.id && /* @__PURE__ */ import_react6.default.createElement("div", { style: S.cardBody }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react6.default.createElement(Field, { label: "Name" }, /* @__PURE__ */ import_react6.default.createElement("input", { style: S.input, value: b.name, onChange: (e) => update(b.id, { name: e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement(Field, { label: "Einspeisung" }, /* @__PURE__ */ import_react6.default.createElement("select", { style: S.input, value: b.feedConnector, onChange: (e) => update(b.id, { feedConnector: e.target.value, feedAmp: CONN2[e.target.value]?.amp || b.feedAmp }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react6.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react6.default.createElement(Field, { label: "Max (A)" }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", style: S.input, value: b.feedAmp, onChange: (e) => update(b.id, { feedAmp: +e.target.value }) }))), /* @__PURE__ */ import_react6.default.createElement("div", { style: { textAlign: "right", marginTop: 4 } }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtnWide, onClick: () => removeType(b.id) }, "L\xF6schen")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { marginTop: 12, marginBottom: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react6.default.createElement("div", { "data-tour": "rccb", style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 8 } }, /* @__PURE__ */ import_react6.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "RCCB-Gruppen"), /* @__PURE__ */ import_react6.default.createElement("button", { style: { background: "transparent", border: "1px solid #3a424c", borderRadius: 10, width: 18, height: 18, padding: 0, color: "#9aa4af", cursor: "pointer", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }, onClick: () => openHelp("rccb"), title: "Hilfe" }, "?")), (b.rcds || []).length === 0 ? /* @__PURE__ */ import_react6.default.createElement("p", { style: { ...S.hint, margin: "0 0 6px" } }, "Keine RCCB-Gruppen \u2014 Anschl\xFCsse werden nur per LS / RCBO gesch\xFCtzt.") : /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 } }, (b.rcds || []).map((rcd) => /* @__PURE__ */ import_react6.default.createElement("div", { key: rcd.id, style: { display: "flex", gap: 4, alignItems: "center", background: "#252b33", border: "1px solid #3a424c", borderRadius: 5, padding: "4px 6px" } }, /* @__PURE__ */ import_react6.default.createElement("input", { style: { ...S.inputSm, width: 120 }, value: rcd.label, placeholder: "Bezeichnung", onChange: (e) => updateRcd(b.id, rcd.id, { label: e.target.value }) }), /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", min: 10, max: 500, style: { ...S.inputSm, width: 58 }, value: rcd.mA, onChange: (e) => updateRcd(b.id, rcd.id, { mA: +e.target.value }) }), /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontSize: 10, color: "#7c8794", whiteSpace: "nowrap" } }, "mA"), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: () => removeRcd(b.id, rcd.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react6.default.createElement(X, { size: 14, "aria-hidden": "true" }))))), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.secondaryBtn, onClick: () => addRcd(b.id) }, "+ RCD hinzuf\xFCgen")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react6.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react6.default.createElement("thead", null, /* @__PURE__ */ import_react6.default.createElement("tr", null, /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Name / Steckplatz"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th, title: "Nur f\xFCr Multicore: Anzahl Steckpl\xE4tze, Phase rotiert L1/L2/L3" }, "Steckpl."), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Sich."), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "FI\xA0mA"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "RCCB-Gruppe"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react6.default.createElement("tbody", null, b.outlets.map((o) => /* @__PURE__ */ import_react6.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { style: S.inputSm, value: o.label, onChange: (e) => updateOutlet(b.id, o.id, { label: e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("select", { style: S.selectSm, value: o.connector, onChange: (e) => updateOutlet(b.id, o.id, { connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react6.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 55 }, value: o.amp, onChange: (e) => updateOutlet(b.id, o.id, { amp: +e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, is3ph2(o.connector) ? /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "L1+L2+L3") : isMulticore2(o.connector) ? /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "rotiert") : /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 60 }, value: o.phase || "L1", onChange: (e) => updateOutlet(b.id, o.id, { phase: e.target.value }) }, PHASES2.map((ph) => /* @__PURE__ */ import_react6.default.createElement("option", { key: ph, value: ph }, ph)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, isMulticore2(o.connector) ? /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 55 }, value: o.mcSlots || 6, onChange: (e) => updateOutlet(b.id, o.id, { mcSlots: +e.target.value }) }) : /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: o.breaker || "C", onChange: (e) => updateOutlet(b.id, o.id, { breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 70 }, value: o.protection || "LS", onChange: (e) => updateOutlet(b.id, o.id, { protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, o.protection === "RCBO" ? /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", min: 1, max: 500, style: { ...S.inputSm, width: 58 }, value: o.rcdMa ?? 30, onChange: (e) => updateOutlet(b.id, o.id, { rcdMa: +e.target.value }) }) : /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, (b.rcds || []).length > 0 ? /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: o.rcdId || "", onChange: (e) => updateOutlet(b.id, o.id, { rcdId: e.target.value || null }) }, /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014 kein \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react6.default.createElement("option", { key: r.id, value: r.id }, r.label))) : /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: () => removeOutlet(b.id, o.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react6.default.createElement(X, { size: 14, "aria-hidden": "true" })))))))), /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginRight: 2 } }, "Bulk:"), /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 46 }, value: bulk.count, onChange: (e) => updBulk({ count: e.target.value }), onBlur: () => updBulk({ count: String(Math.max(1, Math.min(48, parseInt(bulk.count) || 1))) }), title: "Anzahl" }), /* @__PURE__ */ import_react6.default.createElement("select", { style: S.selectSm, value: bulk.connector, onChange: (e) => updBulk({ connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react6.default.createElement("option", { key: k, value: k }, v.label))), /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 52 }, value: bulk.amp, onChange: (e) => updBulk({ amp: +e.target.value }), title: "Ampere" }), /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontSize: 11, color: "#7c8794" } }, "A"), !is3ph2(bulk.connector) && !isMulticore2(bulk.connector) && /* @__PURE__ */ import_react6.default.createElement(import_react6.default.Fragment, null, /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: bulk.phase, onChange: (e) => updBulk({ phase: e.target.value }), disabled: bulk.rotatePhase }, PHASES2.map((ph) => /* @__PURE__ */ import_react6.default.createElement("option", { key: ph, value: ph }, ph))), /* @__PURE__ */ import_react6.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: bulk.rotatePhase ? "#f5a623" : "#9aa4af", cursor: "pointer", userSelect: "none" }, title: "Phasen gleichm\xE4\xDFig rotieren (L1\u2192L2\u2192L3\u2192\u2026)" }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "checkbox", checked: bulk.rotatePhase, onChange: (e) => updBulk({ rotatePhase: e.target.checked }), style: { cursor: "pointer" } }), "Rotation")), /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 52 }, value: bulk.breaker, onChange: (e) => updBulk({ breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t))), /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 72 }, value: bulk.protection, onChange: (e) => updBulk({ protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t))), (b.rcds || []).length > 0 && /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: bulk.rcdId || "", onChange: (e) => updBulk({ rcdId: e.target.value || null }), title: "RCCB-Gruppe" }, /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014 kein RCD \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react6.default.createElement("option", { key: r.id, value: r.id }, r.label))), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.secondaryBtn, onClick: () => {
+    return /* @__PURE__ */ import_react6.default.createElement(Section, { title: "Verteiler-Typen" }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.primaryBtn, onClick: addType }, "+ Neuen Verteiler-Typ"), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.ghostBtn, onClick: exportBoxTypes }, /* @__PURE__ */ import_react6.default.createElement(Download, { size: 14, "aria-hidden": "true" }), "Exportieren"), /* @__PURE__ */ import_react6.default.createElement("label", { style: S.ghostBtn }, /* @__PURE__ */ import_react6.default.createElement(Upload, { size: 14, "aria-hidden": "true" }), "Importieren", /* @__PURE__ */ import_react6.default.createElement("input", { type: "file", accept: ".json", onChange: importBoxTypes, style: { display: "none" } })), boxTypes.length > 0 && /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: removeAllTypes }, "Alle l\xF6schen")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { marginTop: 16 } }, boxTypes.map((b) => /* @__PURE__ */ import_react6.default.createElement("div", { key: b.id, style: S.card }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.cardHead, onClick: () => setOpenId(openId === b.id ? null : b.id) }, /* @__PURE__ */ import_react6.default.createElement("span", { style: S.cardTitle }, openId === b.id ? "\u25BE" : "\u25B8", " ", b.name), /* @__PURE__ */ import_react6.default.createElement("span", { style: S.cardSub }, CONN3[b.feedConnector]?.label || b.feedConnector, " \xB7 ", b.outlets.length, " Anschl\xFCsse")), openId === b.id && /* @__PURE__ */ import_react6.default.createElement("div", { style: S.cardBody }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.metaGrid }, /* @__PURE__ */ import_react6.default.createElement(Field, { label: "Name" }, /* @__PURE__ */ import_react6.default.createElement("input", { style: S.input, value: b.name, onChange: (e) => update(b.id, { name: e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement(Field, { label: "Einspeisung" }, /* @__PURE__ */ import_react6.default.createElement("select", { style: S.input, value: b.feedConnector, onChange: (e) => update(b.id, { feedConnector: e.target.value, feedAmp: CONN3[e.target.value]?.amp || b.feedAmp }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react6.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react6.default.createElement(Field, { label: "Max (A)" }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", style: S.input, value: b.feedAmp, onChange: (e) => update(b.id, { feedAmp: +e.target.value }) }))), /* @__PURE__ */ import_react6.default.createElement("div", { style: { textAlign: "right", marginTop: 4 } }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtnWide, onClick: () => removeType(b.id) }, "L\xF6schen")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { marginTop: 12, marginBottom: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react6.default.createElement("div", { "data-tour": "rccb", style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 8 } }, /* @__PURE__ */ import_react6.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "RCCB-Gruppen"), /* @__PURE__ */ import_react6.default.createElement("button", { style: { background: "transparent", border: "1px solid #3a424c", borderRadius: 10, width: 18, height: 18, padding: 0, color: "#9aa4af", cursor: "pointer", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }, onClick: () => openHelp("rccb"), title: "Hilfe" }, "?")), (b.rcds || []).length === 0 ? /* @__PURE__ */ import_react6.default.createElement("p", { style: { ...S.hint, margin: "0 0 6px" } }, "Keine RCCB-Gruppen \u2014 Anschl\xFCsse werden nur per LS / RCBO gesch\xFCtzt.") : /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 } }, (b.rcds || []).map((rcd) => /* @__PURE__ */ import_react6.default.createElement("div", { key: rcd.id, style: { display: "flex", gap: 4, alignItems: "center", background: "#252b33", border: "1px solid #3a424c", borderRadius: 5, padding: "4px 6px" } }, /* @__PURE__ */ import_react6.default.createElement("input", { style: { ...S.inputSm, width: 120 }, value: rcd.label, placeholder: "Bezeichnung", onChange: (e) => updateRcd(b.id, rcd.id, { label: e.target.value }) }), /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", min: 10, max: 500, style: { ...S.inputSm, width: 58 }, value: rcd.mA, onChange: (e) => updateRcd(b.id, rcd.id, { mA: +e.target.value }) }), /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontSize: 10, color: "#7c8794", whiteSpace: "nowrap" } }, "mA"), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: () => removeRcd(b.id, rcd.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react6.default.createElement(X, { size: 14, "aria-hidden": "true" }))))), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.secondaryBtn, onClick: () => addRcd(b.id) }, "+ RCD hinzuf\xFCgen")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ import_react6.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react6.default.createElement("thead", null, /* @__PURE__ */ import_react6.default.createElement("tr", null, /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Name / Steckplatz"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Stecker"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Phase"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th, title: "Nur f\xFCr Multicore: Anzahl Steckpl\xE4tze, Phase rotiert L1/L2/L3" }, "Steckpl."), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Sich."), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Schutz"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "FI\xA0mA"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "RCCB-Gruppe"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react6.default.createElement("tbody", null, b.outlets.map((o) => /* @__PURE__ */ import_react6.default.createElement("tr", { key: o.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { style: S.inputSm, value: o.label, onChange: (e) => updateOutlet(b.id, o.id, { label: e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("select", { style: S.selectSm, value: o.connector, onChange: (e) => updateOutlet(b.id, o.id, { connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react6.default.createElement("option", { key: k, value: k }, v.label)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 55 }, value: o.amp, onChange: (e) => updateOutlet(b.id, o.id, { amp: +e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, is3ph2(o.connector) ? /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "L1+L2+L3") : isMulticore3(o.connector) ? /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#9aa4af", fontSize: 11 } }, "rotiert") : /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 60 }, value: o.phase || "L1", onChange: (e) => updateOutlet(b.id, o.id, { phase: e.target.value }) }, PHASES3.map((ph) => /* @__PURE__ */ import_react6.default.createElement("option", { key: ph, value: ph }, ph)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, isMulticore3(o.connector) ? /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 55 }, value: o.mcSlots || 6, onChange: (e) => updateOutlet(b.id, o.id, { mcSlots: +e.target.value }) }) : /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: o.breaker || "C", onChange: (e) => updateOutlet(b.id, o.id, { breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 70 }, value: o.protection || "LS", onChange: (e) => updateOutlet(b.id, o.id, { protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t)))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, o.protection === "RCBO" ? /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", min: 1, max: 500, style: { ...S.inputSm, width: 58 }, value: o.rcdMa ?? 30, onChange: (e) => updateOutlet(b.id, o.id, { rcdMa: +e.target.value }) }) : /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, (b.rcds || []).length > 0 ? /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: o.rcdId || "", onChange: (e) => updateOutlet(b.id, o.id, { rcdId: e.target.value || null }) }, /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014 kein \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react6.default.createElement("option", { key: r.id, value: r.id }, r.label))) : /* @__PURE__ */ import_react6.default.createElement("span", { style: { color: "#555", fontSize: 11 } }, "\u2014")), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: () => removeOutlet(b.id, o.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react6.default.createElement(X, { size: 14, "aria-hidden": "true" })))))))), /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 10, padding: "8px 10px", background: "#1b2026", borderRadius: 5, border: "1px solid #2e3540" } }, /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontSize: 11, color: "#9aa4af", fontWeight: 600, marginRight: 2 } }, "Bulk:"), /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", min: 1, max: 48, style: { ...S.inputSm, width: 46 }, value: bulk.count, onChange: (e) => updBulk({ count: e.target.value }), onBlur: () => updBulk({ count: String(Math.max(1, Math.min(48, parseInt(bulk.count) || 1))) }), title: "Anzahl" }), /* @__PURE__ */ import_react6.default.createElement("select", { style: S.selectSm, value: bulk.connector, onChange: (e) => updBulk({ connector: e.target.value }) }, CONN_SORTED_ENTRIES.map(([k, v]) => /* @__PURE__ */ import_react6.default.createElement("option", { key: k, value: k }, v.label))), /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 52 }, value: bulk.amp, onChange: (e) => updBulk({ amp: +e.target.value }), title: "Ampere" }), /* @__PURE__ */ import_react6.default.createElement("span", { style: { fontSize: 11, color: "#7c8794" } }, "A"), !is3ph2(bulk.connector) && !isMulticore3(bulk.connector) && /* @__PURE__ */ import_react6.default.createElement(import_react6.default.Fragment, null, /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 55 }, value: bulk.phase, onChange: (e) => updBulk({ phase: e.target.value }), disabled: bulk.rotatePhase }, PHASES3.map((ph) => /* @__PURE__ */ import_react6.default.createElement("option", { key: ph, value: ph }, ph))), /* @__PURE__ */ import_react6.default.createElement("label", { style: { display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: bulk.rotatePhase ? "#f5a623" : "#9aa4af", cursor: "pointer", userSelect: "none" }, title: "Phasen gleichm\xE4\xDFig rotieren (L1\u2192L2\u2192L3\u2192\u2026)" }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "checkbox", checked: bulk.rotatePhase, onChange: (e) => updBulk({ rotatePhase: e.target.checked }), style: { cursor: "pointer" } }), "Rotation")), /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 52 }, value: bulk.breaker, onChange: (e) => updBulk({ breaker: e.target.value }) }, BREAKER_TYPES.map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t))), /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 72 }, value: bulk.protection, onChange: (e) => updBulk({ protection: e.target.value }) }, PROTECTION_TYPES.map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t))), (b.rcds || []).length > 0 && /* @__PURE__ */ import_react6.default.createElement("select", { style: { ...S.selectSm, width: 100 }, value: bulk.rcdId || "", onChange: (e) => updBulk({ rcdId: e.target.value || null }), title: "RCCB-Gruppe" }, /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014 kein RCD \u2014"), (b.rcds || []).map((r) => /* @__PURE__ */ import_react6.default.createElement("option", { key: r.id, value: r.id }, r.label))), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.secondaryBtn, onClick: () => {
       const base = b.outlets.length;
       const phaseFor = (i) => {
         if (is3ph2(bulk.connector)) return "L1L2L3";
-        if (isMulticore2(bulk.connector)) return "L1";
-        if (bulk.rotatePhase) return PHASES2[(base + i) % PHASES2.length];
+        if (isMulticore3(bulk.connector)) return "L1";
+        if (bulk.rotatePhase) return PHASES3[(base + i) % PHASES3.length];
         return bulk.phase;
       };
       const neu = Array.from({ length: Math.max(1, Math.min(48, parseInt(bulk.count) || 1)) }, (_, i) => ({
@@ -32026,7 +32150,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
         breaker: bulk.breaker,
         protection: bulk.protection,
         rcdId: bulk.rcdId,
-        ...isMulticore2(bulk.connector) ? { mcSlots: 6 } : {}
+        ...isMulticore3(bulk.connector) ? { mcSlots: 6 } : {}
       }));
       setBoxTypes((s) => s.map((bx) => bx.id !== b.id ? bx : { ...bx, outlets: [...bx.outlets, ...neu] }));
     } }, "+ ", parseInt(bulk.count) || 1, "\xD7")), /* @__PURE__ */ import_react6.default.createElement("button", { style: { ...S.secondaryBtn, marginTop: 6 }, onClick: () => addOutlet(b.id) }, "+ Einzeln hinzuf\xFCgen"))))));
@@ -32062,7 +32186,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       r.readAsText(file);
       e.target.value = "";
     };
-    return /* @__PURE__ */ import_react6.default.createElement(Section, { title: "Verbraucher-Stammdaten" }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.primaryBtn, onClick: add }, "+ Verbraucher"), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.ghostBtn, onClick: exportLoads }, /* @__PURE__ */ import_react6.default.createElement(Download, { size: 14, "aria-hidden": "true" }), "Exportieren"), /* @__PURE__ */ import_react6.default.createElement("label", { style: S.ghostBtn }, /* @__PURE__ */ import_react6.default.createElement(Upload, { size: 14, "aria-hidden": "true" }), "Importieren", /* @__PURE__ */ import_react6.default.createElement("input", { type: "file", accept: ".json", onChange: importLoads, style: { display: "none" } }))), /* @__PURE__ */ import_react6.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react6.default.createElement("thead", null, /* @__PURE__ */ import_react6.default.createElement("tr", null, /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "3-phasig"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react6.default.createElement("tbody", null, loads.map((l) => /* @__PURE__ */ import_react6.default.createElement("tr", { key: l.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { style: S.inputSm, value: l.name, onChange: (e) => update(l.id, { name: e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, value: l.watt, onChange: (e) => update(l.id, { watt: e.target.value === "" ? "" : +e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, l.watt ? l.threePhase ? `${round22(l.watt / VOLT)}/Ph` : round22(l.watt / VOLT) : ""), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "checkbox", checked: l.threePhase || false, onChange: (e) => update(l.id, { threePhase: e.target.checked }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: () => remove(l.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react6.default.createElement(X, { size: 14, "aria-hidden": "true" }))))))));
+    return /* @__PURE__ */ import_react6.default.createElement(Section, { title: "Verbraucher-Stammdaten" }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4 } }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.primaryBtn, onClick: add }, "+ Verbraucher"), /* @__PURE__ */ import_react6.default.createElement("button", { style: S.ghostBtn, onClick: exportLoads }, /* @__PURE__ */ import_react6.default.createElement(Download, { size: 14, "aria-hidden": "true" }), "Exportieren"), /* @__PURE__ */ import_react6.default.createElement("label", { style: S.ghostBtn }, /* @__PURE__ */ import_react6.default.createElement(Upload, { size: 14, "aria-hidden": "true" }), "Importieren", /* @__PURE__ */ import_react6.default.createElement("input", { type: "file", accept: ".json", onChange: importLoads, style: { display: "none" } }))), /* @__PURE__ */ import_react6.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react6.default.createElement("thead", null, /* @__PURE__ */ import_react6.default.createElement("tr", null, /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Name"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "W"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "A"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "3-phasig"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }))), /* @__PURE__ */ import_react6.default.createElement("tbody", null, loads.map((l) => /* @__PURE__ */ import_react6.default.createElement("tr", { key: l.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { style: S.inputSm, value: l.name, onChange: (e) => update(l.id, { name: e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "number", style: { ...S.inputSm, width: 90 }, value: l.watt, onChange: (e) => update(l.id, { watt: e.target.value === "" ? "" : +e.target.value }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, l.watt ? l.threePhase ? `${round23(l.watt / VOLT2)}/Ph` : round23(l.watt / VOLT2) : ""), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("input", { type: "checkbox", checked: l.threePhase || false, onChange: (e) => update(l.id, { threePhase: e.target.checked }) })), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.dangerBtn, onClick: () => remove(l.id), "aria-label": "Entfernen", title: "Entfernen" }, /* @__PURE__ */ import_react6.default.createElement(X, { size: 14, "aria-hidden": "true" }))))))));
   }
   function OverviewTab({ instances, instById, boxTypeById, totalLoad, rootInstances, mainConns, mainConnById, meta, isOverloaded, isUnderdimensioned, isAdapted, placements, loads, loadById }) {
     if (instances.length === 0) return /* @__PURE__ */ import_react6.default.createElement(Section, { title: "\xDCbersicht" }, /* @__PURE__ */ import_react6.default.createElement("p", { style: S.empty }, "Noch keine Verteiler aktiviert."));
@@ -32075,21 +32199,21 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
         tot.L2 += t.L2;
         tot.L3 += t.L3;
       });
-      return /* @__PURE__ */ import_react6.default.createElement("div", { key: mc.id, style: S.rootCard }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.rootTitle }, mc.name, mc.amp && /* @__PURE__ */ import_react6.default.createElement("span", { style: S.rootSub }, " (max ", mc.amp, "A)")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 12, color: "#9aa4af", marginBottom: 8 } }, "Verteiler: ", connInsts.map((i) => i.name).join(", ") || "\u2014"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
+      return /* @__PURE__ */ import_react6.default.createElement("div", { key: mc.id, style: S.rootCard }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.rootTitle }, mc.name, mc.amp && /* @__PURE__ */ import_react6.default.createElement("span", { style: S.rootSub }, " (max ", mc.amp, "A)")), /* @__PURE__ */ import_react6.default.createElement("div", { style: { fontSize: 12, color: "#9aa4af", marginBottom: 8 } }, "Verteiler: ", connInsts.map((i) => i.name).join(", ") || "\u2014"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES3.map((ph) => {
         const a = tot[ph];
         const pct = mc.amp ? a / mc.amp * 100 : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-        return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round22(a), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phasePct }, mc.amp ? `${Math.round(pct)}%` : ""));
+        return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round23(a), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phasePct }, mc.amp ? `${Math.round(pct)}%` : ""));
       })));
     }), rootInstances.filter((i) => !i.mainConnectionId).map((ri) => {
       const t = totalLoad(ri.id);
       const type = boxTypeById[ri.typeId];
       const maxA = type?.feedAmp || 0;
-      return /* @__PURE__ */ import_react6.default.createElement("div", { key: ri.id, style: { ...S.rootCard, borderColor: LINE } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.rootTitle, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react6.default.createElement("span", { style: S.rootSub }, "(kein Einspeisepunkt)")), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES2.map((ph) => {
+      return /* @__PURE__ */ import_react6.default.createElement("div", { key: ri.id, style: { ...S.rootCard, borderColor: LINE } }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.rootTitle, color: "#9aa4af" } }, ri.name, " ", /* @__PURE__ */ import_react6.default.createElement("span", { style: S.rootSub }, "(kein Einspeisepunkt)")), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseBar }, PHASES3.map((ph) => {
         const a = t[ph];
         const pct = maxA ? a / maxA * 100 : 0;
         const col = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : "#27ae60";
-        return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round22(a), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })));
+        return /* @__PURE__ */ import_react6.default.createElement("div", { key: ph, style: S.phaseBox }, /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseLabel }, ph), /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseVal, color: col } }, round23(a), " A"), /* @__PURE__ */ import_react6.default.createElement("div", { style: S.phaseTrack }, /* @__PURE__ */ import_react6.default.createElement("div", { style: { ...S.phaseFill, width: `${Math.min(pct, 100)}%`, background: col } })));
       })));
     })), /* @__PURE__ */ import_react6.default.createElement(Section, { title: "Alle Verteiler" }, /* @__PURE__ */ import_react6.default.createElement("table", { style: S.table }, /* @__PURE__ */ import_react6.default.createElement("thead", null, /* @__PURE__ */ import_react6.default.createElement("tr", null, /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Verteiler"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Eingang"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "h\xE4ngt an"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "L1(A)"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "L2(A)"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "L3(A)"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Max(A)"), /* @__PURE__ */ import_react6.default.createElement("th", { style: S.th }, "Status"))), /* @__PURE__ */ import_react6.default.createElement("tbody", null, instances.map((inst) => {
       const t = totalLoad(inst.id);
@@ -32098,11 +32222,11 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       const maxA = parentOutlet ? Math.min(type?.feedAmp || 0, parentOutlet.amp) : type?.feedAmp || 0;
       const peak = Math.max(t.L1, t.L2, t.L3);
       const pct = maxA ? peak / maxA * 100 : 0;
-      const conn = type ? CONN2[type.feedConnector]?.label || "" : "";
+      const conn = type ? CONN3[type.feedConnector]?.label || "" : "";
       const stat = pct > 100 ? "\xDCBERLAST" : pct > 80 ? ">80%" : peak > 0 ? "OK" : "\u2013";
       const statIcon = pct > 100 ? /* @__PURE__ */ import_react6.default.createElement(TriangleAlert, { size: 13, "aria-hidden": "true" }) : peak > 0 && pct <= 80 ? /* @__PURE__ */ import_react6.default.createElement(Check, { size: 13, "aria-hidden": "true" }) : null;
       const scol = pct > 100 ? "#c0392b" : pct > 80 ? "#e67e22" : peak > 0 ? "#27ae60" : "#999";
-      return /* @__PURE__ */ import_react6.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, pct > 100 && /* @__PURE__ */ import_react6.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(TriangleAlert, { size: 15, "aria-label": "\xDCberlastet" })), pct <= 100 && isUnderdimensioned(inst.id) && /* @__PURE__ */ import_react6.default.createElement("span", { title: "Unterdimensioniert!", style: { color: "#f5a623", display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(Zap, { size: 15, "aria-label": "Unterdimensioniert" })), pct <= 100 && !isUnderdimensioned(inst.id) && isAdapted(inst.id) && /* @__PURE__ */ import_react6.default.createElement("span", { title: "Adapter!", style: { color: "#a78bfa", display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(Plug, { size: 15, "aria-label": "Adapter" }))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, inst.name), /* @__PURE__ */ import_react6.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, conn), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, inst.parentId ? instById[inst.parentId]?.name : inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name : "\u2014 Einspeisung \u2014"), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, round22(t.L1)), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, round22(t.L2)), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, round22(t.L3)), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, maxA), /* @__PURE__ */ import_react6.default.createElement("td", { style: { ...S.td, color: scol, fontWeight: 600 } }, /* @__PURE__ */ import_react6.default.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 } }, statIcon, stat)));
+      return /* @__PURE__ */ import_react6.default.createElement("tr", { key: inst.id }, /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, pct > 100 && /* @__PURE__ */ import_react6.default.createElement("span", { title: "\xDCberlastet!", style: { color: "#e74c3c", display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(TriangleAlert, { size: 15, "aria-label": "\xDCberlastet" })), pct <= 100 && isUnderdimensioned(inst.id) && /* @__PURE__ */ import_react6.default.createElement("span", { title: "Unterdimensioniert!", style: { color: "#f5a623", display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(Zap, { size: 15, "aria-label": "Unterdimensioniert" })), pct <= 100 && !isUnderdimensioned(inst.id) && isAdapted(inst.id) && /* @__PURE__ */ import_react6.default.createElement("span", { title: "Adapter!", style: { color: "#a78bfa", display: "inline-flex" } }, /* @__PURE__ */ import_react6.default.createElement(Plug, { size: 15, "aria-label": "Adapter" }))), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, inst.name), /* @__PURE__ */ import_react6.default.createElement("td", { style: { ...S.td, fontSize: 11 } }, conn), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, inst.parentId ? instById[inst.parentId]?.name : inst.mainConnectionId ? mainConnById[inst.mainConnectionId]?.name : "\u2014 Einspeisung \u2014"), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, round23(t.L1)), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, round23(t.L2)), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, round23(t.L3)), /* @__PURE__ */ import_react6.default.createElement("td", { style: S.td }, maxA), /* @__PURE__ */ import_react6.default.createElement("td", { style: { ...S.td, color: scol, fontWeight: 600 } }, /* @__PURE__ */ import_react6.default.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 4 } }, statIcon, stat)));
     })))), (() => {
       const counts = {};
       placements.forEach((p) => {
@@ -32204,7 +32328,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       const mcbMap = {};
       outlets.forEach((out) => {
         if (!out.breaker) return;
-        const ph = is3ph2(out.connector) ? "3P" : isMulticore2(out.connector) ? "MC" : "1P";
+        const ph = is3ph2(out.connector) ? "3P" : isMulticore3(out.connector) ? "MC" : "1P";
         const prot = out.protection === "RCBO" ? "RCBO" : out.protection === "RCD" ? "RCD" : "MCB";
         const key = `${prot}_${out.breaker}_${ph}`;
         if (!mcbMap[key]) mcbMap[key] = { prot, breaker: out.breaker, ph, cnt: 0 };
@@ -32915,7 +33039,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
           const isDraggingCons = dragState?.kind === "consumer" && dragState?.key === cKey;
           const effectiveStackX = isDraggingCons && livePos ? livePos.x : baseStackX;
           const effectiveStackTop = isDraggingCons && livePos ? livePos.y : baseStackTop;
-          const isMC = isMulticore2(out.connector);
+          const isMC = isMulticore3(out.connector);
           const activeIdx = activeOutlets.findIndex((o) => o.id === out.id);
           const laneX = pos.x + NODE_W + 4 + activeIdx * laneGap;
           const midYs = placs.map((_, pi) => effectiveStackTop + pi * (LEAF_H + LEAF_GAP) + LEAF_H / 2);
@@ -32971,7 +33095,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
                 if (!load) return null;
                 const leafY = pi * (LEAF_H + LEAF_GAP);
                 const wattStr = load.watt ? `${load.watt} W` : "";
-                const ampStr = load.watt ? ` \xB7 ${round22(load.watt / 230)} A` : "";
+                const ampStr = load.watt ? ` \xB7 ${round23(load.watt / 230)} A` : "";
                 const maxName = isMC ? 13 : 18;
                 const nameDisp = load.name && load.name.length > maxName ? load.name.slice(0, maxName - 1) + "\u2026" : load.name || "?";
                 const spOk = plac.mcSlot != null;
@@ -32987,7 +33111,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
                     stroke: "#3a5060",
                     strokeWidth: 1
                   }
-                ), /* @__PURE__ */ import_react6.default.createElement("text", { x: 8, y: 14, fill: "#6aaabf", fontSize: 9, fontWeight: "600" }, nameDisp), /* @__PURE__ */ import_react6.default.createElement("text", { x: 8, y: 27, fill: "#3a6070", fontSize: 8 }, wattStr, ampStr), isMC && /* @__PURE__ */ import_react6.default.createElement("g", null, /* @__PURE__ */ import_react6.default.createElement("title", null, spOk ? `Steckplatz ${plac.mcSlot} (${PHASES2[(plac.mcSlot - 1) % 3]}) auf ${out.label}` : `Kein Steckplatz zugeordnet \u2013 im Steckplan ausw\xE4hlen`), /* @__PURE__ */ import_react6.default.createElement(
+                ), /* @__PURE__ */ import_react6.default.createElement("text", { x: 8, y: 14, fill: "#6aaabf", fontSize: 9, fontWeight: "600" }, nameDisp), /* @__PURE__ */ import_react6.default.createElement("text", { x: 8, y: 27, fill: "#3a6070", fontSize: 8 }, wattStr, ampStr), isMC && /* @__PURE__ */ import_react6.default.createElement("g", null, /* @__PURE__ */ import_react6.default.createElement("title", null, spOk ? `Steckplatz ${plac.mcSlot} (${PHASES3[(plac.mcSlot - 1) % 3]}) auf ${out.label}` : `Kein Steckplatz zugeordnet \u2013 im Steckplan ausw\xE4hlen`), /* @__PURE__ */ import_react6.default.createElement(
                   "rect",
                   {
                     x: LEAF_W - spW - 4,
@@ -33179,7 +33303,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       /* @__PURE__ */ import_react6.default.createElement("div", { style: { marginBottom: 16 } }, /* @__PURE__ */ import_react6.default.createElement("button", { style: S.primaryBtn, onClick: addCalc }, "+ Neue Rechnung")),
       cableCalcs.length === 0 && /* @__PURE__ */ import_react6.default.createElement("p", { style: { color: "#666", fontSize: 13 } }, "Noch keine Rechnungen vorhanden. \xDCber \u201E+ Neue Rechnung\u201C eine neue anlegen."),
       cableCalcs.map((calc) => {
-        const dim = calcDim(calc.cableA, calc.fTemp, calc.fAdern, calc.fLagen, calc.fArt, calc.fN);
+        const dim = calcDim2(calc.cableA, calc.fTemp, calc.fAdern, calc.fLagen, calc.fArt, calc.fN);
         const ready = calc.I_B !== "" && calc.I_n !== "" && calc.cableA !== "";
         const chk1 = ready && +calc.I_B <= +calc.I_n;
         const chk2 = ready && dim != null && +calc.I_n <= dim.izul;
@@ -33232,7 +33356,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
             onChange: (e) => upd(calc.id, { fTemp: e.target.value })
           },
           /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014"),
-          Object.keys(F_TEMP).map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t, " \xB0C"))
+          Object.keys(F_TEMP2).map((t) => /* @__PURE__ */ import_react6.default.createElement("option", { key: t, value: t }, t, " \xB0C"))
         )), /* @__PURE__ */ import_react6.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Stromf. Adern", /* @__PURE__ */ import_react6.default.createElement(
           "select",
           {
@@ -33241,7 +33365,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
             onChange: (e) => upd(calc.id, { fAdern: e.target.value })
           },
           /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014"),
-          Object.keys(F_ADERN).map((n) => /* @__PURE__ */ import_react6.default.createElement("option", { key: n, value: n }, n, " Adern"))
+          Object.keys(F_ADERN2).map((n) => /* @__PURE__ */ import_react6.default.createElement("option", { key: n, value: n }, n, " Adern"))
         )), /* @__PURE__ */ import_react6.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "Aufgewickelt", /* @__PURE__ */ import_react6.default.createElement(
           "select",
           {
@@ -33250,7 +33374,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
             onChange: (e) => upd(calc.id, { fLagen: e.target.value })
           },
           /* @__PURE__ */ import_react6.default.createElement("option", { value: "" }, "\u2014"),
-          Object.keys(F_LAGEN).map((n) => /* @__PURE__ */ import_react6.default.createElement("option", { key: n, value: n }, n === "1" ? "1 Lage" : n + " Lagen"))
+          Object.keys(F_LAGEN2).map((n) => /* @__PURE__ */ import_react6.default.createElement("option", { key: n, value: n }, n === "1" ? "1 Lage" : n + " Lagen"))
         )), /* @__PURE__ */ import_react6.default.createElement("label", { style: { display: "flex", flexDirection: "column", gap: 3, fontSize: 11, color: "#9aa4af" } }, "H\xE4ufung \u2013 Verlegeart", /* @__PURE__ */ import_react6.default.createElement(
           "select",
           {
@@ -33283,8 +33407,8 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       voltCalcs.length === 0 && /* @__PURE__ */ import_react6.default.createElement("p", { style: { color: "#666", fontSize: 13 } }, "Noch keine Rechnungen vorhanden. \xDCber \u201E+ Neue Rechnung\u201C eine neue anlegen."),
       voltCalcs.map((calc) => {
         const ready = calc.I !== "" && calc.l !== "" && calc.cosPhi !== "" && calc.cableA !== "" && calc.threePhase !== "";
-        const du = ready ? calcVoltDrop2(+calc.I, +calc.l, +calc.cableA, +calc.cosPhi, calc.threePhase === "3ph") : null;
-        const minA = ready ? minCsVoltDrop(+calc.I, +calc.l, +calc.cosPhi, calc.threePhase === "3ph") : null;
+        const du = ready ? calcVoltDrop3(+calc.I, +calc.l, +calc.cableA, +calc.cosPhi, calc.threePhase === "3ph") : null;
+        const minA = ready ? minCsVoltDrop2(+calc.I, +calc.l, +calc.cosPhi, calc.threePhase === "3ph") : null;
         const duPct = du?.pct ?? null;
         const col = duPct === null ? null : duPct <= 3 ? "#2ecc71" : duPct <= 5 ? "#f5a623" : "#e74c3c";
         const resBg = du === null ? {} : duPct <= 3 ? { background: "rgba(46,204,113,0.08)", border: "1px solid rgba(46,204,113,0.28)" } : duPct <= 5 ? { background: "rgba(245,166,35,0.10)", border: "1px solid rgba(245,166,35,0.35)" } : { background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.28)" };
@@ -33383,7 +33507,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       childInstIds.forEach((cid) => {
         const cType = boxTypeById[instById[cid]?.typeId];
         (cType?.outlets || []).forEach((co) => {
-          if (isMulticore2(co.connector)) {
+          if (isMulticore3(co.connector)) {
             for (let s = 1; s <= (co.mcSlots || 6); s++) {
               const slotId = `${co.id}_s${s}`;
               const gcInsts = instances.filter((ci) => ci.parentId === cid && ci.parentOutletId === slotId);
@@ -33514,9 +33638,9 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
       });
       rcboOutlets.forEach((o) => {
         const rMa = o.rcdMa ?? 30;
-        if (isMulticore2(o.connector)) {
+        if (isMulticore3(o.connector)) {
           const slots = o.mcSlots || 6;
-          for (let s = 1; s <= slots; s++) expandedRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: `${o.id}_s${s}`, rowLabel: `${o.label} \u2013 SP ${s} (${PHASES2[(s - 1) % 3]})`, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
+          for (let s = 1; s <= slots; s++) expandedRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: `${o.id}_s${s}`, rowLabel: `${o.label} \u2013 SP ${s} (${PHASES3[(s - 1) % 3]})`, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
         } else {
           expandedRcdRows.push({ rowType: "rcbo", rcd: null, outlet: o, oid: o.id, rowLabel: o.label, iAnLimit: rMa, protLabel: `RCBO ${o.amp}A / ${rMa}mA` });
         }
@@ -33530,7 +33654,7 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
           key: inst.id,
           tour: "pruef-verteiler",
           title: /* @__PURE__ */ import_react6.default.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ import_react6.default.createElement(Plug, { size: 17, color: ACCENT, "aria-hidden": "true" }), inst.name),
-          subtitle: `${type?.name || "?"} \xB7 Einspeisung: ${CONN2[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A`
+          subtitle: `${type?.name || "?"} \xB7 Einspeisung: ${CONN3[type?.feedConnector]?.label || ""} ${type?.feedAmp || ""}A`
         },
         /* @__PURE__ */ import_react6.default.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ import_react6.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Sichtpr\xFCfung"), /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3 } }, SICHT_ITEMS2.map((item, idx) => {
           const v = sicht[idx];
@@ -33548,16 +33672,16 @@ Sitzung wirklich f\xFCr alle beenden?`)) return;
           const schleifenRows = [];
           outlets.forEach((outlet) => {
             const outHasRcd = (o) => o.protection === "RCBO" || !!o.rcdId;
-            if (isMulticore2(outlet.connector)) {
+            if (isMulticore3(outlet.connector)) {
               const slots = outlet.mcSlots || 6;
               for (let s = 1; s <= slots; s++) {
                 const slotId = `${outlet.id}_s${s}`;
                 const slotChildInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === slotId);
-                schleifenRows.push({ oid: slotId, label: `${outlet.label} \u2013 SP ${s}`, subLabel: `${PHASES2[(s - 1) % 3]} \xB7 ${outlet.amp}A`, amp: outlet.amp || 16, is3p: false, hasChild: slotChildInsts.length > 0, childName: slotChildInsts[0]?.name || "", childInstIds: slotChildInsts.map((ci) => ci.id), hasRcd: outHasRcd(outlet), breaker: outlet.breaker || "C" });
+                schleifenRows.push({ oid: slotId, label: `${outlet.label} \u2013 SP ${s}`, subLabel: `${PHASES3[(s - 1) % 3]} \xB7 ${outlet.amp}A`, amp: outlet.amp || 16, is3p: false, hasChild: slotChildInsts.length > 0, childName: slotChildInsts[0]?.name || "", childInstIds: slotChildInsts.map((ci) => ci.id), hasRcd: outHasRcd(outlet), breaker: outlet.breaker || "C" });
               }
             } else {
               const childInsts = instances.filter((ci) => ci.parentId === inst.id && ci.parentOutletId === outlet.id);
-              schleifenRows.push({ oid: outlet.id, label: outlet.label, subLabel: `${CONN2[outlet.connector]?.label || ""} ${outlet.amp}A`, amp: outlet.amp || type?.feedAmp || 16, is3p: is3ph2(outlet.connector), hasChild: childInsts.length > 0, childName: childInsts[0]?.name || "", childInstIds: childInsts.map((ci) => ci.id), hasRcd: outHasRcd(outlet), breaker: outlet.breaker || "C" });
+              schleifenRows.push({ oid: outlet.id, label: outlet.label, subLabel: `${CONN3[outlet.connector]?.label || ""} ${outlet.amp}A`, amp: outlet.amp || type?.feedAmp || 16, is3p: is3ph2(outlet.connector), hasChild: childInsts.length > 0, childName: childInsts[0]?.name || "", childInstIds: childInsts.map((ci) => ci.id), hasRcd: outHasRcd(outlet), breaker: outlet.breaker || "C" });
             }
           });
           return /* @__PURE__ */ import_react6.default.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ import_react6.default.createElement("p", { style: { fontSize: 11, color: "#9aa4af", margin: "0 0 6px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 } }, "Schleifenimpedanz & Kurzschluss"), /* @__PURE__ */ import_react6.default.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 4 } }, schleifenRows.map(({ oid, label, subLabel, amp, is3p, hasChild, childName, childInstIds, hasRcd, breaker }) => {

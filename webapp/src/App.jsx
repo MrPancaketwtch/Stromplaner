@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ClipboardCheck, Plug, ClipboardList, Share2, Users, X, Pencil, CornerDownRight, Check, TriangleAlert, CircleAlert, FilePlus2, RefreshCw, Lock, LogOut, Plus, Trash2, Play, Power, Printer, PenLine, ImagePlus, Bluetooth, BluetoothOff, CircleHelp, ChevronRight } from 'lucide-react';
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from '@sync/sitzung.js';
 import { migrateOutlet } from '@shared/pruefprotokoll.js';
-import { protokollPdf, pdfTeilen, pdfDateiname, protokollDrucken } from './pdf.js';
+import { protokollPdf, pdfTeilen, pdfDateiname, protokollDrucken, stromplanDrucken } from './pdf.js';
 import { packen, entpacken, zuBase64, ausBase64 } from '@shared/bt-protokoll.js';
 import { Capacitor } from '@capacitor/core';
 import { Tour, Willkommen, tutorialGefragt, tutorialMerken } from '@shared/tour.jsx';
@@ -1122,6 +1122,10 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
     const n = lib.boxTypes.length, m = lib.loads.length;
     notify(`Neuer Plan angelegt${n || m ? ` – mit ${n} Verteiler-Typ${n === 1 ? '' : 'en'} und ${m} Verbraucher${m === 1 ? '' : 'n'} aus der Bibliothek` : ''}. Der bisherige Plan bleibt in der Liste.`);
   };
+  const stromplanPdf = async () => {
+    try { await stromplanDrucken(plan, { logo: bild.logo }); }
+    catch (e) { notify('Drucken nicht möglich: ' + (e?.message || e), 'err'); }
+  };
   const loeschen = (e) => {
     const name = e.name || 'Plan ohne Namen';
     if (!window.confirm(`„${name}“ (${e.verteiler} Verteiler) mit allen Prüfergebnissen vom Handy löschen?`)) return;
@@ -1195,6 +1199,13 @@ function ProjektTab({ plan, setPlan, lib, typen, verbraucher, planliste, sitzung
             />
           </div>
         ))}
+      </div>
+
+      <div className="section">
+        <div className="section-title">Stromplan</div>
+        <button className="btn btn--secondary" data-tour="stromplan-pdf" style={{ width: '100%' }} disabled={!plan.instances.length} onClick={stromplanPdf}>
+          <Printer size={16} aria-hidden="true" />Stromplan als PDF
+        </button>
       </div>
 
       <div className="section" data-tour="bibliothek">

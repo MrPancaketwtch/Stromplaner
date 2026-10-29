@@ -47,7 +47,7 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht: Geplant wird am 
 ### Tabs in der Handy-App
 | Tab | Inhalt |
 |-----|--------|
-| **Projekt** | **Planliste** (mehrere Pläne anlegen, wechseln, löschen), Projektdaten, **Firmenlogo** fürs PDF, **Verteiler-Typen** und **Verbraucher** (anlegen und bearbeiten) |
+| **Projekt** | **Planliste** (mehrere Pläne anlegen, wechseln, löschen), Projektdaten, **Stromplan als PDF** (wie am PC, ohne Blockschaltbild), **Firmenlogo** fürs PDF, **Verteiler-Typen** und **Verbraucher** (anlegen und bearbeiten) |
 | **Steckplan** | Verteiler und Steckungen ansehen und anpassen. Am Steckplatz Verbraucher stecken (auch neu anlegen) und Unterverteiler anschließen oder dort neu anlegen; alternativ am Verteiler unter **Hängt an** |
 | **Prüfung** | Errichtungsprüfung je Verteiler: Sichtprüfung, Spannungen, Drehfeld, Schleifenimpedanz am Eingang, RCD-Prüfung, Z_s / I_k je Abgang, Bemerkung. Grenzwerte werden wie am PC grün/rot markiert. Mit **Nächster ›** geht es von Verteiler zu Verteiler; „Weiter“ auf der Tastatur springt ins nächste Messfeld. **PDF speichern / drucken** öffnet den Android-Druckdialog („Als PDF speichern“ oder Drucker) – das PDF ist identisch mit dem vom PC, Text markierbar. **PDF direkt teilen** schickt eine Bild-Fassung sofort per Mail oder Messenger. Unter *Prüfungsdetails* lässt sich mit dem Finger unterschreiben. |
 | **Teilen** | Per **Bluetooth** ohne Netzwerk und ohne Server mit dem PC austauschen |

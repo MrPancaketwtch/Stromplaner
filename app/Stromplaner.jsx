@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { Zap, ImagePlus, Pencil, X, Save, FolderOpen, History, Users, FilePlus2, ScrollText, RefreshCw, CircleArrowUp, Download, Coffee, Printer, Upload, Share2, TriangleAlert, Plug, Lock, Move, Type, Square, Slash, RotateCcw, Check, PenLine, Undo2, CornerDownRight, Trash2, Info, Bluetooth, BluetoothOff } from "lucide-react";
 import { useSitzung, serverApi, serverBasis, beitrittMoeglich, ladeName, speichereName } from "./sync/sitzung.js";
 import { pruefprotokollHtml } from "./shared/pruefprotokoll.js";
+import { stromplanHtml } from "./shared/stromplan.js";
 import { btVerfuegbar, btVerbinden, btInfo, btHolen, btSenden } from "./bluetooth.js";
 import { Tour, Willkommen, tutorialGefragt, tutorialMerken } from "./shared/tour.jsx";
 import { TOUREN_PC, HILFE_ZU_TOUR } from "./touren-pc.js";
@@ -82,6 +83,9 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 // Betas (1.3.0-beta.1) zeigen die Einträge der kommenden Version (1.3.0)
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
+  "1.5.0": [
+    "Android-App: den ganzen Stromplan als PDF – Verteiler, Steckungen und Phasenlast wie am PC (ohne Blockschaltbild), im Tab Projekt über „Stromplan als PDF“",
+  ],
   "1.4.0": [
     "Geführte Rundgänge statt Anleitungstexten – am PC im Tab „Anleitung“ und über die „?“-Knöpfe, in der Android-App im neuen Tab „Hilfe“. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen Überblick möchtest. Ist dein Plan noch leer, zeigen sie einen Beispielplan – danach ist dein Stand wieder da",
     "Pläne zwischen PC und Handy per Bluetooth austauschen – ohne WLAN oder Netzwerk: Handy unter „Teilen“ sichtbar machen, am PC unter Teilen mit dem Handy verbinden, dann vom Handy holen (nur Prüfergebnisse oder ganzer Plan) oder ans Handy senden",
@@ -1034,125 +1038,7 @@ export default function App() {
   const exportPDF=()=>{
     const pw=window.open("","_blank","width=900,height=700");
     if(!pw){ uiAlert("Popup-Blocker aktiv – bitte erlauben."); return; }
-    const phBar=(vals,maxA)=>PHASES.map(ph=>{
-      const a=round2(vals[ph]); const pct=maxA?Math.round((a/maxA)*100):0;
-      const col=pct>100?"#c0392b":pct>80?"#e67e22":"#27ae60";
-      return `<div style="flex:1;text-align:center;padding:4px 8px;background:#f8f8f8;border:1px solid #ddd;border-radius:4px">
-        <div style="font-weight:700;font-size:11px">${ph}</div>
-        <div style="font-size:16px;font-weight:800;color:${col}">${a} A</div>
-        <div style="height:5px;background:#eee;border-radius:3px;margin:3px 0"><div style="height:100%;width:${Math.min(pct,100)}%;background:${col};border-radius:3px"></div></div>
-        <div style="font-size:9px;color:#666">${maxA?pct+"% von "+maxA+"A":""}</div></div>`;
-    }).join("");
-    let body=`${corpLogo?`<div style="text-align:right;margin-bottom:12px"><img src="${corpLogo.replace(/"/g,'&quot;')}" style="max-height:40px;max-width:140px;object-fit:contain"></div>`:""}<h1 style="font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:6px"><svg width="18" height="18" viewBox="0 0 24 24" fill="#f5a623" stroke="#b05a00" stroke-width="1.5" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>STROMPLAN</h1>
-      <div style="font-size:12px;color:#555;margin-bottom:16px">${meta.production} · ${meta.creator} · v${meta.version} · ${meta.date}</div>`;
-    if(mainConns.length){
-      body+=`<h2 style="font-size:13px;background:#1c2127;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Einspeisepunkte</h2>`;
-      mainConns.forEach(mc=>{
-        const connInsts=rootInstances.filter(i=>i.mainConnectionId===mc.id);
-        const tot={L1:0,L2:0,L3:0};
-        connInsts.forEach(i=>{ const t=totalLoad(i.id); tot.L1+=t.L1; tot.L2+=t.L2; tot.L3+=t.L3; });
-        body+=`<div style="margin-bottom:10px"><b>${mc.name}</b>${mc.amp?` (max ${mc.amp}A)`:""}<div style="display:flex;gap:6px;margin-top:4px">${phBar(tot,mc.amp||0)}</div></div>`;
-      });
-    }
-    instances.forEach(inst=>{
-      const type=boxTypeById[inst.typeId]; const own=ownLoad(inst.id); const tot=totalLoad(inst.id);
-      const maxA=type?.feedAmp||0; const conn=type?(CONN[type.feedConnector]?.label||""):"";
-      const rows2=placements.filter(p=>p.instanceId===inst.id).map(p=>{
-        const l=loadById[p.loadId]; const out=type?.outlets.find(o=>o.id===p.outletId);
-        if(!l) return null;
-        const amp=l.watt?round2(l.watt/VOLT):0;
-        let ph="",slot="";
-        if(l.threePhase){ ph="L1+L2+L3"; }
-        else if(out&&isMulticore(out.connector)){ const s=p.mcSlot||1; ph=PHASES[(s-1)%3]; slot=`Steckplatz ${s}`; }
-        else { ph=out?.phase||""; }
-        return {name:l.name,outlet:out?.label||"",slot,ph,watt:l.watt,amp,breaker:out?.breaker||"",prot:out?.protection||""};
-      }).filter(Boolean);
-      body+=`<div style="page-break-inside:avoid;margin-top:18px">
-        <h2 style="font-size:13px;background:#2e75b6;color:#fff;padding:6px 10px;margin:0 0 6px;border-radius:4px">${inst.name} <span style="font-weight:400;font-size:11px">(${type?.name||""} · ${conn} · max ${maxA}A)</span></h2>
-        <div style="font-size:11px;color:#555;margin-bottom:6px">hängt an: ${inst.parentId?instById[inst.parentId]?.name:inst.mainConnectionId?(mainConnById[inst.mainConnectionId]?.name||"— Einspeisung —"):"— Einspeisung —"}</div>
-        <div style="display:flex;gap:6px;margin-bottom:8px">${phBar(tot,maxA)}</div>`;
-      if(rows2.length){
-        body+=`<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:#eee">
-          ${["Verbraucher","Anschluss","Steckplatz","Phase","W","A","Sich.","Schutz"].map(h=>`<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
-        rows2.forEach(r=>{ body+=`<tr>${[r.name,r.outlet,r.slot,r.ph,r.watt,r.amp,r.breaker,r.prot].map(v=>`<td style="padding:2px 5px;border:1px solid #ddd">${v}</td>`).join("")}</tr>`; });
-        body+=`</tbody></table>`;
-      } else body+=`<p style="font-size:11px;color:#999;font-style:italic">Keine Verbraucher gesteckt.</p>`;
-      body+=`</div>`;
-    });
-
-    /* ── Leitungsdimensionierung ──────────────────────────────────── */
-    if(cableCalcs.length>0){
-      body+=`<div style="page-break-inside:avoid;margin-top:28px">
-        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Leitungsdimensionierung (H07RN-F)</h2>
-        <table style="width:100%;border-collapse:collapse;font-size:10px">
-          <thead><tr style="background:#eee">
-            <th style="padding:3px 6px;border:1px solid #ddd;text-align:left">Bezeichnung</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2B;(A)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2099;(A)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">Querschnitt</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">Faktor</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x1D467;(A)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2B;&le;I&#x2099;</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I&#x2099;&le;I&#x1D467;</th>
-          </tr></thead><tbody>`;
-      cableCalcs.forEach(c=>{
-        const dim=calcDim(c.cableA,c.fTemp,c.fAdern,c.fLagen,c.fArt,c.fN);
-        const ready=c.I_B!==''&&c.I_n!==''&&c.cableA!=='';
-        const chk1=ready&&+c.I_B<=+c.I_n; const chk2=ready&&dim!=null&&+c.I_n<=dim.izul;
-        const ok1=ready?(chk1?'&#10003;':'&#10007;'):'–'; const ok2=ready&&dim?(chk2?'&#10003;':'&#10007;'):'–';
-        const col1=!ready?'#666':chk1?'#1a7a3a':'#c0392b'; const col2=!ready||!dim?'#666':chk2?'#1a7a3a':'#c0392b';
-        body+=`<tr>
-          <td style="padding:2px 6px;border:1px solid #ddd">${c.label||'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I_B||'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I_n||'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cableA?c.cableA+' mm²':'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${dim?dim.fTotal:'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${dim?dim.izul:'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col1};font-weight:700">${ok1}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col2};font-weight:700">${ok2}</td>
-        </tr>`;
-      });
-      body+=`</tbody></table></div>`;
-    }
-
-    /* ── Spannungsfall ────────────────────────────────────────────── */
-    if(voltCalcs.length>0){
-      body+=`<div style="page-break-inside:avoid;margin-top:18px">
-        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 8px;border-radius:4px">Spannungsfall (DIN VDE 0100-520)</h2>
-        <table style="width:100%;border-collapse:collapse;font-size:10px">
-          <thead><tr style="background:#eee">
-            <th style="padding:3px 6px;border:1px solid #ddd;text-align:left">Bezeichnung</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">I(A)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">l(m)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">cos&phi;</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">A(mm²)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">Phasigkeit</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">&Delta;U(V)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">&Delta;U(%)</th>
-            <th style="padding:3px 6px;border:1px solid #ddd">A&le;3%</th>
-          </tr></thead><tbody>`;
-      voltCalcs.forEach(c=>{
-        const is3=c.threePhase==='3ph';
-        const ready=c.I!==''&&c.l!==''&&c.cosPhi!==''&&c.cableA!==''&&c.threePhase!=='';
-        const du=ready?calcVoltDrop(+c.I,+c.l,+c.cableA,+c.cosPhi,is3):null;
-        const minA=ready?minCsVoltDrop(+c.I,+c.l,+c.cosPhi,is3,3):null;
-        const pct=du?du.pct:null;
-        const col=pct===null?'#666':pct<=3?'#1a7a3a':pct<=5?'#b05a00':'#c0392b';
-        body+=`<tr>
-          <td style="padding:2px 6px;border:1px solid #ddd">${c.label||'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.I||'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.l||'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cosPhi||'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.cableA||'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${c.threePhase==='3ph'?'3-phasig':'1-phasig'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col}">${du?du.V+' V':'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center;color:${col};font-weight:700">${du?du.pct+' %':'–'}</td>
-          <td style="padding:2px 6px;border:1px solid #ddd;text-align:center">${minA!==null?minA+' mm²':'–'}</td>
-        </tr>`;
-      });
-      body+=`</tbody></table></div>`;
-    }
-
+    let schaltbildSvg="";
     /* ── Blockschaltbild ──────────────────────────────────────────── */
     const svgEl=schematicSvgRef.current;
     if(svgEl&&instances.length>0){
@@ -1220,14 +1106,10 @@ export default function App() {
         else if(s==='#4a5568') el.setAttribute('stroke','#888');
       });
 
-      body+=`<div style="page-break-before:always">
-        <h2 style="font-size:13px;background:#2d3748;color:#fff;padding:6px 10px;margin:0 0 12px;border-radius:4px">Blockschaltbild</h2>
-        ${svgClone.outerHTML}</div>`;
+      schaltbildSvg=svgClone.outerHTML;
     }
 
-    pw.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Stromplan – ${meta.production}</title>
-      <style>@page{size:A4;margin:15mm}body{font-family:Arial,sans-serif;font-size:12px;color:#222;margin:0}</style>
-      </head><body>${body}</body></html>`);
+    pw.document.write(stromplanHtml(planDaten(),{logo:corpLogo,schaltbildSvg}));
     pw.document.close();
     setTimeout(()=>{ pw.focus(); pw.print(); },600);
   };
