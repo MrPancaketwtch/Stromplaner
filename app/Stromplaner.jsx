@@ -85,6 +85,7 @@ const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0
 const CHANGELOG = {
   "1.5.0": [
     "Android-App: den ganzen Stromplan als PDF – Verteiler, Steckungen und Phasenlast wie am PC (ohne Blockschaltbild), im Tab Projekt über „Stromplan als PDF“",
+    "Rundgänge überspringen keine Schritte mehr – etwa „Mit Handy verbinden“ bei schon verbundenem Handy oder die RCCB-Gruppen; fehlt die Stelle gerade, erscheint der Schritt trotzdem",
   ],
   "1.4.0": [
     "Geführte Rundgänge statt Anleitungstexten – am PC im Tab „Anleitung“ und über die „?“-Knöpfe, in der Android-App im neuen Tab „Hilfe“. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen Überblick möchtest. Ist dein Plan noch leer, zeigen sie einen Beispielplan – danach ist dein Stand wieder da",
@@ -535,13 +536,14 @@ export default function App() {
   const libGeloescht = useRef({ boxTypes:new Set(), loads:new Set() });   // in den Bibliotheks-Tabs gelöschte Ids
   const [tour,         setTour]         = useState(null);  // { id, start } des laufenden Rundgangs
   const [willkommen,   setWillkommen]   = useState(false); // erste Frage beim Start ohne Plan
-  const tourOeffnete = useRef({ teilen:false, sitzung:false }); // was der Rundgang selbst geöffnet hat
+  const tourOeffnete = useRef({ teilen:false, sitzung:false, typ:false }); // was der Rundgang selbst geöffnet hat
   const beispielSicherung = useRef(null); // eigener Stand, solange ein Rundgang den Beispielplan zeigt
 
   /* ── Sync ──────────────────────────────────────────────────────────────── */
   const [syncServer,      setSyncServer]      = useState(()=>localStorage.getItem("sp_sync_server")||"");
   const [syncToken,       setSyncToken]       = useState(()=>localStorage.getItem("sp_sync_token")||"");
   const [showSharePanel,   setShowSharePanel]   = useState(false);
+  const [typOffen,         setTypOffen]         = useState(null);   // aufgeklappter Verteiler-Typ
   useEffect(()=>{ localStorage.setItem("sp_sync_server", syncServer); },[syncServer]);
   useEffect(()=>{ localStorage.setItem("sp_sync_token",  syncToken);  },[syncToken]);
 
@@ -1154,11 +1156,13 @@ export default function App() {
     tab:(id)=>{ if(id==="dim"||id==="volt"){ setErweiterSubTab(id); goTab("erweitert"); } else goTab(id); },
     teilen:(offen)=>{ tourOeffnete.current.teilen=offen; setShowSharePanel(offen); },
     sitzung:(offen)=>{ tourOeffnete.current.sitzung=offen; setShowSitzung(offen); },
+    typ:()=>{ if(typOffen||!boxTypes.length) return; tourOeffnete.current.typ=true; setTypOffen(boxTypes[0].id); },
   };
   const tourEnde=()=>{
     if(tourOeffnete.current.teilen) setShowSharePanel(false);
     if(tourOeffnete.current.sitzung) setShowSitzung(false);
-    tourOeffnete.current={teilen:false,sitzung:false};
+    if(tourOeffnete.current.typ) setTypOffen(null);
+    tourOeffnete.current={teilen:false,sitzung:false,typ:false};
     const s=beispielSicherung.current;
     if(s){ beispielSicherung.current=null; planSetzen(s.daten); setActivePlan(s.activePlan); }
     setTour(null);
@@ -1200,14 +1204,14 @@ export default function App() {
         <button style={S.ghostBtn} data-tour="speichern" onClick={saveJSON}><Save size={14} aria-hidden="true"/>Speichern</button>
         {window.electronAPI&&<div style={{position:"relative"}}>
           <button style={S.ghostBtn} data-tour="teilen" title="Plan per Bluetooth mit dem Handy austauschen" onClick={()=>setShowSharePanel(v=>!v)}><Share2 size={14} aria-hidden="true"/>Teilen</button>
-          {showSharePanel&&<div style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}}>
+          {showSharePanel&&<div data-tour="bt-panel" style={{position:"absolute",top:"100%",right:0,zIndex:999,background:"#1b2026",border:"1px solid #2e3640",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,.5)",width:320,marginTop:4,padding:12}}>
             <div style={{fontSize:10,color:"#7c8794",marginBottom:6,letterSpacing:.5,textTransform:"uppercase"}}>Per Bluetooth – ohne Netzwerk</div>
             {!btVerfuegbar()
               ? <div style={{fontSize:10,color:"#7c8794",marginBottom:8,lineHeight:1.5}}>Bluetooth ist auf diesem Rechner nicht verfügbar.</div>
               : <>
                   {btStatus.msg&&<div style={{fontSize:10,color:btStatus.err?"#f87171":"#7ecf7e",marginBottom:6,wordBreak:"break-word"}}>{btStatus.msg}</div>}
                   {!bt
-                    ? <button data-tour="bt-verbinden" disabled={btGeraete!==null} onClick={btSuchen} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Bluetooth size={12} aria-hidden="true"/>{btGeraete!==null?"Suche …":"Mit Handy verbinden"}</button>
+                    ? <button disabled={btGeraete!==null} onClick={btSuchen} style={{width:"100%",...S.ghostBtn,fontSize:11,justifyContent:"center"}}><Bluetooth size={12} aria-hidden="true"/>{btGeraete!==null?"Suche …":"Mit Handy verbinden"}</button>
                     : <div style={{display:"flex",flexDirection:"column",gap:5}}>
                         <div style={{fontSize:11,color:"#c8d0da"}}><Bluetooth size={11} aria-hidden="true" style={{verticalAlign:"-1px",marginRight:4}}/>{bt.name}{bt.info?.name?` · „${bt.info.name}“`:""}{bt.info?.verteiler!=null?` · ${bt.info.verteiler} Verteiler`:""}</div>
                         {(()=>{ const pc=typeof __APP_VERSION__!=="undefined"?__APP_VERSION__:"dev"; return bt.info?.version&&bt.info.version!==pc&&<div style={{fontSize:9,color:"#e67e22"}}>Handy hat Version {bt.info.version}, der PC {pc}.</div>; })()}
@@ -1278,7 +1282,7 @@ export default function App() {
           <SchematicTab {...sharedProps} meta={meta} svgRef={schematicSvgRef} placements={placements} loadById={loadById} schaltbildLayout={schaltbildLayout} setSchaltbildLayout={setSchaltbildLayout}/>
         </div>
         <div style={panelStyle("boxtypes")}>
-          <BoxTypesTab boxTypes={boxTypes} setBoxTypes={setBoxTypesBib} instances={instances} />
+          <BoxTypesTab boxTypes={boxTypes} setBoxTypes={setBoxTypesBib} instances={instances} openId={typOffen} setOpenId={setTypOffen} />
         </div>
         <div style={panelStyle("loads")}>
           <LoadsTab loads={loads} setLoads={setLoadsBib} />
@@ -1947,8 +1951,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
 /* ══════════════════════════════════════════════════════════════════════════
    TAB: Verteiler-Typen
 ══════════════════════════════════════════════════════════════════════════ */
-function BoxTypesTab({ boxTypes,setBoxTypes,instances }) {
-  const [openId,setOpenId]=useState(null);
+function BoxTypesTab({ boxTypes,setBoxTypes,instances,openId,setOpenId }) {
   const [bulk,setBulk]=useState({count:"1",connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdId:null,rotatePhase:false});
   const updBulk=(patch)=>setBulk(s=>{
     const n={...s,...patch};

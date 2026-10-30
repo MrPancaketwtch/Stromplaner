@@ -1,5 +1,5 @@
 // Rundgänge der Desktop-App (Ablauf: app/shared/tour.jsx).
-// aktion: { tab(id), teilen(offen), sitzung(offen) } – Abschnitte werden über data-abschnitt="Titel" gefunden.
+// aktion: { tab(id), teilen(offen), sitzung(offen), typ() } – Abschnitte werden über data-abschnitt="Titel" gefunden.
 const tab = (id) => (a) => a.tab(id);
 const abschnitt = (titel) => `[data-abschnitt="${titel}"]`;
 
@@ -42,7 +42,6 @@ export const TOUREN_PC = [
       { ziel: abschnitt("Einspeisepunkte – Gesamtlast"), titel: "Gesamtlast", text: "Auslastung je Einspeisepunkt und Phase auf einen Blick.", vorher: tab("plan") },
       { ziel: '[data-tour="steckplan-auswahl"]', titel: "Verteiler wählen", text: "Jeder Verteiler hat sein eigenes Datenblatt." },
       { ziel: '[data-tour="steckplan-blatt"]', titel: "Stecken", text: "Verbraucher auf die Anschlüsse stecken – die Phasenlast rechnet sofort mit." },
-      { ziel: abschnitt("Steckplan"), titel: "Erst Verteiler anschließen", text: "Lege unter „1 · Konfiguration“ Verteiler an und schließe sie an einen Einspeisepunkt oder anderen Verteiler an." },
     ],
   },
   {
@@ -51,7 +50,7 @@ export const TOUREN_PC = [
     beschreibung: "Verteiler-Typen und Verbraucher",
     schritte: [
       { ziel: abschnitt("Verteiler-Typen"), titel: "Verteiler-Typen", text: "Deine Verteilermodelle mit Anschlüssen und Absicherung – einmal anlegen, in jeder Produktion nutzen.", vorher: tab("boxtypes") },
-      { id: "rccb", ziel: '[data-tour="rccb"]', titel: "RCCB-Gruppen", text: "FI-Schutzschalter, die mehrere Anschlüsse gemeinsam schützen.", vorher: tab("boxtypes") },
+      { id: "rccb", ziel: '[data-tour="rccb"]', titel: "RCCB-Gruppen", text: "FI-Schutzschalter, die mehrere Anschlüsse gemeinsam schützen.", vorher: (a) => { a.tab("boxtypes"); a.typ(); } },
       { ziel: abschnitt("Verbraucher-Stammdaten"), titel: "Verbraucher", text: "Geräte mit Leistung. 3-phasige werden auf L1–L3 verteilt.", vorher: tab("loads") },
     ],
   },
@@ -62,7 +61,6 @@ export const TOUREN_PC = [
     beschreibung: "Zusammenfassung und Blockschaltbild",
     schritte: [
       { ziel: abschnitt("Alle Verteiler"), titel: "Übersicht", text: "Alle Verteiler mit Last, dazu die Verbraucher nach Typ und je Verteiler.", vorher: tab("overview") },
-      { ziel: abschnitt("Übersicht"), titel: "Übersicht", text: "Sobald Verteiler angelegt sind, siehst du hier alle Lasten und Verbraucher zusammengefasst.", vorher: tab("overview") },
       { ziel: abschnitt("Blockschaltbild"), titel: "Schaltbild", text: "Die Verteilung als Blockschaltbild – Positionen lassen sich verschieben, Notizen ergänzen.", vorher: tab("schematic") },
     ],
   },
@@ -84,7 +82,7 @@ export const TOUREN_PC = [
     beschreibung: "Per Bluetooth, ohne Netzwerk",
     schritte: [
       { ziel: '[data-tour="teilen"]', titel: "Teilen", text: "Hier verbindest du dich mit der Handy-App." },
-      { ziel: '[data-tour="bt-verbinden"]', titel: "Mit Handy verbinden", text: "Am Handy unter „Teilen“ sichtbar machen, dann hier verbinden – keine Kopplung nötig.", vorher: (a) => a.teilen(true) },
+      { ziel: '[data-tour="bt-panel"]', titel: "Mit Handy verbinden", text: "Am Handy unter „Teilen“ sichtbar machen, dann hier verbinden – keine Kopplung nötig.", vorher: (a) => a.teilen(true) },
       { titel: "Holen oder senden", text: "Vom Handy holst du nur die Prüfergebnisse oder den ganzen Plan. Ein Plan ans Handy landet dort in der Planliste." },
     ],
   },

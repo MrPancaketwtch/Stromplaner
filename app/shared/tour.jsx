@@ -1,7 +1,7 @@
 // Geführte Tour und Willkommensfrage – gemeinsam für Desktop- und Handy-App.
 // Ein Schritt: { id?, ziel?: CSS-Selektor, titel, text?, vorher?: (aktion) => void }
-// Ohne Ziel erscheint die Karte mittig. Gibt es das Ziel gerade nicht (z. B. noch keine Verteiler),
-// wird der Schritt übersprungen – die Touren funktionieren so mit leerem wie mit vollem Plan.
+// Ohne Ziel erscheint die Karte mittig – auch wenn es das Ziel gerade nicht gibt (z. B. noch keine Verteiler),
+// damit kein Schritt verloren geht.
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const F = { akzent: "#f5a623", karte: "#1e2530", rand: "#2e3a4a", text: "#e8eaf0", leise: "#9aa4af", grund: "#15191e" };
@@ -43,7 +43,6 @@ export function Tour({ schritte, aktion, onEnde, start = 0, hinweis = null }) {
   const [rahmen, setRahmen] = useState(null);   // Rahmen des Ziels, null = Karte mittig
   const [bereit, setBereit] = useState(false);
   const [karte, setKarte] = useState({ h: 170 });
-  const richtung = useRef(1);
   const ziel = useRef(null);
   const karteRef = useRef(null);
   const ende = useRef(onEnde); ende.current = onEnde;
@@ -58,11 +57,6 @@ export function Tour({ schritte, aktion, onEnde, start = 0, hinweis = null }) {
       try { s.vorher?.(aktion); } catch { /* Ansicht ließ sich nicht wechseln – Ziel fehlt dann einfach */ }
       const el = s.ziel ? await warteAufZiel(s.ziel) : null;
       if (abbruch) return;
-      if (s.ziel && !el) {
-        const n = index + richtung.current;
-        if (n >= 0 && n < schritte.length) setIndex(n); else ende.current();
-        return;
-      }
       ziel.current = el;
       if (el) {
         el.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
@@ -91,8 +85,8 @@ export function Tour({ schritte, aktion, onEnde, start = 0, hinweis = null }) {
     if (h && Math.abs(h - karte.h) > 2) setKarte({ h });
   });
 
-  const weiter = () => { richtung.current = 1; if (letzter) ende.current(); else setIndex(i => i + 1); };
-  const zurueck = () => { richtung.current = -1; if (index > 0) setIndex(i => i - 1); };
+  const weiter = () => { if (letzter) ende.current(); else setIndex(i => i + 1); };
+  const zurueck = () => { if (index > 0) setIndex(i => i - 1); };
 
   useEffect(() => {
     const taste = (e) => {
