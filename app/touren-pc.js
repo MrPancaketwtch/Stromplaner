@@ -50,7 +50,7 @@ export const TOUREN_PC = [
     beschreibung: "Verteiler-Typen und Verbraucher",
     schritte: [
       { ziel: abschnitt("Verteiler-Typen"), titel: "Verteiler-Typen", text: "Deine Verteilermodelle mit Anschlüssen und Absicherung – einmal anlegen, in jeder Produktion nutzen.", vorher: tab("boxtypes") },
-      { id: "rccb", ziel: '[data-tour="rccb"]', titel: "RCCB-Gruppen", text: "FI-Schutzschalter, die mehrere Anschlüsse gemeinsam schützen.", vorher: (a) => { a.tab("boxtypes"); a.typ(); } },
+      { id: "rccb", ziel: '[data-tour="rccb"]', titel: "RCD-Gruppen", text: "Ein RCD (FI-Schalter) schützt mehrere Anschlüsse gemeinsam – nur nötig, wenn sie per LS statt RCBO abgesichert sind.", vorher: (a) => { a.tab("boxtypes"); a.typ(); } },
       { ziel: abschnitt("Verbraucher-Stammdaten"), titel: "Verbraucher", text: "Geräte mit Leistung. 3-phasige werden auf L1–L3 verteilt.", vorher: tab("loads") },
     ],
   },

@@ -84,8 +84,10 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
   "1.5.0": [
+    "Verteiler-Typen übersichtlicher: einzelne Anschlüsse und mehrere gleiche auf einmal hinzufügen stehen beschriftet in einem Feld. „Schutz“ heißt jetzt „Leitungsschutz“, RCCB-Gruppen heißen einheitlich RCD-Gruppen – mit kurzem Hinweis, wann man sie braucht",
+    "Der „?“-Knopf an den RCD-Gruppen startet wieder den passenden Rundgang",
     "Android-App: den ganzen Stromplan als PDF – Verteiler, Steckungen und Phasenlast wie am PC (ohne Blockschaltbild), im Tab Projekt über „Stromplan als PDF“",
-    "Rundgänge überspringen keine Schritte mehr – etwa „Mit Handy verbinden“ bei schon verbundenem Handy oder die RCCB-Gruppen; fehlt die Stelle gerade, erscheint der Schritt trotzdem",
+    "Rundgänge überspringen keine Schritte mehr – etwa „Mit Handy verbinden“ bei schon verbundenem Handy oder die RCD-Gruppen; fehlt die Stelle gerade, erscheint der Schritt trotzdem",
   ],
   "1.4.0": [
     "Geführte Rundgänge statt Anleitungstexten – am PC im Tab „Anleitung“ und über die „?“-Knöpfe, in der Android-App im neuen Tab „Hilfe“. Beim ersten Start ohne Plan fragt Stromplaner, ob du einen Überblick möchtest. Ist dein Plan noch leer, zeigen sie einen Beispielplan – danach ist dein Stand wieder da",
@@ -1952,6 +1954,7 @@ function PlanTab({ instances,boxTypeById,loads,loadById,instById,placements,addP
    TAB: Verteiler-Typen
 ══════════════════════════════════════════════════════════════════════════ */
 function BoxTypesTab({ boxTypes,setBoxTypes,instances,openId,setOpenId }) {
+  const openHelp=useContext(HelpContext);
   const [bulk,setBulk]=useState({count:"1",connector:"SCHUKO",amp:16,phase:"L1",breaker:"C",protection:"RCBO",rcdId:null,rotatePhase:false});
   const updBulk=(patch)=>setBulk(s=>{
     const n={...s,...patch};
@@ -1998,7 +2001,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances,openId,setOpenId }) {
   const addRcd=(boxId)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:[...(b.rcds||[]),{id:uid(),label:"RCD",mA:30}]}));
   const updateRcd=(boxId,rcdId,patch)=>setBoxTypes(s=>s.map(b=>b.id!==boxId?b:{...b,rcds:(b.rcds||[]).map(r=>r.id===rcdId?{...r,...patch}:r)}));
   const removeRcd=async(boxId,rcdId)=>{
-    if(!await uiConfirm("RCCB-Gruppe loeschen? Zugeordnete Anschluesse verlieren ihre RCD-Zuordnung."))return;
+    if(!await uiConfirm("RCD-Gruppe löschen? Zugeordnete Anschlüsse verlieren ihre Zuordnung."))return;
     setBoxTypes(s=>s.map(b=>{
       if(b.id!==boxId) return b;
       return {...b,rcds:(b.rcds||[]).filter(r=>r.id!==rcdId),outlets:b.outlets.map(o=>o.rcdId===rcdId?{...o,rcdId:null}:o)};
@@ -2050,12 +2053,11 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances,openId,setOpenId }) {
                   <button style={S.dangerBtnWide} onClick={()=>removeType(b.id)}>Löschen</button>
                 </div>
 
-                {/* RCCB-Gruppen */}
-                <div style={{marginTop:12,marginBottom:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
-                  <div data-tour="rccb" style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><p style={{fontSize:11,color:"#9aa4af",margin:0,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCCB-Gruppen</p><button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:18,height:18,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp("rccb")} title="Hilfe">?</button></div>
-                  {(b.rcds||[]).length===0
-                    ? <p style={{...S.hint,margin:"0 0 6px"}}>Keine RCCB-Gruppen — Anschlüsse werden nur per LS / RCBO geschützt.</p>
-                    : <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                {/* RCD-Gruppen */}
+                <div data-tour="rccb" style={{marginTop:12,marginBottom:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><p style={{fontSize:11,color:"#9aa4af",margin:0,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>RCD-Gruppen</p><button style={{background:"transparent",border:"1px solid #3a424c",borderRadius:10,width:18,height:18,padding:0,color:"#9aa4af",cursor:"pointer",fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} onClick={()=>openHelp("rccb")} title="Hilfe">?</button></div>
+                  <p style={{...S.hint,margin:"0 0 8px"}}>Nur nötig, wenn Anschlüsse per LS statt RCBO abgesichert sind – ein RCD schützt dann mehrere Anschlüsse gemeinsam.</p>
+                  {(b.rcds||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
                         {(b.rcds||[]).map(rcd=>(
                           <div key={rcd.id} style={{display:"flex",gap:4,alignItems:"center",background:"#252b33",border:"1px solid #3a424c",borderRadius:5,padding:"4px 6px"}}>
                             <input style={{...S.inputSm,width:120}} value={rcd.label} placeholder="Bezeichnung" onChange={e=>updateRcd(b.id,rcd.id,{label:e.target.value})}/>
@@ -2064,16 +2066,15 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances,openId,setOpenId }) {
                             <button style={S.dangerBtn} onClick={()=>removeRcd(b.id,rcd.id)} aria-label="Entfernen" title="Entfernen"><X size={14} aria-hidden="true"/></button>
                           </div>
                         ))}
-                      </div>
-                  }
-                  <button style={S.secondaryBtn} onClick={()=>addRcd(b.id)}>+ RCD hinzufügen</button>
+                      </div>}
+                  <button style={S.secondaryBtn} onClick={()=>addRcd(b.id)}>+ RCD-Gruppe hinzufügen</button>
                 </div>
 
                 <div style={{overflowX:"auto"}}>
                 <table style={S.table}>
                   <thead><tr>
                     <th style={S.th}>Name / Steckplatz</th><th style={S.th}>Stecker</th><th style={S.th}>A</th>
-                    <th style={S.th}>Phase</th><th style={S.th} title="Nur für Multicore: Anzahl Steckplätze, Phase rotiert L1/L2/L3">Steckpl.</th><th style={S.th}>Sich.</th><th style={S.th}>Schutz</th><th style={S.th}>FI&nbsp;mA</th><th style={S.th}>RCCB-Gruppe</th><th style={S.th}></th>
+                    <th style={S.th}>Phase</th><th style={S.th} title="Nur für Multicore: Anzahl Steckplätze, Phase rotiert L1/L2/L3">Steckpl.</th><th style={S.th} title="Auslösecharakteristik">Sich.</th><th style={S.th}>Leitungsschutz</th><th style={S.th} title="Auslösestrom des RCBO">RCD&nbsp;mA</th><th style={S.th}>RCD-Gruppe</th><th style={S.th}></th>
                   </tr></thead>
                   <tbody>
                     {b.outlets.map(o=>(
@@ -2099,7 +2100,7 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances,openId,setOpenId }) {
                             <span style={{color:"#555",fontSize:11}}>—</span>}
                         </td>
                         <td style={S.td}><select style={{...S.selectSm,width:55}} value={o.breaker||"C"} onChange={e=>updateOutlet(b.id,o.id,{breaker:e.target.value})}>{BREAKER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></td>
-                        <td style={S.td}><select style={{...S.selectSm,width:70}} value={o.protection||"LS"} onChange={e=>updateOutlet(b.id,o.id,{protection:e.target.value})}>{PROTECTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></td>
+                        <td style={S.td}><select style={{...S.selectSm,width:80}} value={o.protection||"LS"} onChange={e=>updateOutlet(b.id,o.id,{protection:e.target.value})}>{PROTECTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></td>
                         <td style={S.td}>{o.protection==="RCBO"?<input type="number" min={1} max={500} style={{...S.inputSm,width:58}} value={o.rcdMa??30} onChange={e=>updateOutlet(b.id,o.id,{rcdMa:+e.target.value})}/>:<span style={{color:"#555",fontSize:11}}>—</span>}</td>
                         <td style={S.td}>
                           {(b.rcds||[]).length>0
@@ -2115,34 +2116,50 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances,openId,setOpenId }) {
                   </tbody>
                 </table>
                 </div>
-                <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
-                  <span style={{fontSize:11,color:"#9aa4af",fontWeight:600,marginRight:2}}>Bulk:</span>
-                  <input type="number" min={1} max={48} style={{...S.inputSm,width:46}} value={bulk.count} onChange={e=>updBulk({count:e.target.value})} onBlur={()=>updBulk({count:String(Math.max(1,Math.min(48,parseInt(bulk.count)||1)))})} title="Anzahl"/>
-                  <select style={S.selectSm} value={bulk.connector} onChange={e=>updBulk({connector:e.target.value})}>
-                    {CONN_SORTED_ENTRIES.map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
-                  </select>
-                  <input type="number" style={{...S.inputSm,width:52}} value={bulk.amp} onChange={e=>updBulk({amp:+e.target.value})} title="Ampere"/>
-                  <span style={{fontSize:11,color:"#7c8794"}}>A</span>
-                  {!is3ph(bulk.connector)&&!isMulticore(bulk.connector)&&(<>
-                    <select style={{...S.selectSm,width:55}} value={bulk.phase} onChange={e=>updBulk({phase:e.target.value})} disabled={bulk.rotatePhase}>
-                      {PHASES.map(ph=><option key={ph} value={ph}>{ph}</option>)}
+                <div style={{marginTop:10,padding:"8px 10px",background:"#1b2026",borderRadius:5,border:"1px solid #2e3540"}}>
+                <p style={{fontSize:11,color:"#9aa4af",margin:"0 0 8px",fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>Anschlüsse hinzufügen</p>
+                <button style={S.secondaryBtn} onClick={()=>addOutlet(b.id)}>+ Einzelnen Anschluss</button>
+                <p style={{fontSize:11,color:"#9aa4af",margin:"12px 0 6px",fontWeight:600}}>Mehrere gleiche auf einmal</p>
+                <div style={{display:"flex",gap:6,alignItems:"flex-end",flexWrap:"wrap"}}>
+                  <label style={{fontSize:10,color:"#7c8794",display:"flex",flexDirection:"column",gap:2}}>Anzahl
+                    <input type="number" min={1} max={48} style={{...S.inputSm,width:52}} value={bulk.count} onChange={e=>updBulk({count:e.target.value})} onBlur={()=>updBulk({count:String(Math.max(1,Math.min(48,parseInt(bulk.count)||1)))})}/>
+                  </label>
+                  <label style={{fontSize:10,color:"#7c8794",display:"flex",flexDirection:"column",gap:2}}>Stecker
+                    <select style={S.selectSm} value={bulk.connector} onChange={e=>updBulk({connector:e.target.value})}>
+                      {CONN_SORTED_ENTRIES.map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
                     </select>
-                    <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:bulk.rotatePhase?"#f5a623":"#9aa4af",cursor:"pointer",userSelect:"none"}} title="Phasen gleichmäßig rotieren (L1→L2→L3→…)">
+                  </label>
+                  <label style={{fontSize:10,color:"#7c8794",display:"flex",flexDirection:"column",gap:2}}>A
+                    <input type="number" style={{...S.inputSm,width:52}} value={bulk.amp} onChange={e=>updBulk({amp:+e.target.value})}/>
+                  </label>
+                  {!is3ph(bulk.connector)&&!isMulticore(bulk.connector)&&(<>
+                    <label style={{fontSize:10,color:"#7c8794",display:"flex",flexDirection:"column",gap:2}}>Phase
+                      <select style={{...S.selectSm,width:60}} value={bulk.phase} onChange={e=>updBulk({phase:e.target.value})} disabled={bulk.rotatePhase}>
+                        {PHASES.map(ph=><option key={ph} value={ph}>{ph}</option>)}
+                      </select>
+                    </label>
+                    <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:bulk.rotatePhase?"#f5a623":"#9aa4af",cursor:"pointer",userSelect:"none",paddingBottom:5}} title="Phasen gleichmäßig rotieren (L1→L2→L3→…)">
                       <input type="checkbox" checked={bulk.rotatePhase} onChange={e=>updBulk({rotatePhase:e.target.checked})} style={{cursor:"pointer"}}/>
-                      Rotation
+                      Phasen rotieren
                     </label>
                   </>)}
-                  <select style={{...S.selectSm,width:52}} value={bulk.breaker} onChange={e=>updBulk({breaker:e.target.value})}>
-                    {BREAKER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <select style={{...S.selectSm,width:72}} value={bulk.protection} onChange={e=>updBulk({protection:e.target.value})}>
-                    {PROTECTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-                  </select>
-                  {(b.rcds||[]).length>0&&(
-                    <select style={{...S.selectSm,width:100}} value={bulk.rcdId||""} onChange={e=>updBulk({rcdId:e.target.value||null})} title="RCCB-Gruppe">
-                      <option value="">— kein RCD —</option>
-                      {(b.rcds||[]).map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+                  <label style={{fontSize:10,color:"#7c8794",display:"flex",flexDirection:"column",gap:2}} title="Auslösecharakteristik">Sich.
+                    <select style={{...S.selectSm,width:55}} value={bulk.breaker} onChange={e=>updBulk({breaker:e.target.value})}>
+                      {BREAKER_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
                     </select>
+                  </label>
+                  <label style={{fontSize:10,color:"#7c8794",display:"flex",flexDirection:"column",gap:2}}>Leitungsschutz
+                    <select style={{...S.selectSm,width:80}} value={bulk.protection} onChange={e=>updBulk({protection:e.target.value})}>
+                      {PROTECTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                    </select>
+                  </label>
+                  {(b.rcds||[]).length>0&&(
+                    <label style={{fontSize:10,color:"#7c8794",display:"flex",flexDirection:"column",gap:2}}>RCD-Gruppe
+                      <select style={{...S.selectSm,width:100}} value={bulk.rcdId||""} onChange={e=>updBulk({rcdId:e.target.value||null})}>
+                        <option value="">— kein —</option>
+                        {(b.rcds||[]).map(r=><option key={r.id} value={r.id}>{r.label}</option>)}
+                      </select>
+                    </label>
                   )}
                   <button style={S.secondaryBtn} onClick={()=>{
                     const base=b.outlets.length;
@@ -2164,9 +2181,9 @@ function BoxTypesTab({ boxTypes,setBoxTypes,instances,openId,setOpenId }) {
                       ...(isMulticore(bulk.connector)?{mcSlots:6}:{})
                     }));
                     setBoxTypes(s=>s.map(bx=>bx.id!==b.id?bx:{...bx,outlets:[...bx.outlets,...neu]}));
-                  }}>+ {parseInt(bulk.count)||1}×</button>
+                  }}>+ {parseInt(bulk.count)||1} {(parseInt(bulk.count)||1)===1?"Anschluss":"Anschlüsse"}</button>
                 </div>
-                <button style={{...S.secondaryBtn,marginTop:6}} onClick={()=>addOutlet(b.id)}>+ Einzeln hinzufügen</button>
+                </div>
               </div>
             )}
           </div>
@@ -3789,7 +3806,7 @@ function InspectionTab({ instances, instById, boxTypeById, mainConns, mainConnBy
           const outlets   = type ? sortOutlets(type.outlets) : [];
           const ir        = getIR(inst.id);
           const sicht     = ir.sicht || Array(6).fill(null);
-          // #16: RCCB-Gruppen als eigene Zeilen, danach RCBO-Anschlüsse (Multicore expandiert)
+          // #16: RCD-Gruppen als eigene Zeilen, danach RCBO-Anschlüsse (Multicore expandiert)
           const rcdGroups = type?.rcds || [];
           const rcboOutlets = outlets.filter(o=>o.protection==="RCBO");
           const expandedRcdRows = [];

@@ -97,7 +97,7 @@ Messwerte je Verteiler eintragen – am PC oder mit der Handy-App direkt am Vert
 | **3 · Übersicht** | Einspeisepunkte mit Summenlast, alle Verteiler mit Last, Verbraucher nach Typ und je Verteiler. |
 | **Schaltbild** | Die Kaskade als Blockschaltbild mit Steckern, Absicherung und Verbrauchern; Positionen lassen sich verschieben, Notizen ergänzen. Erscheint auch im PDF. |
 | **Errichtungsprüfung** | Prüfprotokoll nach DIN VDE 0100-600: Prüfungsdetails, Sichtprüfung, Spannungen, Drehfeld, RCD-Prüfung, Schleifenimpedanz und Kurzschlussstrom je Abgang, Bemerkungen mit Mangel oder Hinweis. Werte außerhalb der Grenzen werden rot. Export als mehrseitiges PDF mit Deckblatt, Mängelliste und Unterschrift. |
-| **Verteiler-Typen** | Deine Verteilermodelle mit Abgängen, Absicherung (B/C/D/K), Schutzart (LS / RCBO / ohne) und RCCB-Gruppen; mehrere gleiche Abgänge auf einmal anlegen; Import und Export. |
+| **Verteiler-Typen** | Deine Verteilermodelle mit Abgängen, Absicherung (B/C/D/K), Leitungsschutz (LS / RCBO / ohne) und RCD-Gruppen; mehrere gleiche Abgänge auf einmal anlegen; Import und Export. |
 | **Verbraucher** | Deine Geräte mit Leistung und 1- oder 3-phasig; Import und Export. |
 | **Anleitung** | Geführte Rundgänge zu allen Bereichen. Die **?**-Knöpfe an einzelnen Abschnitten starten den passenden Rundgang direkt an dieser Stelle. |
 | **Leitungsdimensionierung** · **Spannungsfall** *(orange, ganz rechts)* | Rechner für Leitungsquerschnitt (H07RN-F) und Spannungsfall; beliebig viele benannte Rechnungen, die mit dem Plan gespeichert werden. |
@@ -244,9 +244,9 @@ Die Last eines Verteilers umfasst alle direkt gesteckten Verbraucher plus alle a
 
 ### Errichtungsprüfung – Grenzwerte
 - **Spannungen:** L–N und L–PE 207–244 V, L–L 360–424 V, N–PE ≤ 1 V.
-- **RCD:** Auslösezeit t_A ≤ 300 ms, Auslösestrom I_Δ zwischen ½ · IΔn und IΔn. RCCB-Gruppen sind eigene Prüfzeilen, RCBO-Abgänge werden einzeln geprüft, Multicore-Abgänge in einzelne Steckplätze aufgeteilt.
+- **RCD:** Auslösezeit t_A ≤ 300 ms, Auslösestrom I_Δ zwischen ½ · IΔn und IΔn. RCD-Gruppen sind eigene Prüfzeilen, RCBO-Abgänge werden einzeln geprüft, Multicore-Abgänge in einzelne Steckplätze aufgeteilt.
 - **Schleifenimpedanz ohne RCD:** `Z_s ≤ U₀ / (I_n × k)` mit k = 5 (B), 10 (C), 20 (D), 14 (K). Kurzschlussstrom `I_k ≥ I_n × k`.
-- **Mit RCD (RCCB/RCBO):** Theoretisch reicht `U₀ / IΔn ≈ 7,67 Ω` (30 mA). Werte über **2 Ω** deuten in der Praxis aber auf einen schlechten Schutzleiterkontakt hin – Stromplaner nutzt deshalb **2 Ω** als Praxisgrenze.
+- **Mit RCD (RCD-Gruppe oder RCBO):** Theoretisch reicht `U₀ / IΔn ≈ 7,67 Ω` (30 mA). Werte über **2 Ω** deuten in der Praxis aber auf einen schlechten Schutzleiterkontakt hin – Stromplaner nutzt deshalb **2 Ω** als Praxisgrenze.
 - **Kaskadierte Unterverteiler:** Die Schleifenimpedanz wächst entlang des Leitungswegs, also gilt `Z_s(Eingang UV) < Z_s(Abgang im UV)`. Die Messung am ungünstigsten Punkt deckt die vorgelagerten Abschnitte mit ab (DIN VDE 0100-600, Abschn. 643). Stromplaner leitet Z_s und I_k am UV-Eingang deshalb aus den Messungen der angeschlossenen Abgänge ab – über beliebig viele Ebenen. Überschreitet der abgeleitete Wert den Grenzwert des Eingangs, lässt sich mit **✎ Nachtragen** ein separat gemessener Wert eintragen; das Protokoll dokumentiert Grund und Vergleichswert.
 
 ### Leitungsdimensionierung (H07RN-F, DIN VDE 0298-4)

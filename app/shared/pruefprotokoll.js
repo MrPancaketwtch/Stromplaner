@@ -247,7 +247,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
       const outlets=type?sortOutlets(type.outlets):[];
       const ir=getIR(inst.id);
       const sicht=ir.sicht||Array(6).fill(null);
-      // RCCB-Gruppen + RCBO im PDF
+      // RCD-Gruppen + RCBO im PDF
       const pdfRcdRows=[];
       (type?.rcds||[]).forEach(rcd=>pdfRcdRows.push({rowType:"rcd",rcd,outlet:null,oid:`rcd_${rcd.id}`,rowLabel:rcd.label,iAnLimit:rcd.mA,protLabel:`RCD ${rcd.mA} mA`}));
       outlets.filter(o=>o.protection==="RCBO").forEach(o=>{

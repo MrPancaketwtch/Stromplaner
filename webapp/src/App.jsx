@@ -788,7 +788,7 @@ function TypEditor({ typ, inUse, onSave, onDelete, onClose }) {
             <div key={o.id} className="typ-abgang">
               <input className="field-input" aria-label="Bezeichnung" value={o.label} onChange={e => upd(o.id, { label: e.target.value })} />
               <span className="typ-abgang-art">{isMulticore(o.connector) ? 'Multicore' : CONN[o.connector]?.label || o.connector}</span>
-              <select className="field-select" aria-label="Schutz" value={o.protection || 'LS'} onChange={e => upd(o.id, { protection: e.target.value, ...(e.target.value === 'RCBO' ? { rcdMa: o.rcdMa ?? 30 } : {}) })}>
+              <select className="field-select" aria-label="Leitungsschutz" value={o.protection || 'LS'} onChange={e => upd(o.id, { protection: e.target.value, ...(e.target.value === 'RCBO' ? { rcdMa: o.rcdMa ?? 30 } : {}) })}>
                 <option value="LS">LS</option>
                 <option value="RCBO">RCBO</option>
                 <option value="Keine">ohne</option>
