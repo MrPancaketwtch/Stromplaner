@@ -149,7 +149,7 @@ export function stromplanHtml(plan, { logo = "", schaltbildSvg = "" } = {}) {
         <div style="display:flex;gap:6px;margin-bottom:8px">${phBar(tot,maxA)}</div>`;
       if(rows2.length){
         body+=`<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:#eee">
-          ${["Verbraucher","Anschluss","Steckplatz","Phase","W","A","Sich.","Schutz"].map(h=>`<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
+          ${["Verbraucher","Anschluss","Steckplatz","Phase","W","A","Sich.","Leitungsschutz"].map(h=>`<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
         rows2.forEach(r=>{ body+=`<tr>${[r.name,r.outlet,r.slot,r.ph,r.watt,r.amp,r.breaker,r.prot].map(v=>`<td style="padding:2px 5px;border:1px solid #ddd">${v}</td>`).join("")}</tr>`; });
         body+=`</tbody></table>`;
       } else body+=`<p style="font-size:11px;color:#999;font-style:italic">Keine Verbraucher gesteckt.</p>`;

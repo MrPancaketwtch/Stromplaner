@@ -29694,7 +29694,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
         <div style="display:flex;gap:6px;margin-bottom:8px">${phBar(tot, maxA)}</div>`;
       if (rows2.length) {
         body += `<table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="background:#eee">
-          ${["Verbraucher", "Anschluss", "Steckplatz", "Phase", "W", "A", "Sich.", "Schutz"].map((h) => `<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
+          ${["Verbraucher", "Anschluss", "Steckplatz", "Phase", "W", "A", "Sich.", "Leitungsschutz"].map((h) => `<th style="padding:3px 5px;border:1px solid #ddd">${h}</th>`).join("")}</tr></thead><tbody>`;
         rows2.forEach((r) => {
           body += `<tr>${[r.name, r.outlet, r.slot, r.ph, r.watt, r.amp, r.breaker, r.prot].map((v) => `<td style="padding:2px 5px;border:1px solid #ddd">${v}</td>`).join("")}</tr>`;
         });
@@ -30377,7 +30377,7 @@ html,body{margin:0;padding:0;background:#2a2724;font-family:var(--ep-font)}*{box
   var changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v || "").split("-")[0]] || [];
   var CHANGELOG = {
     "1.5.0": [
-      "Verteiler-Typen \xFCbersichtlicher: einzelne Anschl\xFCsse und mehrere gleiche auf einmal hinzuf\xFCgen stehen beschriftet in einem Feld. \u201ESchutz\u201C hei\xDFt jetzt \u201ELeitungsschutz\u201C, RCCB-Gruppen hei\xDFen einheitlich RCD-Gruppen \u2013 mit kurzem Hinweis, wann man sie braucht",
+      "Verteiler-Typen \xFCbersichtlicher: einzelne Anschl\xFCsse und mehrere gleiche auf einmal hinzuf\xFCgen stehen beschriftet in einem Feld. \u201ESchutz\u201C hei\xDFt jetzt \u201ELeitungsschutz\u201C (auch im Stromplan-PDF), RCCB-Gruppen hei\xDFen einheitlich RCD-Gruppen \u2013 mit kurzem Hinweis, wann man sie braucht",
       "Der \u201E?\u201C-Knopf an den RCD-Gruppen startet wieder den passenden Rundgang",
       "Android-App: den ganzen Stromplan als PDF \u2013 Verteiler, Steckungen und Phasenlast wie am PC (ohne Blockschaltbild), im Tab Projekt \xFCber \u201EStromplan als PDF\u201C",
       "Rundg\xE4nge \xFCberspringen keine Schritte mehr \u2013 etwa \u201EMit Handy verbinden\u201C bei schon verbundenem Handy oder die RCD-Gruppen; fehlt die Stelle gerade, erscheint der Schritt trotzdem"
