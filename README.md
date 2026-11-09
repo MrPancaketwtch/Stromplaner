@@ -22,7 +22,7 @@ Die neueste Version gibt es auf der **[Releases-Seite](https://github.com/MrPanc
 - **macOS (Apple Silicon / M-Serie):** `Stromplaner-x.x.x-arm64.dmg`
 - **macOS (Intel):** `Stromplaner-x.x.x.dmg`
 
-> **macOS:** Beim ersten Öffnen warnt macOS „Entwickler nicht verifiziert“. Rechtsklick auf die App → **Öffnen** → **Öffnen** – danach startet sie normal.
+> **macOS:** Beim ersten Öffnen meldet macOS, dass die App nicht überprüft werden kann – sie ist nicht mit einem Apple-Zertifikat signiert. Dann unter **Systemeinstellungen → Datenschutz & Sicherheit** ganz unten **Dennoch öffnen** wählen; danach startet sie normal. Bis macOS 14 geht auch Rechtsklick auf die App → **Öffnen**.
 
 ### Handy (Android)
 Die Handy-App ist für die Arbeit direkt an der Anlage gedacht – draußen ist ein Laptop einfach unhandlich. Zum Planen empfehle ich weiterhin die PC-App, auch wenn beides geht.

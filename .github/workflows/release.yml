@@ -84,7 +84,7 @@ jobs:
           | 🤖 **Android (Handy-App)** | \`Stromplaner-${V}.apk\` |
           | 🌐 **PWA (Web)** | [Jetzt öffnen](https://mrpancaketwtch.github.io/Stromplaner/) |
 
-          > **macOS-Hinweis:** Beim ersten Öffnen erscheint eine Warnung „Entwickler nicht verifiziert" — Rechtsklick auf die App → **Öffnen** → **Öffnen** umgeht das einmalig.
+          > **macOS-Hinweis:** Beim ersten Öffnen meldet macOS, dass die App nicht überprüft werden kann. Dann unter **Systemeinstellungen → Datenschutz & Sicherheit** ganz unten **Dennoch öffnen** wählen (bis macOS 14 geht auch Rechtsklick auf die App → **Öffnen**).
           >
           > **Android:** Die APK wird einige Minuten nach den Desktop-Dateien angehängt. Zum Installieren „Installation aus unbekannten Quellen“ für den Browser bzw. Dateimanager erlauben.
 

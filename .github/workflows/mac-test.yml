@@ -1,0 +1,40 @@
+name: macOS Test-Build
+
+# Baut die macOS-DMGs ohne Release, prüft die Signatur und legt sie unter Artifacts ab.
+on:
+  workflow_dispatch:
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+
+      - run: npm install
+      - run: npm run build
+
+      - name: Package
+        run: npx electron-builder --mac --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Signatur in den DMGs prüfen
+        run: |
+          for dmg in dist/*.dmg; do
+            mnt=$(mktemp -d)
+            hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mnt" >/dev/null
+            codesign --verify --deep --strict --verbose=2 "$mnt/Stromplaner.app"
+            codesign -dv "$mnt/Stromplaner.app" 2>&1 | grep -E 'Signature|Format'
+            hdiutil detach "$mnt" >/dev/null
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stromplaner-macOS
+          path: dist/*.dmg
+          retention-days: 7
