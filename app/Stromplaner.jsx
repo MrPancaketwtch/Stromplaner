@@ -83,6 +83,9 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 // Betas (1.3.0-beta.1) zeigen die Einträge der kommenden Version (1.3.0)
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
+  "1.6.0": [
+    "macOS: Updates direkt in der App – Stromplaner zeigt neue Versionen mit ihren Neuerungen, lädt die passende DMG (Apple Silicon oder Intel) in den Downloads-Ordner und öffnet sie. Danach nur noch Stromplaner beenden und die neue Version nach „Programme“ ziehen. Versionen lassen sich überspringen oder auf später verschieben, im App-Menü gibt es „Nach Updates suchen…“",
+  ],
   "1.5.0": [
     "Android-App: den ganzen Stromplan als PDF – Verteiler, Steckungen und Phasenlast wie am PC (ohne Blockschaltbild), im Tab Projekt über „Stromplan als PDF“",
     "Verteiler-Typen übersichtlicher: einzelne Anschlüsse und mehrere gleiche auf einmal hinzufügen stehen beschriftet in einem Feld. „Schutz“ heißt jetzt „Leitungsschutz“ (auch im Stromplan-PDF), RCCB-Gruppen heißen einheitlich RCD-Gruppen – mit kurzem Hinweis, wann man sie braucht",
@@ -587,9 +590,11 @@ export default function App() {
     }
   },[]);
 
+  const einfuehrungRef=useRef(false);
   useEffect(()=>{
     window.electronAPI?.onUpdateStatus(msg => {
       setUpdateStatus(msg);
+      if(msg.zeigen&&!einfuehrungRef.current) setShowUpdateModal(true);
     });
   },[]);
   const [updateKanal, setUpdateKanal] = useState(null);
@@ -1172,6 +1177,7 @@ export default function App() {
   };
   // Changelog und Spendenhinweis warten, bis Willkommensfrage und Rundgang vorbei sind
   const einfuehrung=willkommen||!!tour;
+  einfuehrungRef.current=einfuehrung;
 
   const panelStyle=(k)=>({display:tab===k?"block":"none",...(tab===k?{animation:`tabSlide${tabDir>0?'R':'L'} 0.18s ease`}:{})});
   const sharedProps={ instances,instById,boxTypeById,totalLoad,isOverloaded,isUnderdimensioned,isAdapted,rootInstances,mainConns,mainConnById };
@@ -1332,7 +1338,7 @@ function UpdateModal({status,onClose,onCheck,onInstall,setStatus,kanal,onKanal})
   const istBeta=installiert.includes("-");
   const betaTag=(v)=>String(v||"").includes("-")&&<span style={{marginLeft:6,fontSize:10,fontWeight:700,color:'#1c2127',background:ACCENT,borderRadius:3,padding:'1px 5px',verticalAlign:'1px'}}>BETA</span>;
   const overlay={position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'};
-  const box={background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:10,padding:'28px 32px',minWidth:340,maxWidth:420,color:'#e8eaf0',fontFamily:'inherit'};
+  const box={background:'#1e2530',border:'1px solid #2e3a4a',borderRadius:10,padding:'28px 32px',width:480,maxWidth:'calc(100vw - 32px)',boxSizing:'border-box',color:'#e8eaf0',fontFamily:'inherit'};
   const title={fontSize:16,fontWeight:700,marginBottom:16,color:'#fff'};
   const row={display:'flex',gap:10,marginTop:18,justifyContent:'flex-end'};
   const btn=(c)=>({padding:'7px 18px',borderRadius:5,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,...c});
@@ -1347,11 +1353,21 @@ function UpdateModal({status,onClose,onCheck,onInstall,setStatus,kanal,onKanal})
         {status.type==='up-to-date'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Du hast bereits die neueste Version.</p>}
         {status.type==='available'&&!status.manual&&<p style={{color:'#f5a623',margin:0}}>Version {status.version}{betaTag(status.version)} verfügbar – wird heruntergeladen…</p>}
         {status.type==='available'&&status.manual&&<>
-          <p style={{color:'#f5a623',margin:'0 0 8px'}}>Version {status.version}{betaTag(status.version)} ist verfügbar.</p>
-          <p style={{color:'#aab',margin:0,fontSize:12,lineHeight:1.5}}>Auf dem Mac bitte manuell aktualisieren: Auf der Download-Seite die passende <strong>.dmg</strong> laden (Apple Silicon: <em>-arm64.dmg</em>, Intel: ohne Zusatz), öffnen und Stromplaner in den Programme-Ordner ziehen. Deine Daten bleiben erhalten.</p>
+          <p style={{color:'#f5a623',margin:'0 0 8px'}}>Version {status.version}{betaTag(status.version)} ist verfügbar{status.groesse?` (${Math.round(status.groesse/1048576)} MB)`:''}.</p>
+          {status.notizen?.length>0&&<ul style={{margin:'0 0 8px',paddingLeft:18,fontSize:12,lineHeight:1.5,color:'#c8d0da',maxHeight:180,overflowY:'auto'}}>
+            {status.notizen.map((n,i)=><li key={i}>{n.replace(/\*\*/g,'')}</li>)}
+          </ul>}
+          <p style={{color:'#aab',margin:0,fontSize:12,lineHeight:1.5}}>Die neue Version wird in deinen Downloads-Ordner geladen und geöffnet. Deine Daten bleiben erhalten.</p>
         </>}
-        {status.type==='downloading'&&<p style={{color:'#5bb8f5',margin:0}}>Wird heruntergeladen… {status.percent!=null?status.percent+'%':''}</p>}
-        {status.type==='downloaded'&&<p style={{color:'#6dbf7e',margin:0}}>✓ Version {status.version||''}{betaTag(status.version)} bereit. Nach dem Neustart wird die neue Version installiert.</p>}
+        {status.type==='downloading'&&<>
+          <p style={{color:'#5bb8f5',margin:'0 0 8px'}}>Wird heruntergeladen… {status.percent!=null?status.percent+'%':''}</p>
+          {status.percent!=null&&<div style={{height:6,background:'#2a3547',borderRadius:3,overflow:'hidden'}}><div style={{width:`${status.percent}%`,height:'100%',background:'#5bb8f5',transition:'width .2s'}}/></div>}
+        </>}
+        {status.type==='downloaded'&&!status.manual&&<p style={{color:'#6dbf7e',margin:0}}>✓ Version {status.version||''}{betaTag(status.version)} bereit. Nach dem Neustart wird die neue Version installiert.</p>}
+        {status.type==='downloaded'&&status.manual&&<>
+          <p style={{color:'#6dbf7e',margin:'0 0 8px'}}>✓ Version {status.version||''}{betaTag(status.version)} ist geladen und geöffnet.</p>
+          <p style={{color:'#aab',margin:0,fontSize:12,lineHeight:1.5}}>Stromplaner beenden, dann im geöffneten Fenster Stromplaner auf „Programme“ ziehen und die alte Version ersetzen.</p>
+        </>}
         {status.type==='error'&&<p style={{color:'#e06c75',margin:0}}>Fehler: {status.message||'Update konnte nicht geprüft werden.'}</p>}
         {kanal&&<div style={{marginTop:18,paddingTop:14,borderTop:'1px solid #2e3a4a'}}>
           <div style={{fontSize:10,color:'#7c8794',letterSpacing:.5,textTransform:'uppercase',marginBottom:8}}>Update-Kanal</div>
@@ -1369,14 +1385,18 @@ function UpdateModal({status,onClose,onCheck,onInstall,setStatus,kanal,onKanal})
             {istBeta&&kanal==='stabil'?' Du nutzt gerade eine Beta und bleibst darauf, bis eine neuere fertige Version erscheint.':''}
           </p>
         </div>}
-        <div style={row}>
+        <div style={{...row,flexWrap:'wrap',alignItems:'center'}}>
+          {status.type==='downloaded'&&status.manual&&<button style={btn({background:'none',color:'#9aa4af',padding:'7px 4px',marginRight:'auto'})} onClick={()=>window.electronAPI.updateImFinder()}>Im Finder zeigen</button>}
+          {status.type==='available'&&status.manual&&<button style={btn({background:'none',color:'#9aa4af',padding:'7px 4px',marginRight:'auto'})} onClick={()=>{window.electronAPI.updateUeberspringen();onClose();}}>Diese Version überspringen</button>}
           {status.type==='downloaded'
-            ?<button style={btn({background:'#3a7bd5',color:'#fff'})} onClick={onInstall}>Jetzt neu starten</button>
+            ?<button style={btn({background:'#3a7bd5',color:'#fff'})} onClick={onInstall}>{status.manual?'Stromplaner beenden':'Jetzt neu starten'}</button>
             :status.type==='available'&&status.manual
-            ?<button style={btn({background:'#3a7bd5',color:'#fff'})} onClick={onInstall}>Download-Seite öffnen</button>
+            ?<button style={btn({background:'#3a7bd5',color:'#fff'})} onClick={onInstall}>Herunterladen</button>
             :<button style={btn({background:'#3a7bd5',color:'#fff',opacity:busy?0.6:1})} disabled={busy} onClick={()=>{setStatus({type:'checking'});onCheck();}}>Nach Updates suchen</button>
           }
-          <button style={btn({background:'#2a3547',color:'#aab'})} onClick={onClose}>Schließen</button>
+          {status.type==='available'&&status.manual
+            ?<button style={btn({background:'#2a3547',color:'#aab'})} onClick={()=>{window.electronAPI.updateSpaeter();onClose();}}>Später</button>
+            :<button style={btn({background:'#2a3547',color:'#aab'})} onClick={onClose}>Schließen</button>}
         </div>
       </div>
     </div>

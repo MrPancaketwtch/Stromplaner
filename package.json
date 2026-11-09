@@ -8,6 +8,7 @@
     "start": "electron .",
     "pack": "electron-builder --dir",
     "dist": "npm run build && electron-builder",
+    "test": "node --test \"test/*.test.js\"",
     "release": "npm run build && electron-builder --publish always"
   },
   "build": {
@@ -19,6 +20,8 @@
     "files": [
       "src/main.js",
       "src/preload.js",
+      "src/update-logik.js",
+      "src/update-mac.js",
       "src/splash.html",
       "src/intro.mp4",
       "src/startup.wav",

@@ -1,6 +1,7 @@
-const { app, BrowserWindow, shell, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, dialog, Menu } = require('electron');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const { autoUpdater } = require('electron-updater');
+const { macUpdater } = require('./update-mac.js');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -127,9 +128,9 @@ function createWindow() {
 }
 
 // macOS tauscht die App nur aus, wenn sie mit Apple-Developer-ID signiert ist – das ist sie nicht.
-// Dort daher nur auf neue Versionen hinweisen und die Download-Seite öffnen.
-const MANUAL_UPDATE = process.platform === 'darwin';
-const RELEASES_URL = 'https://github.com/MrPancaketwtch/Stromplaner/releases';
+// Dort übernimmt update-mac.js: neue Version suchen, DMG laden und öffnen. electron-updater läuft nur unter Windows/Linux.
+const MAC = process.platform === 'darwin';
+let macUpdate = null;
 
 // Update-Kanal: „stabil“ = nur fertige Versionen, „beta“ = auch Betas. Die Wahl bleibt gespeichert;
 // ohne gespeicherte Wahl sucht eine installierte Beta weiter nach Betas.
@@ -138,11 +139,17 @@ const updateSettingsFile = () => path.join(app.getPath('userData'), 'update-sett
 let updateKanal = null;
 let kanalWechsel = null; // wird gesetzt, sobald der Updater läuft (nur in der installierten App)
 
+// update-settings.json: { kanal, uebersprungen, erinnernAb } – Änderungen werden zusammengeführt
+function updateEinstellungen() {
+  try { return JSON.parse(fs.readFileSync(updateSettingsFile(), 'utf8')) || {}; } catch { return {}; }
+}
+function updateEinstellungenSpeichern(patch) {
+  try { fs.writeFileSync(updateSettingsFile(), JSON.stringify({ ...updateEinstellungen(), ...patch }, null, 2), 'utf8'); } catch {}
+}
+
 function ladeUpdateKanal() {
-  try {
-    const k = JSON.parse(fs.readFileSync(updateSettingsFile(), 'utf8')).kanal;
-    if (k === 'beta' || k === 'stabil') return k;
-  } catch {}
+  const k = updateEinstellungen().kanal;
+  if (k === 'beta' || k === 'stabil') return k;
   return istVorabversion(app.getVersion()) ? 'beta' : 'stabil';
 }
 const aktuellerKanal = () => updateKanal || (updateKanal = ladeUpdateKanal());
@@ -157,7 +164,7 @@ ipcMain.handle('get-update-channel', () => aktuellerKanal());
 ipcMain.handle('set-update-channel', (_event, kanal) => {
   if (kanal !== 'beta' && kanal !== 'stabil') return { kanal: aktuellerKanal(), geprueft: false };
   updateKanal = kanal;
-  try { fs.writeFileSync(updateSettingsFile(), JSON.stringify({ kanal }, null, 2), 'utf8'); } catch {}
+  updateEinstellungenSpeichern({ kanal });
   if (!kanalWechsel) return { kanal, geprueft: false };
   kanalWechsel(kanal);
   return { kanal, geprueft: true };
@@ -167,11 +174,10 @@ function setupAutoUpdater(win) {
   const send = (type, payload) => {
     if (!win.isDestroyed()) win.webContents.send('update-status', { type, ...payload });
   };
+  if (MAC) return setupMacUpdater(send);
 
   let updateReady = false;
   let geladeneVersion = null;
-  let gefundeneVersion = null;
-  if (MANUAL_UPDATE) autoUpdater.autoDownload = false;
   kanalAnwenden(aktuellerKanal());
 
   const pruefen = () => {
@@ -203,8 +209,7 @@ function setupAutoUpdater(win) {
     send('downloading', { percent: Math.round(p.percent) })
   );
   autoUpdater.on('update-available', (info) => {
-    gefundeneVersion = info.version;
-    send('available', { version: info.version, manual: MANUAL_UPDATE, beta: istVorabversion(info.version) });
+    send('available', { version: info.version, beta: istVorabversion(info.version) });
   });
   autoUpdater.on('update-downloaded', (info) => {
     updateReady = true;
@@ -215,13 +220,44 @@ function setupAutoUpdater(win) {
 
   ipcMain.handle('check-for-updates', () => pruefen());
 
-  ipcMain.handle('install-update', () => {
-    // „latest“ zeigt auf GitHub nie Betas – daher direkt die gefundene Version öffnen
-    if (MANUAL_UPDATE) { shell.openExternal(gefundeneVersion ? `${RELEASES_URL}/tag/v${gefundeneVersion}` : `${RELEASES_URL}/latest`); return; }
-    autoUpdater.quitAndInstall();
-  });
+  ipcMain.handle('install-update', () => autoUpdater.quitAndInstall());
 
   autoUpdater.checkForUpdates().catch(() => {});
+}
+
+function setupMacUpdater(send) {
+  macUpdate = macUpdater({ send, kanal: aktuellerKanal, einstellungen: updateEinstellungen, speichern: updateEinstellungenSpeichern });
+  kanalWechsel = () => macUpdate.kanalGewechselt();
+  ipcMain.handle('check-for-updates', () => macUpdate.pruefen());
+  ipcMain.handle('install-update', () => macUpdate.installieren());
+  ipcMain.handle('update-im-finder', () => macUpdate.imFinderZeigen());
+  ipcMain.handle('update-ueberspringen', () => macUpdate.ueberspringen());
+  ipcMain.handle('update-spaeter', () => macUpdate.spaeter());
+  macUpdate.pruefen({ automatisch: true });
+}
+
+// macOS-Menü wie Electrons Standardmenü, im App-Menü zusätzlich „Nach Updates suchen…“
+function macMenue() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label: app.name, submenu: [
+      { role: 'about', label: 'Über Stromplaner' },
+      { label: 'Nach Updates suchen…', click: () => {
+        if (!macUpdate || !mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('update-status', { type: 'checking', zeigen: true });
+        macUpdate.pruefen();
+      } },
+      { type: 'separator' },
+      { role: 'services' },
+      { type: 'separator' },
+      { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
+      { type: 'separator' },
+      { role: 'quit' },
+    ] },
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ]));
 }
 
 ipcMain.handle('app-version', () => app.getVersion());
@@ -341,5 +377,5 @@ ipcMain.handle('export-inspection-pdf', async (_event, html) => {
   }
 });
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => { if (MAC) macMenue(); createWindow(); });
 app.on('window-all-closed', () => app.quit());

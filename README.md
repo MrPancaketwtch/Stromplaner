@@ -35,8 +35,17 @@ Die Handy-App ist für die Arbeit direkt an der Anlage gedacht – draußen ist 
 
 ### Updates
 - **Windows:** Updates laden automatisch im Hintergrund. Ist eines bereit, erscheint in der Kopfzeile **Update bereit** – ein Klick startet neu.
-- **macOS:** Die App ist nicht mit einem Apple-Entwicklerzertifikat signiert und kann sich deshalb nicht selbst austauschen. Stromplaner zeigt **Update verfügbar** an; **Download-Seite öffnen** führt zum Release. Dort die passende `.dmg` laden und Stromplaner in den Programme-Ordner ziehen – Pläne, Bibliothek und Einstellungen bleiben erhalten.
+- **macOS:** siehe [Updates auf dem Mac](#updates-auf-dem-mac).
 - **Beta-Versionen:** Unter **Updates** lässt sich der Kanal wählen. **Stabil** (Standard) liefert nur fertige Versionen, **Beta** zusätzlich Vorabversionen zum Testen. Wer zurück auf Stabil schaltet, bleibt auf der installierten Beta, bis eine neuere fertige Version erscheint.
+
+### Updates auf dem Mac
+Die Mac-App ist nicht mit einem Apple-Entwicklerzertifikat signiert und kann sich deshalb nicht selbst austauschen. Den Rest erledigt Stromplaner:
+
+1. Beim Start – oder über **Stromplaner → Nach Updates suchen…** bzw. **Updates** in der Kopfzeile – erscheint bei einer neuen Version ein Dialog mit den Neuerungen.
+2. **Herunterladen** lädt die passende DMG (Apple Silicon oder Intel) in den Downloads-Ordner und öffnet sie.
+3. **Stromplaner beenden**, dann im geöffneten Fenster Stromplaner auf **Programme** ziehen und die alte Version ersetzen. Pläne, Bibliothek und Einstellungen bleiben erhalten.
+
+**Diese Version überspringen** meldet genau diese Version beim Start nicht mehr, **Später** erinnert frühestens nach einem Tag wieder. Über den Knopf **Updates** lässt sich jederzeit von Hand suchen.
 
 ---
 
@@ -196,6 +205,8 @@ Stromplaner/
 ├── src/
 │   ├── main.js               ← Electron-Hauptprozess (Fenster, Dateien, Updates, Bluetooth-Geräteauswahl)
 │   ├── preload.js            ← IPC-Brücke (contextBridge)
+│   ├── update-mac.js         ← Updates auf dem Mac (GitHub-Releases-API, DMG laden)
+│   ├── update-logik.js       ←   Versionsvergleich, Release- und DMG-Auswahl (Tests in test/)
 │   └── splash.html           ← Startbildschirm
 ├── webapp/                   ← Handy-App (React + Vite; PWA und per Capacitor Android-App)
 │   ├── src/App.jsx           ← Oberfläche
@@ -209,11 +220,13 @@ Stromplaner/
 │   ├── build.js              ← esbuild → standalone HTML
 │   ├── release.bat           ← Version setzen, bauen, taggen, pushen
 │   ├── setup-android-signing.ps1
-│   └── afterPack.js          ← rcedit-Hook (Icon in die .exe)
+│   ├── changelog-notizen.js  ← Changelog einer Version als Release-Text
+│   └── afterPack.js          ← Icon in die .exe; Mac-App ad-hoc signieren
 ├── build/                    ← Icons
 ├── .github/workflows/
 │   ├── release.yml           ← Windows + macOS bei Tag-Push
 │   ├── android.yml           ← APK + App-Bundle (bei Tag-Push oder manuell)
+│   ├── mac-test.yml          ← macOS-DMGs ohne Release testen (manuell)
 │   └── webapp.yml            ← PWA auf GitHub Pages bei Push auf main
 ├── Speicherstände/           ← eigene Pläne (lokal)
 └── package.json              ← Version für alle Apps
@@ -224,7 +237,7 @@ Stromplaner/
 |------------|-------------|
 | Desktop-UI | React 18 (JSX), Icons [lucide-react](https://lucide.dev) |
 | Build | esbuild → eine einzige HTML-Datei ohne externe Abhängigkeiten |
-| Desktop | Electron 33 (NSIS für Windows, DMG für macOS), Updates über electron-updater und GitHub Releases |
+| Desktop | Electron 33 (NSIS für Windows, DMG für macOS); Updates unter Windows über electron-updater, auf dem Mac über die GitHub-Releases-API (DMG laden, App ad-hoc signiert) |
 | Speichern | localStorage (Autosave, 600 ms entprellt); Bibliothek zusätzlich als `Bibliothek.json` in AppData (`%APPDATA%\Stromplaner\Speicherstände\` bzw. `~/Library/Application Support/Stromplaner/Speicherstände/`) – wird zusammengeführt, nicht ersetzt |
 | Schaltbild | SVG mit eigenem Layout (kein D3) |
 | Handy-App | React 18 + Vite, Capacitor 8 (Android, API 36), PWA über GitHub Pages; eigene Plugins für Drucken und Bluetooth |
@@ -278,13 +291,16 @@ Ampel: ≤ 3 % grün, ≤ 5 % orange, > 5 % rot. Zusätzlich wird der Mindestque
 npm install          # einmalig
 npm run build        # nach Änderungen an app/Stromplaner.jsx → app/Stromplaner.html
 npm start            # Desktop-App lokal starten
+npm test             # Tests der Update-Logik (mit UPDATE_NETZTEST=1 auch gegen die echten Releases)
 npm run dist         # lokaler Windows-Installer → dist/
 ```
 
 **Neue Version:**
 1. Changelog in `app/Stromplaner.jsx` (`CHANGELOG`) ergänzen.
 2. `scripts\release.bat` ausführen und die Versionsnummer eingeben. Das Skript setzt die Version in `package.json`, baut, committet, taggt und pusht.
-3. GitHub Actions baut Windows (`.exe`) und macOS (`.dmg`) und veröffentlicht sie als Release; APK und Play-Store-Bundle (`.aab`) folgen einige Minuten später. Die PWA übernimmt die Version beim Push automatisch.
+3. GitHub Actions baut Windows (`.exe`) und macOS (`.dmg`) und veröffentlicht sie als Release; APK und Play-Store-Bundle (`.aab`) folgen einige Minuten später. Die PWA übernimmt die Version beim Push automatisch. Der Release-Text bekommt die Changelog-Einträge als „Neu in …“ – die zeigt auch der Update-Dialog auf dem Mac.
+
+Die macOS-DMGs lassen sich vorher ohne Release testen: Workflow **macOS Test-Build** (Actions → *Run workflow*) führt die Tests aus, prüft die Signatur und legt die DMGs unter *Artifacts* ab.
 
 Alle Apps – PC, Android, PWA – lesen ihre Version aus der `package.json` im Hauptordner. Das ist wichtig, weil der Planer-Server nur gleiche Versionen in eine Sitzung lässt.
 

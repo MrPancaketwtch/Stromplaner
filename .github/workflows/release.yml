@@ -62,6 +62,8 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Update release description
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -71,8 +73,12 @@ jobs:
           V="${VERSION#v}"
           BETA=""
           case "$V" in *-*) BETA="> **Beta-Version zum Testen** – kann noch Fehler enthalten. Installierte Stromplaner-Versionen aktualisieren sich nicht automatisch auf Betas; wer eine Beta installiert, bekommt spätere Betas und die fertige Version als Update."; esac
+          # „## Neu in …“ liest auch der Update-Dialog auf dem Mac
+          NEU="$(node scripts/changelog-notizen.js "$V")"
           cat > /tmp/notes.md << NOTES
           ${BETA}
+
+          ${NEU}
 
           ## Herunterladen
 

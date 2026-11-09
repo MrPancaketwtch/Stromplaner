@@ -18,6 +18,12 @@ jobs:
       - run: npm install
       - run: npm run build
 
+      # Versionsvergleich, Asset-Auswahl und ein Abruf der echten GitHub-Releases
+      - name: Update-Tests
+        run: npm test
+        env:
+          UPDATE_NETZTEST: 1
+
       - name: Package
         run: npx electron-builder --mac --publish never
         env:
@@ -32,6 +38,17 @@ jobs:
             codesign -dv "$mnt/Stromplaner.app" 2>&1 | grep -E 'Signature|Format'
             hdiutil detach "$mnt" >/dev/null
           done
+
+      # Die gepackte App muss starten (fehlt z. B. ein Modul in build.files, beendet sie sich sofort)
+      - name: Starttest
+        run: |
+          app=dist/mac-arm64/Stromplaner.app/Contents/MacOS/Stromplaner
+          "$app" > start.log 2>&1 &
+          pid=$!
+          sleep 20
+          if ! kill -0 $pid 2>/dev/null; then cat start.log; echo "App hat sich beendet"; exit 1; fi
+          kill $pid
+          grep -i 'error' start.log || true
 
       - uses: actions/upload-artifact@v4
         with:
