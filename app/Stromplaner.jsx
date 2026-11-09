@@ -84,10 +84,10 @@ const CONN_SORTED_ENTRIES = Object.entries(CONN).sort((a,b)=>a[1].label.localeCo
 const changelogFor = (v) => CHANGELOG[v] || CHANGELOG[String(v||"").split("-")[0]] || [];
 const CHANGELOG = {
   "1.5.0": [
-    "macOS (Apple Silicon): Die App startet wieder – statt der Meldung „beschädigt“ fragt macOS beim ersten Öffnen nur noch nach der Freigabe",
-    "Verteiler-Typen übersichtlicher: einzelne Anschlüsse und mehrere gleiche auf einmal hinzufügen stehen beschriftet in einem Feld. „Schutz“ heißt jetzt „Leitungsschutz“ (auch im Stromplan-PDF), RCCB-Gruppen heißen einheitlich RCD-Gruppen – mit kurzem Hinweis, wann man sie braucht",
-    "Der „?“-Knopf an den RCD-Gruppen startet wieder den passenden Rundgang",
     "Android-App: den ganzen Stromplan als PDF – Verteiler, Steckungen und Phasenlast wie am PC (ohne Blockschaltbild), im Tab Projekt über „Stromplan als PDF“",
+    "Verteiler-Typen übersichtlicher: einzelne Anschlüsse und mehrere gleiche auf einmal hinzufügen stehen beschriftet in einem Feld. „Schutz“ heißt jetzt „Leitungsschutz“ (auch im Stromplan-PDF), RCCB-Gruppen heißen einheitlich RCD-Gruppen – mit kurzem Hinweis, wann man sie braucht",
+    "macOS (Apple Silicon): Die App startet wieder – statt der Meldung „beschädigt“ fragt macOS beim ersten Öffnen nur noch nach der Freigabe",
+    "Der „?“-Knopf an den RCD-Gruppen startet wieder den passenden Rundgang",
     "Rundgänge überspringen keine Schritte mehr – etwa „Mit Handy verbinden“ bei schon verbundenem Handy oder die RCD-Gruppen; fehlt die Stelle gerade, erscheint der Schritt trotzdem",
   ],
   "1.4.0": [
